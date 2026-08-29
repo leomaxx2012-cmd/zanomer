@@ -1,0 +1,24 @@
+name: Sync permitted partner listings
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Every day at 12:00 Moscow time (09:00 UTC; Moscow has UTC+3 year-round).
+    - cron: "0 9 * * *"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v22
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run sync:partners
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
