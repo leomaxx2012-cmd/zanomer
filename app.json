@@ -1,0 +1,11 @@
+{
+  "expo": {
+    "name": "ЗаНомером",
+    "slug": "avtonomer",
+    "scheme": "avtonomer",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": ["expo-router"],
+    "experiments": { "typedRoutes": true }
+  }
+}
