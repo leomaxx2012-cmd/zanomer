@@ -235,10 +235,23 @@ export default function HomeScreen() {
   }
 
   async function openChat(listing: Plate) {
-    if (!supabase || !isSignedIn) {
-      setAuthMessage("Войди в аккаунт, чтобы написать продавцу.");
-      setAuthOpen(true);
-      return;
+    if (!supabase) return;
+
+    // Временный гостевой режим: для переписки не просим посетителя
+    // регистрироваться. Supabase создаёт анонимную сессию, поэтому к чату
+    // всё равно применяются те же правила доступа и фильтр запрещённых слов.
+    if (!isSignedIn) {
+      const { data, error } = await supabase.auth.signInAnonymously();
+      if (error || !data.user) {
+        setChatMessage("Гостевой чат пока не включён в базе. Включи Anonymous sign-ins в настройках Supabase.");
+        setChatOpen(true);
+        return;
+      }
+      const guestName = `Гость-${data.user.id.slice(0, 6)}`;
+      setCurrentUserId(data.user.id);
+      setProfileName(guestName);
+      setIsSignedIn(true);
+      await supabase.from("auto_profiles").upsert({ id: data.user.id, username: guestName }, { onConflict: "id" });
     }
     setChatMessage("");
     setChatDraft("");
@@ -359,9 +372,10 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!supabase) return;
 
-    async function setProfile(user: { id?: string; email?: string | null; user_metadata?: Record<string, unknown> } | null) {
+    async function setProfile(user: { id?: string; email?: string | null; is_anonymous?: boolean; user_metadata?: Record<string, unknown> } | null) {
       const displayName = user?.user_metadata?.display_name;
-      const name = typeof displayName === "string" && displayName ? displayName : user?.email?.split("@")[0] ?? "";
+      const guestName = user?.is_anonymous && user.id ? `Гость-${user.id.slice(0, 6)}` : "";
+      const name = typeof displayName === "string" && displayName ? displayName : user?.email?.split("@")[0] ?? guestName;
       if (!user?.id || !name) {
         setProfileName(name);
         setIsSignedIn(false);
