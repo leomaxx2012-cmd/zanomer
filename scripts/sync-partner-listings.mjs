@@ -13,11 +13,19 @@ import { createClient } from "@supabase/supabase-js";
 
 
 
+
+
+
+
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 if (!url || !serviceKey) {
   throw new Error("Set EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before running the importer.");
 }
+
+
+
+
 
 
 
@@ -34,9 +42,3 @@ const SOURCES = [
   { handle: "runomer05", name: "Красивые номера Дагестан" },
   { handle: "specznak", name: "Красивые госномера Specznak" },
   { handle: "jelezki77", name: "Железки77" },
-];
-
-
-// Only codes whose Russian region name is known to the importer are accepted.
-// An unknown code is skipped instead of publishing a misleading region.
-const REGION_NAMES = new Map([
