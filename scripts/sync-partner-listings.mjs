@@ -9,6 +9,7 @@
  *   SUPABASE_SERVICE_ROLE_KEY   (server/CI only, never in the mobile app)
  */
 import { createClient } from "@supabase/supabase-js";
+import { createWorker } from "tesseract.js";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -46,6 +47,27 @@ const normalizeLetter = (letter) => latinToCyrillic[letter.toUpperCase()] ?? let
 const decodeHtml = (value) => value.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]*>/g, " ")
   .replace(/&nbsp;/gi, " ").replace(/&amp;/gi, "&").replace(/&quot;/gi, '"').replace(/&#39;/g, "'")
   .replace(/\s+/g, " ").trim();
+const decodeUrl = (value) => value.replace(/&amp;/gi, "&").replace(/&#39;/g, "'");
+
+// OCR is used only as a fallback when the post text itself does not contain a
+// complete listing. Recognised text is parsed in memory and is never saved.
+let ocrWorkerPromise;
+async function recognisePhotos(photoUrls) {
+  if (!photoUrls.length) return "";
+  ocrWorkerPromise ??= createWorker("eng");
+  const worker = await ocrWorkerPromise;
+  const parts = [];
+  for (const photoUrl of photoUrls.slice(0, 2)) {
+    try {
+      const { data } = await worker.recognize(photoUrl);
+      if (data.text) parts.push(data.text);
+    } catch (error) {
+      // A deleted, private, or unreadable image must not stop the channel check.
+      console.warn(`Photo OCR skipped: ${error.message}`);
+    }
+  }
+  return parts.join("\n");
+}
 
 function classifyTag(left, digits, right) {
   if (/^(\d)\1\1$/.test(digits)) return "Одинаковые цифры";
@@ -94,12 +116,14 @@ function extractPosts(html, source) {
     const [, identifier] = found;
     const block = found[0];
     const postId = identifier.split("/").at(-1);
-    const content = block.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/i)?.[1];
-    if (!postId || !content) continue;
+    const content = block.match(/tgme_widget_message_text[^>]*>([\s\S]*?)<\/div>/i)?.[1] ?? "";
+    if (!postId) continue;
     const datetime = block.match(/<time[^>]+datetime="([^"]+)"/i)?.[1];
     const text = decodeHtml(content);
+    const photoUrls = [...block.matchAll(/tgme_widget_message_photo_wrap[^>]+style="[^"]*url\(['"]?([^'"\)]+)['"]?\)/gi)]
+      .map((match) => decodeUrl(match[1]));
     const sold = /\b(продан[аоы]?|забронирован[аоы]?|снят[аоы]? с продажи)\b/i.test(text);
-    posts.push({ postId, text, postedAt: datetime, sold });
+    posts.push({ postId, text, photoUrls, postedAt: datetime, sold });
   }
   return posts;
 }
@@ -128,7 +152,11 @@ async function syncSource(source) {
     // Telegram may show older posts on the public channel page. Do not import
     // them retroactively: only genuinely recent publications enter the catalog.
     if (!wasPublishedWithinLastDay(post.postedAt)) continue;
-    const rows = parsePost(post.text, source, post.postId, post.postedAt);
+    let rows = parsePost(post.text, source, post.postId, post.postedAt);
+    if (!rows.length && post.photoUrls.length) {
+      const photoText = await recognisePhotos(post.photoUrls);
+      rows = parsePost(`${post.text}\n${photoText}`, source, post.postId, post.postedAt);
+    }
     if (!rows.length) continue;
     const { error } = await db.from("partner_listings").upsert(rows, { onConflict: "id" });
     if (error) throw error;
@@ -150,4 +178,5 @@ for (const source of SOURCES) {
   }
 }
 console.log(JSON.stringify({ checkedAt: new Date().toISOString(), result }, null, 2));
+if (ocrWorkerPromise) (await ocrWorkerPromise).terminate();
 
