@@ -161,7 +161,9 @@ function extractPosts(html, source) {
     const text = decodeHtml(content);
     const photoUrls = [...block.matchAll(/tgme_widget_message_photo_wrap[^>]+style="[^"]*url\(['"]?([^'"\)]+)['"]?\)/gi)]
       .map((match) => decodeUrl(match[1]));
-    const sold = /\b(продан[аоы]?|забронирован[аоы]?|снят[аоы]? с продажи)\b/i.test(text);
+    // Archive only explicit availability changes. "Продам" is deliberately
+    // absent: it means the plate is offered, not sold.
+    const sold = /\b(продан[аоы]?|продали|забронирован[аоы]?|зарезервирован[аоы]?|в резерве|снят[аоы]? с продажи|нет в наличии)\b/i.test(text);
     posts.push({ postId, text, photoUrls, postedAt: datetime, sold });
   }
   return posts;

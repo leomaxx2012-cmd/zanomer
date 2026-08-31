@@ -27,6 +27,7 @@ type Plate = {
   vehicle: "car" | "motorcycle" | "truck";
   seller: string;
   createdAt: string;
+  publishedAt?: string;
   tag: string;
   sourceName?: string;
   sourceUrl?: string;
@@ -71,6 +72,16 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+function formatListingDate(value?: string) {
+  if (!value) return "Дата не указана";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("ru-RU", {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit",
+  });
+}
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
 const latinPlateLetters: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
@@ -428,6 +439,7 @@ export default function HomeScreen() {
         vehicle: item.vehicle_type as Plate["vehicle"],
         seller: names.get(item.owner_id) ?? "Пользователь ЗаНомером",
         createdAt: item.created_at.slice(0, 10),
+        publishedAt: item.created_at,
         tag: "Объявление",
         isSiteListing: true,
         ownerId: item.owner_id,
@@ -447,6 +459,7 @@ export default function HomeScreen() {
         vehicle: item.vehicle_type as Plate["vehicle"],
         seller: item.source_name,
         createdAt: item.created_at.slice(0, 10),
+        publishedAt: item.created_at,
         tag: item.tag ?? "Партнёрское объявление",
         sourceName: "Открыть исходное объявление",
         sourceUrl: item.source_url,
@@ -1107,7 +1120,7 @@ export default function HomeScreen() {
       {(activeTab === "buy" || activeTab === "favorites") && <>
       <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное и сохранённое" : `Похожие на ${similarTo.value}`}</Text>}
-        {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>Найдено: {visiblePlates.length}</Text></View>}
+        {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>Объявлений: {visiblePlates.length}</Text></View>}
       </View>
       {activeTab === "buy" && <View style={styles.listFilters}>
         {[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit(limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}
@@ -1156,7 +1169,8 @@ export default function HomeScreen() {
                   {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
                 </View>
                 <Text numberOfLines={1} style={styles.region}>{item.region}</Text>
-                <Text numberOfLines={1} style={styles.seller}>Продавец: {item.seller} · {item.createdAt}</Text>
+                <Text numberOfLines={1} style={styles.seller}>Продавец: {item.seller}</Text>
+                <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
                 {!!item.sellerRating && <View style={styles.catalogRating}><Text style={styles.catalogRatingText}>★ {item.sellerRating.toFixed(1)} · продавец оценён</Text></View>}
                 <View style={styles.cardBottomRow}>
                   <Text style={styles.price}>{item.price}</Text>
@@ -1198,7 +1212,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Регион</Text><Text style={styles.detailsValue}>{selectedPlate?.region}</Text>
-                <Text style={styles.detailsLabel}>Дата размещения</Text><Text style={styles.detailsValue}>{selectedPlate?.createdAt}</Text>
+                <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
                 <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate?.seller}</Text>
               </View>
               <View style={styles.priceHistoryBlock}>
