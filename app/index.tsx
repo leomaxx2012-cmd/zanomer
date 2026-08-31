@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
+  Image,
   Linking,
   Modal,
   Pressable,
@@ -12,6 +13,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../lib/supabase";
 import { registerForPushNotifications, showChatNotification } from "../lib/push-notifications";
 
@@ -37,6 +39,7 @@ type Plate = {
   featuredUntil?: string | null;
   listingStatus?: "active" | "moderation" | "archived";
   ownerId?: string;
+  photoUrl?: string;
 };
 
 type PricePoint = {
@@ -139,6 +142,7 @@ export default function HomeScreen() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [catalogOnly, setCatalogOnly] = useState(false);
   const [saved, setSaved] = useState<string[]>([]);
+  const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"buy" | "sell" | "favorites" | "subscriptions">("buy");
   const [subscribedNumbers, setSubscribedNumbers] = useState<string[]>([]);
   const [similarToId, setSimilarToId] = useState<string | null>(null);
@@ -165,6 +169,7 @@ export default function HomeScreen() {
   const [listingRegion, setListingRegion] = useState("Москва · 77");
   const [listingPrice, setListingPrice] = useState("");
   const [listingComment, setListingComment] = useState("");
+  const [listingPhotoUri, setListingPhotoUri] = useState("");
   const [listingConfirmed, setListingConfirmed] = useState(false);
   const [listingMessage, setListingMessage] = useState("");
   const [selectedPlate, setSelectedPlate] = useState<Plate | null>(null);
@@ -197,6 +202,7 @@ export default function HomeScreen() {
     }
 
     const currentPrice = [{ date: selectedPlate.createdAt, priceValue: selectedPlate.priceValue }];
+    setRecentlyViewed((current) => [selectedPlate.id, ...current.filter((id) => id !== selectedPlate.id)].slice(0, 8));
     setPriceHistory(currentPrice);
     if (!supabase) return;
 
@@ -403,7 +409,7 @@ export default function HomeScreen() {
       const [siteResult, partnerResult] = await Promise.all([
         client
           .from("auto_listings")
-          .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until")
+          .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url")
           .eq("status", "active")
           .order("created_at", { ascending: false }),
         client
@@ -450,6 +456,7 @@ export default function HomeScreen() {
         ownerId: item.owner_id,
         sellerRating: sellerReviews ? sellerReviews.total / sellerReviews.count : null,
         featuredUntil: item.featured_until,
+        photoUrl: item.photo_url ?? undefined,
       };
       });
       const partners: Plate[] = partnerData.map((item) => ({
@@ -727,6 +734,21 @@ export default function HomeScreen() {
     if (listingPicker === "digits") setListingDigits((current) => current.slice(0, -1));
   }
 
+  async function chooseListingPhoto() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setListingMessage("Разреши доступ к галерее, чтобы добавить фото номера.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [4, 3],
+      quality: 0.75,
+    });
+    if (!result.canceled) setListingPhotoUri(result.assets[0]?.uri ?? "");
+  }
+
   async function addListing() {
     const priceValue = Number(listingPrice.replace(/\D/g, ""));
     if (!profileName || !listingLeftLetter || listingDigits.length !== 3 || listingRightLetters.length !== 2 || !priceValue || !listingConfirmed) {
@@ -781,6 +803,18 @@ export default function HomeScreen() {
         setAuthOpen(true);
         return;
       }
+      let photoUrl: string | null = null;
+      if (listingPhotoUri) {
+        const response = await fetch(listingPhotoUri);
+        const image = await response.blob();
+        const path = `${userData.user.id}/${Date.now()}.jpg`;
+        const upload = await supabase.storage.from("listing-photos").upload(path, image, { contentType: "image/jpeg", upsert: false });
+        if (upload.error) {
+          setListingMessage("Фото не загрузилось. Выполни listing-photos.sql в Supabase или опубликуй без фото.");
+          return;
+        }
+        photoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
+      }
       const { error } = await supabase.from("auto_listings").insert({
         owner_id: userData.user.id,
         plate_left: entry.leftLetter,
@@ -789,6 +823,7 @@ export default function HomeScreen() {
         region: entry.region,
         vehicle_type: entry.vehicle,
         price_rub: entry.priceValue,
+        photo_url: photoUrl,
         status: isModerator ? "active" : "moderation",
       });
       if (error) {
@@ -799,6 +834,7 @@ export default function HomeScreen() {
     setAddOpen(false);
     setListingLeftLetter(""); setListingDigits(""); setListingRightLetters(""); setListingPrice("");
     setListingComment("");
+    setListingPhotoUri("");
     setListingConfirmed(false);
     setListingMessage(isModerator
       ? "✓ Объявление опубликовано: твой аккаунт подтверждён как модератор."
@@ -1090,6 +1126,10 @@ export default function HomeScreen() {
                 </ScrollView>
               </View>}
               <TextInput value={listingPrice} onChangeText={setListingPrice} placeholder="Цена в рублях" placeholderTextColor="#98A2B3" style={styles.addInput} keyboardType="number-pad" />
+              <Pressable onPress={() => { void chooseListingPhoto(); }} style={styles.photoPickerButton}>
+                <Text style={styles.photoPickerText}>{listingPhotoUri ? "✓ Фото добавлено — изменить" : "🖼 Добавить фото номера"}</Text>
+              </Pressable>
+              {!!listingPhotoUri && <Image source={{ uri: listingPhotoUri }} style={styles.listingPhotoPreview} />}
               <Text style={styles.contactHint}>Не публикуй документы, VIN, банковские данные или чужие номера телефонов. Связь с покупателем позже будет через внутренний чат.</Text>
               <TextInput value={listingComment} onChangeText={setListingComment} placeholder="Комментарий продавца (необязательно)" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.commentInput]} multiline />
               <Pressable onPress={() => setListingConfirmed((current) => !current)} style={styles.confirmRow}>
@@ -1183,6 +1223,14 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>}
+      {activeTab === "favorites" && recentlyViewed.length > 0 && <View style={styles.recentPanel}>
+        <Text style={styles.savedSearchesTitle}>Недавно смотрели</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
+          {recentlyViewed.map((id) => catalog.find((plate) => plate.id === id)).filter(Boolean).map((plate) => <Pressable key={plate!.id} onPress={() => setSelectedPlate(plate!)} style={styles.recentCard}>
+            <Text style={styles.recentPlate}>{plate!.value}</Text><Text style={styles.recentPrice}>{plate!.price}</Text>
+          </Pressable>)}
+        </ScrollView>
+      </View>}
 
       <FlatList
         data={renderedPlates}
@@ -1268,6 +1316,7 @@ export default function HomeScreen() {
                 <Text style={styles.detailsPlateValue}>{selectedPlate?.value}</Text>
                 <Text style={styles.detailsPlateRegion}>{selectedPlate?.region}</Text>
               </View>
+              {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
               <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Регион</Text><Text style={styles.detailsValue}>{selectedPlate?.region}</Text>
                 <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
@@ -1501,6 +1550,11 @@ const styles = StyleSheet.create({
   featuredMeta: { color: "#D0D5DD", fontSize: 11, marginTop: 4 },
   noHotOffers: { backgroundColor: "#FFF7ED", borderColor: "#FED7AA", borderRadius: 13, borderWidth: 1, color: "#9A3412", fontSize: 12, fontWeight: "700", paddingHorizontal: 13, paddingVertical: 11 },
   savedSearchesPanel: { backgroundColor: "#F8FAFC", borderColor: "#E2E8F0", borderRadius: 14, borderWidth: 1, marginTop: 9, padding: 12 },
+  recentPanel: { backgroundColor: "#FFFFFF", borderColor: "#E7E3F8", borderRadius: 14, borderWidth: 1, marginTop: 9, padding: 12 },
+  recentRow: { gap: 8, paddingTop: 9 },
+  recentCard: { backgroundColor: "#F4F3FF", borderRadius: 12, minWidth: 132, padding: 11 },
+  recentPlate: { color: "#24213E", fontSize: 14, fontWeight: "900" },
+  recentPrice: { color: "#167250", fontSize: 12, fontWeight: "800", marginTop: 4 },
   savedSearchesTitle: { color: "#101828", fontSize: 14, fontWeight: "800" },
   savedSearchesEmpty: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 6 },
   savedSearchRow: { alignItems: "center", borderTopColor: "#E2E8F0", borderTopWidth: 1, flexDirection: "row", gap: 8, marginTop: 9, paddingTop: 9 },
@@ -1516,6 +1570,9 @@ const styles = StyleSheet.create({
   addDigitsInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", flex: 1, fontSize: 18, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 10, textAlign: "center" },
   addLettersInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", fontSize: 18, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 10, textAlign: "center", width: 76 },
   addInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", fontSize: 14, marginTop: 9, paddingHorizontal: 11, paddingVertical: 10 },
+  photoPickerButton: { alignItems: "center", backgroundColor: "#F4F3FF", borderColor: "#CFC8FF", borderRadius: 11, borderWidth: 1, marginTop: 10, paddingVertical: 11 },
+  photoPickerText: { color: "#5143C2", fontSize: 13, fontWeight: "800" },
+  listingPhotoPreview: { alignSelf: "center", borderRadius: 12, height: 150, marginTop: 10, width: "100%" },
   listingPickerPanel: { backgroundColor: "#F7F6FF", borderColor: "#D8D1FF", borderRadius: 13, borderWidth: 1, marginTop: 9, padding: 11 },
   listingPickerHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   listingPickerTitle: { color: "#352F67", fontSize: 13, fontWeight: "900" },
@@ -1657,6 +1714,7 @@ const styles = StyleSheet.create({
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
   detailsPlatePreview: { alignItems: "center", backgroundColor: "#F8FAFC", borderColor: "#344054", borderRadius: 14, borderWidth: 2, marginTop: 20, paddingHorizontal: 14, paddingVertical: 20 },
+  detailsPhoto: { borderRadius: 14, height: 230, marginTop: 14, width: "100%" },
   detailsPlateValue: { color: "#101828", fontSize: 34, fontWeight: "900", letterSpacing: 1 },
   detailsPlateRegion: { color: "#475467", fontSize: 14, fontWeight: "800", marginTop: 5 },
   detailsClose: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
