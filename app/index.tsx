@@ -144,6 +144,7 @@ export default function HomeScreen() {
   const [similarToId, setSimilarToId] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
+  const [shownListingsCount, setShownListingsCount] = useState(30);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -566,6 +567,13 @@ export default function HomeScreen() {
   const visiblePlates = activeTab === "favorites"
     ? catalog.filter((plate) => saved.includes(plate.id) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
     : plates;
+  const renderedPlates = visiblePlates.slice(0, shownListingsCount);
+
+  // The catalogue is inside the main page scroll. Rendering a few dozen cards
+  // at a time keeps web and older phones responsive when the sources grow.
+  useEffect(() => {
+    setShownListingsCount(30);
+  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, vehicle, priceLimit, specialFilters, sort, similarToId]);
   const hotPlates = useMemo(() => {
     const now = new Date().toISOString();
     return plates.filter((plate) => !!plate.featuredUntil && plate.featuredUntil > now)
@@ -1149,7 +1157,7 @@ export default function HomeScreen() {
       </View>}
 
       <FlatList
-        data={visiblePlates}
+        data={renderedPlates}
         keyExtractor={(item) => item.id}
         nestedScrollEnabled
         scrollEnabled
@@ -1189,6 +1197,7 @@ export default function HomeScreen() {
             </Pressable>
           );
         }}
+        ListFooterComponent={renderedPlates.length < visiblePlates.length ? <Pressable onPress={() => setShownListingsCount((count) => count + 30)} style={styles.loadMoreButton}><Text style={styles.loadMoreText}>Показать ещё · осталось {visiblePlates.length - renderedPlates.length}</Text></Pressable> : null}
         ListEmptyComponent={<Text style={styles.empty}>{activeTab === "favorites" ? "В избранном пока нет номеров. Сохранённые поиски находятся выше." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
       />
       </>}
@@ -1522,6 +1531,8 @@ const styles = StyleSheet.create({
   listFilterButtonActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   listFilterButtonText: { color: "#4B4662", fontSize: 12, fontWeight: "800" },
   listFilterButtonTextActive: { color: "#FFFFFF" },
+  loadMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F0EEFF", borderColor: "#D8D2FF", borderRadius: 14, borderWidth: 1, marginBottom: 18, marginTop: 4, paddingHorizontal: 16, paddingVertical: 11 },
+  loadMoreText: { color: "#5143C2", fontSize: 13, fontWeight: "800" },
   catalogHeaderWithoutTitle: { justifyContent: "flex-end", marginTop: 10 },
   listTitle: { flex: 1, marginRight: 10, minWidth: 0 },
   resultCount: { backgroundColor: "#EEEBFF", borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
