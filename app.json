@@ -5,6 +5,9 @@
     "scheme": "avtonomer",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "web": {
+      "output": "static"
+    },
     "plugins": [
       "expo-router",
       "expo-notifications"
