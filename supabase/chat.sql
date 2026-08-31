@@ -26,7 +26,9 @@ alter table public.listing_messages enable row level security;
 create or replace function public.reject_prohibited_chat_message()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if lower(new.body) ~ '(хуй|хуе|пизд|еба|бля|сука|мраз|гандон|идиот)' then
+  -- Русский, украинский, английский и популярная транслитерация.
+  -- Проверка выполняется на сервере и действует также для гостевых сессий.
+  if lower(new.body) ~ '(хуй|хуе|ху[йїіе]|пизд|пізд|еба|їба|йоб|бля|бляд|сука|курва|мраз|гандон|идиот|fuck|f+u+c+k+|shit|bitch|asshole|bastard|cunt|dick|whore|slut|huy|hu[yi]|pizd|pizdets|ebat|yob|blya|suka|kurwa)' then
     raise exception 'Сообщение содержит запрещённые слова';
   end if;
   return new;
@@ -53,11 +55,16 @@ create policy "Users send messages to active listings"
     sender_id = auth.uid()
     and recipient_id is not null
     and recipient_id <> auth.uid()
-    and exists (select 1 from public.auto_listings l where l.id = listing_id and l.status = 'active')
     and (
-      recipient_id = (select owner_id from public.auto_listings l where l.id = listing_id)
+      exists (
+        select 1 from public.auto_listings l
+        where l.id = listing_id and l.status = 'active' and l.owner_id = recipient_id
+      )
       or (
-        (select owner_id from public.auto_listings l where l.id = listing_id) = auth.uid()
+        exists (
+          select 1 from public.auto_listings l
+          where l.id = listing_id and l.status = 'active' and l.owner_id = auth.uid()
+        )
         and exists (
           select 1 from public.listing_messages earlier
           where earlier.listing_id = listing_id
@@ -66,6 +73,62 @@ create policy "Users send messages to active listings"
       )
     )
   );
+
+-- Жалобы на сообщения. Их видит автор жалобы и модератор в отдельном интерфейсе;
+-- обычные участники чата не получают доступ к чужим жалобам.
+create table if not exists public.listing_message_reports (
+  id uuid primary key default gen_random_uuid(),
+  message_id uuid not null references public.listing_messages(id) on delete cascade,
+  reporter_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  reason text not null check (char_length(trim(reason)) between 3 and 500),
+  created_at timestamptz not null default now(),
+  unique (message_id, reporter_id)
+);
+
+alter table public.listing_message_reports enable row level security;
+
+alter table public.listing_message_reports
+  add column if not exists status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected')),
+  add column if not exists reviewed_by uuid references auth.users(id) on delete set null,
+  add column if not exists reviewed_at timestamptz;
+
+drop policy if exists "Users submit their own message reports" on public.listing_message_reports;
+create policy "Users submit their own message reports"
+  on public.listing_message_reports for insert to authenticated
+  with check (reporter_id = auth.uid());
+
+drop policy if exists "Users see their own message reports" on public.listing_message_reports;
+create policy "Users see their own message reports"
+  on public.listing_message_reports for select to authenticated
+  using (reporter_id = auth.uid());
+
+-- Только аккаунты из auto_moderators могут видеть и обрабатывать чужие жалобы.
+drop policy if exists "Moderators view message reports" on public.listing_message_reports;
+create policy "Moderators view message reports"
+  on public.listing_message_reports for select to authenticated
+  using (exists (select 1 from public.auto_moderators m where m.user_id = auth.uid()));
+
+create or replace function public.review_listing_message_report(report uuid, new_status text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.auto_moderators m where m.user_id = auth.uid()) then
+    raise exception 'Недостаточно прав модератора';
+  end if;
+  if new_status not in ('approved', 'rejected') then
+    raise exception 'Недопустимый статус жалобы';
+  end if;
+  update public.listing_message_reports
+  set status = new_status, reviewed_by = auth.uid(), reviewed_at = now()
+  where id = report and status = 'pending';
+  if not found then
+    raise exception 'Жалоба не найдена или уже обработана';
+  end if;
+end;
+$$;
+
+revoke all on function public.review_listing_message_report(uuid, text) from public;
+grant execute on function public.review_listing_message_report(uuid, text) to authenticated;
 
 -- Ник владельца доступен всем для отображения в карточке, без контактов.
 -- Политика уже есть в schema.sql; эта строка безопасна при повторном запуске.

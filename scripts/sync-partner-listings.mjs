@@ -51,6 +51,8 @@ const decodeUrl = (value) => value.replace(/&amp;/gi, "&").replace(/&#39;/g, "'"
 
 // OCR is used only as a fallback when the post text itself does not contain a
 // complete listing. Recognised text is parsed in memory and is never saved.
+// In particular, this lets the importer read a region code printed on a plate
+// photo when the post caption contains only the price.
 let ocrWorkerPromise;
 async function recognisePhotos(photoUrls) {
   if (!photoUrls.length) return "";
@@ -77,6 +79,44 @@ function classifyTag(left, digits, right) {
   return "Красивый номер";
 }
 
+function normaliseRegionCode(value) {
+  const digits = String(value).replace(/\D/g, "");
+  if (digits.length === 1) return `0${digits}`;
+  return digits;
+}
+
+function findSingleExplicitPrice(text) {
+  const labelled = [...text.matchAll(/(?:💰|цена\s*[:—-]?)\s*(\d[\d\s,]*)/gi)]
+    .map((match) => Number(match[1].replace(/[^\d]/g, "")))
+    .filter((price) => Number.isSafeInteger(price) && price >= 5_000 && price <= 50_000_000);
+  const unique = [...new Set(labelled)];
+  return unique.length === 1 ? unique[0] : null;
+}
+
+function createRow({ source, postId, postedAt, rawLeft, digits, rawRight, regionCode, price }) {
+  const normalizedRegionCode = normaliseRegionCode(regionCode);
+  const name = REGION_NAMES.get(normalizedRegionCode);
+  if (!name || !Number.isSafeInteger(price) || price < 5_000 || price > 50_000_000) return null;
+  const left = normalizeLetter(rawLeft);
+  const right = [...rawRight].map(normalizeLetter).join("");
+  return {
+    id: `${source.handle}-${postId}-${left}${digits}${right}${normalizedRegionCode}`.toLowerCase(),
+    plate_left: left,
+    plate_digits: digits,
+    plate_right: right,
+    region: `${name} · ${normalizedRegionCode}`,
+    vehicle_type: "car",
+    price_rub: price,
+    tag: classifyTag(left, digits, right),
+    source_name: source.name,
+    source_url: `https://t.me/${source.handle}/${postId}`,
+    status: "active",
+    archive_reason: null,
+    checked_at: new Date().toISOString(),
+    created_at: postedAt ?? new Date().toISOString(),
+  };
+}
+
 function parsePost(text, source, postId, postedAt) {
   // Each accepted row must have a plate, a price immediately after it, and a known region code.
   // Contacts are irrelevant and purposely ignored.
@@ -84,29 +124,24 @@ function parsePost(text, source, postId, postedAt) {
   const entries = [];
   for (const match of text.matchAll(row)) {
     const [, rawLeft, digits, rawRight, regionCode, rawPrice] = match;
-    const name = REGION_NAMES.get(regionCode);
     const price = Number(rawPrice.replace(/[^\d]/g, ""));
-    if (!name || !Number.isSafeInteger(price) || price < 5_000 || price > 50_000_000) continue;
-    const left = normalizeLetter(rawLeft);
-    const right = [...rawRight].map(normalizeLetter).join("");
-    entries.push({
-      id: `${source.handle}-${postId}-${left}${digits}${right}${regionCode}`.toLowerCase(),
-      plate_left: left,
-      plate_digits: digits,
-      plate_right: right,
-      region: `${name} · ${regionCode}`,
-      vehicle_type: "car",
-      price_rub: price,
-      tag: classifyTag(left, digits, right),
-      source_name: source.name,
-      source_url: `https://t.me/${source.handle}/${postId}`,
-      status: "active",
-      archive_reason: null,
-      checked_at: new Date().toISOString(),
-      created_at: postedAt ?? new Date().toISOString(),
-    });
+    const entry = createRow({ source, postId, postedAt, rawLeft, digits, rawRight, regionCode, price });
+    if (entry) entries.push(entry);
   }
-  return entries;
+
+  // OCR often puts the plate and its region on a separate line, while the
+  // caption has the price. Accept this only when the caption has one explicit
+  // price; two prices would make it impossible to link the correct one safely.
+  if (!entries.length) {
+    const price = findSingleExplicitPrice(text);
+    const plateWithPhotoRegion = /([АВЕКМНОРСТУХABCEHKMOPTXY])\s?(\d{3})\s?([АВЕКМНОРСТУХABCEHKMOPTXY]{2})\s*(?:RUS|RU|РУС)?\s*(\d{1,3})\b/gim;
+    for (const match of text.matchAll(plateWithPhotoRegion)) {
+      const [, rawLeft, digits, rawRight, regionCode] = match;
+      const entry = createRow({ source, postId, postedAt, rawLeft, digits, rawRight, regionCode, price });
+      if (entry) entries.push(entry);
+    }
+  }
+  return [...new Map(entries.map((entry) => [entry.id, entry])).values()];
 }
 
 function extractPosts(html, source) {
@@ -179,4 +214,3 @@ for (const source of SOURCES) {
 }
 console.log(JSON.stringify({ checkedAt: new Date().toISOString(), result }, null, 2));
 if (ocrWorkerPromise) (await ocrWorkerPromise).terminate();
-

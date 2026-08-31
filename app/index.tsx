@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { supabase } from "../lib/supabase";
+import { registerForPushNotifications } from "../lib/push-notifications";
 
 type Plate = {
   id: string;
@@ -43,6 +44,8 @@ type PricePoint = {
 };
 
 type ChatMessage = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string };
+type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessage };
+type MessageReport = { id: string; reason: string; created_at: string; message?: { body?: string } | null };
 
 type SavedSearch = {
   id: string;
@@ -68,6 +71,24 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+// Пользователь может печатать русской или английской раскладкой. Латинские
+// аналоги приводим к буквам российского госномера, остальные символы отсекаем.
+const latinPlateLetters: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
+function normalizePlateLetters(value: string, maxLength: number, allowWildcard = true) {
+  return value
+    .toUpperCase()
+    .split("")
+    .map((letter) => latinPlateLetters[letter] ?? letter)
+    .filter((letter) => allowedLetters.includes(letter) || (allowWildcard && letter === "*"))
+    .join("")
+    .slice(0, maxLength);
+}
+function normalizePlateDigits(value: string, maxLength: number, allowWildcard = true) {
+  return value.replace(allowWildcard ? /[^0-9*]/g : /\D/g, "").slice(0, maxLength);
+}
+// Дублирует серверную проверку из supabase/chat.sql, чтобы посетитель видел
+// причину до отправки сообщения. Серверный фильтр остаётся главным.
+const prohibitedChatPattern = /(?:хуй|хуе|ху[йїіе]|пизд|пізд|еба|їба|йоб|бля|бляд|сука|курва|мраз|гандон|идиот|fuck|f+u+c+k+|shit|bitch|asshole|bastard|cunt|dick|whore|slut|huy|hu[yi]|pizd|pizdets|ebat|yob|blya|suka|kurwa)/iu;
 
 // Временные демонстрационные карточки. Реальные объявления добавляем только
 // от владельцев или партнёров, которые дали на это разрешение.
@@ -111,11 +132,11 @@ export default function HomeScreen() {
   const [subscribedNumbers, setSubscribedNumbers] = useState<string[]>([]);
   const [similarToId, setSimilarToId] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [savedSearchesOpen, setSavedSearchesOpen] = useState(false);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [profileDraft, setProfileDraft] = useState("");
   const [authEmail, setAuthEmail] = useState("");
@@ -138,6 +159,7 @@ export default function HomeScreen() {
   const [listingPicker, setListingPicker] = useState<PlatePicker>(null);
   const [myListings, setMyListings] = useState<Plate[]>([]);
   const [moderationListings, setModerationListings] = useState<Plate[]>([]);
+  const [moderationReports, setModerationReports] = useState<MessageReport[]>([]);
   const [isModerator, setIsModerator] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
@@ -146,6 +168,12 @@ export default function HomeScreen() {
   const [chatDraft, setChatDraft] = useState("");
   const [chatMessage, setChatMessage] = useState("");
   const [chatRecipientId, setChatRecipientId] = useState("");
+  const [chatsOpen, setChatsOpen] = useState(false);
+  const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
+  const [reportingMessage, setReportingMessage] = useState<ChatMessage | null>(null);
+  const [reportReason, setReportReason] = useState("");
+  const [reportMessage, setReportMessage] = useState("");
+  const [ratingMessage, setRatingMessage] = useState("");
 
   useEffect(() => {
     if (!selectedPlate) {
@@ -215,6 +243,12 @@ export default function HomeScreen() {
       .eq("status", "moderation")
       .order("created_at", { ascending: true });
     setModerationListings((pending ?? []).map((item) => mapManagedListing(item, "Пользователь ЗаНомером")));
+    const { data: reports } = await client
+      .from("listing_message_reports")
+      .select("id, reason, created_at, listing_messages(body)")
+      .eq("status", "pending")
+      .order("created_at", { ascending: true });
+    setModerationReports((reports ?? []) as MessageReport[]);
   }
 
   async function archiveMyListing(listing: Plate) {
@@ -234,24 +268,32 @@ export default function HomeScreen() {
     await loadManagement(data.user?.id, profileName);
   }
 
+  async function reviewMessageReport(report: MessageReport, status: "approved" | "rejected") {
+    if (!supabase) return;
+    const { error } = await supabase.rpc("review_listing_message_report", { report: report.id, new_status: status });
+    if (error) return setAuthMessage("Не удалось обработать жалобу. Проверь права модератора.");
+    const { data } = await supabase.auth.getUser();
+    await loadManagement(data.user?.id, profileName);
+  }
+
   async function openChat(listing: Plate) {
     if (!supabase) return;
+    if (listing.ownerId && listing.ownerId === currentUserId) {
+      setChatMessage("Нельзя написать самому себе по своему объявлению.");
+      return;
+    }
 
-    // Временный гостевой режим: для переписки не просим посетителя
-    // регистрироваться. Supabase создаёт анонимную сессию, поэтому к чату
-    // всё равно применяются те же правила доступа и фильтр запрещённых слов.
-    if (!isSignedIn) {
-      const { data, error } = await supabase.auth.signInAnonymously();
-      if (error || !data.user) {
-        setChatMessage("Гостевой чат пока не включён в базе. Включи Anonymous sign-ins в настройках Supabase.");
-        setChatOpen(true);
-        return;
-      }
-      const guestName = `Гость-${data.user.id.slice(0, 6)}`;
-      setCurrentUserId(data.user.id);
-      setProfileName(guestName);
-      setIsSignedIn(true);
-      await supabase.from("auto_profiles").upsert({ id: data.user.id, username: guestName }, { onConflict: "id" });
+    let activeUserId = currentUserId;
+    if (!isSignedIn || isAnonymous) {
+      if (isAnonymous) await supabase.auth.signOut();
+      setIsAnonymous(false);
+      setIsSignedIn(false);
+      setCurrentUserId("");
+      setAuthMode("signup");
+      setAuthStep(1);
+      setAuthMessage("Чтобы написать продавцу, зарегистрируйся и подтверди почту.");
+      setAuthOpen(true);
+      return;
     }
     setChatMessage("");
     setChatDraft("");
@@ -263,16 +305,66 @@ export default function HomeScreen() {
     if (error) setChatMessage("Чат пока не подключён к базе. Выполни chat.sql в Supabase.");
     const messages = (data ?? []) as ChatMessage[];
     setChatMessages(messages);
-    setChatRecipientId(listing.ownerId === currentUserId ? messages.filter((item) => item.sender_id !== currentUserId).at(-1)?.sender_id ?? "" : listing.ownerId ?? "");
+    setChatRecipientId(listing.ownerId === activeUserId ? messages.filter((item) => item.sender_id !== activeUserId).at(-1)?.sender_id ?? "" : listing.ownerId ?? "");
     setChatOpen(true);
+  }
+
+  async function loadChatThreads() {
+    if (!supabase || !currentUserId) return;
+    const { data, error } = await supabase
+      .from("listing_messages")
+      .select("id, listing_id, sender_id, recipient_id, body, created_at")
+      .order("created_at", { ascending: false });
+    if (error) return setChatMessage("Не удалось загрузить диалоги.");
+    const threads = new Map<string, ChatThread>();
+    ((data ?? []) as (ChatMessage & { listing_id: string })[]).forEach((item) => {
+      const partnerId = item.sender_id === currentUserId ? item.recipient_id : item.sender_id;
+      const key = `${item.listing_id}:${partnerId}`;
+      if (!threads.has(key)) threads.set(key, { listingId: item.listing_id, partnerId, lastMessage: item });
+    });
+    setChatThreads([...threads.values()]);
+  }
+
+  async function openChats() {
+    if (!currentUserId) {
+      setChatMessage("Список диалогов появится после первого сообщения.");
+      setChatsOpen(true);
+      return;
+    }
+    await loadChatThreads();
+    setChatsOpen(true);
+  }
+
+  async function sendReport() {
+    if (!supabase || !reportingMessage || !reportReason.trim()) return setReportMessage("Кратко укажи причину жалобы.");
+    const { error } = await supabase.from("listing_message_reports").insert({ message_id: reportingMessage.id, reason: reportReason.trim() });
+    if (error) return setReportMessage("Не удалось отправить жалобу. Проверь, что в базе выполнен chat.sql.");
+    setReportReason("");
+    setReportMessage("Жалоба отправлена на проверку.");
+  }
+
+  async function rateSeller(score: number) {
+    if (!supabase || !selectedPlate?.ownerId || !currentUserId) return setRatingMessage("Сначала зарегистрируйся и напиши продавцу.");
+    if (selectedPlate.ownerId === currentUserId) return;
+    const { error } = await supabase.from("seller_reviews").upsert({ listing_id: selectedPlate.id, seller_id: selectedPlate.ownerId, score }, { onConflict: "listing_id,reviewer_id" });
+    setRatingMessage(error ? "Оценка пока не сохранена. Проверь обновление базы." : "Спасибо, оценка сохранена.");
   }
 
   async function sendChatMessage() {
     if (!supabase || !selectedPlate || !chatDraft.trim()) return;
+    if (prohibitedChatPattern.test(chatDraft)) {
+      setChatMessage("Сообщение содержит запрещённые слова на одном из языков. Измени текст.");
+      return;
+    }
     const recipientId = chatRecipientId || selectedPlate.ownerId;
     if (!recipientId) return setChatMessage("Не удалось определить получателя сообщения.");
     const { error } = await supabase.from("listing_messages").insert({ listing_id: selectedPlate.id, recipient_id: recipientId, body: chatDraft.trim() });
-    if (error) return setChatMessage(error.message.includes("запрещ") ? "Сообщение содержит запрещённые слова. Измени текст." : "Не удалось отправить сообщение.");
+    if (error) {
+      if (error.message.includes("запрещ")) return setChatMessage("Сообщение содержит запрещённые слова. Измени текст.");
+      if (error.code === "42501") return setChatMessage("Чат не может отправить сообщение: в базе ещё не включены права для гостевого чата.");
+      if (error.code === "23503") return setChatMessage("Это объявление уже удалено, поэтому написать по нему нельзя.");
+      return setChatMessage(`Не удалось отправить: ${error.message}`);
+    }
     setChatDraft("");
     await openChat(selectedPlate);
   }
@@ -290,20 +382,41 @@ export default function HomeScreen() {
     const client = supabase;
 
     async function loadCatalog() {
-      const { data, error } = await client
-        .from("auto_listings")
-        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until")
-        .eq("status", "active")
-        .order("created_at", { ascending: false });
-      if (error || !data) return;
+      // Таблицы загружаются независимо: партнёрский каталог не должен исчезать,
+      // если пользовательские объявления временно недоступны гостю по RLS.
+      const [siteResult, partnerResult] = await Promise.all([
+        client
+          .from("auto_listings")
+          .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until")
+          .eq("status", "active")
+          .order("created_at", { ascending: false }),
+        client
+          .from("partner_listings")
+          .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
+          .eq("status", "active")
+          .order("created_at", { ascending: false }),
+      ]);
+      const data = siteResult.data ?? [];
+      const partnerData = partnerResult.data ?? [];
+      if (siteResult.error && partnerResult.error) return;
 
       const ownerIds = data.map((item) => item.owner_id).filter(Boolean);
       const { data: profiles } = ownerIds.length
         ? await client.from("auto_profiles").select("id, username").in("id", ownerIds)
         : { data: [] as { id: string; username: string }[] };
       const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.username]));
+      const { data: reviewRows } = ownerIds.length
+        ? await client.from("seller_reviews").select("seller_id, score").in("seller_id", ownerIds)
+        : { data: [] as { seller_id: string; score: number }[] };
+      const ratings = new Map<string, { total: number; count: number }>();
+      (reviewRows ?? []).forEach((review) => {
+        const current = ratings.get(review.seller_id) ?? { total: 0, count: 0 };
+        ratings.set(review.seller_id, { total: current.total + Number(review.score), count: current.count + 1 });
+      });
 
-      const fromDatabase: Plate[] = data.map((item) => ({
+      const fromDatabase: Plate[] = data.map((item) => {
+        const sellerReviews = ratings.get(item.owner_id);
+        return {
         id: item.id,
         value: `${item.plate_left} ${item.plate_digits} ${item.plate_right}`,
         leftLetter: item.plate_left,
@@ -318,16 +431,11 @@ export default function HomeScreen() {
         tag: "Объявление",
         isSiteListing: true,
         ownerId: item.owner_id,
-        sellerRating: null,
+        sellerRating: sellerReviews ? sellerReviews.total / sellerReviews.count : null,
         featuredUntil: item.featured_until,
-      }));
-      const { data: partnerData } = await client
-        .from("partner_listings")
-        .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
-        .eq("status", "active")
-        .order("created_at", { ascending: false });
-
-      const partners: Plate[] = (partnerData ?? []).map((item) => ({
+      };
+      });
+      const partners: Plate[] = partnerData.map((item) => ({
         id: item.id,
         value: `${item.plate_left} ${item.plate_digits} ${item.plate_right}`,
         leftLetter: item.plate_left,
@@ -379,11 +487,13 @@ export default function HomeScreen() {
       if (!user?.id || !name) {
         setProfileName(name);
         setIsSignedIn(false);
+        setIsAnonymous(false);
         setCurrentUserId("");
         setMyListings([]); setModerationListings([]); setIsModerator(false);
         return;
       }
       setIsSignedIn(true);
+      setIsAnonymous(Boolean(user.is_anonymous));
       setCurrentUserId(user.id);
       const { error } = await supabase.from("auto_profiles").upsert({ id: user.id, username: name }, { onConflict: "id" });
       if (error) {
@@ -396,6 +506,9 @@ export default function HomeScreen() {
       }
       setProfileName(name);
       void loadManagement(user.id, name);
+      // На Android приложение один раз спросит разрешение, а затем сохранит
+      // токен устройства для уведомлений о подходящих номерах.
+      void registerForPushNotifications(user.id);
     }
 
     void supabase.auth.getUser().then(({ data }) => setProfile(data.user));
@@ -466,9 +579,32 @@ export default function HomeScreen() {
   const selectedRegionOption = availableRegions.find((item) => item.value === regionCode);
   const selectedRegionLabel = regionCode || "77";
   const selectedRegionFilterLabel = selectedRegionOption?.title ?? "Все регионы";
+  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || specialFilters.length);
 
   function toggleSaved(id: string) {
-    setSaved((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+    setSaved((current) => {
+      const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
+      setSubscribedNumbers(next);
+      const plate = catalog.find((item) => item.id === id);
+      if (!current.includes(id) && plate) {
+        const [regionTitle, savedRegionCode = ""] = plate.region.split(" · ");
+        const alert: SavedSearch = {
+          id: `favorite-${id}`,
+          title: plate.value,
+          leftLetter: plate.leftLetter,
+          rightLetters: plate.rightLetters,
+          digits: plate.digits,
+          region: regionTitle || "Все",
+          regionCode: savedRegionCode,
+          vehicle: plate.vehicle,
+          priceLimit: null,
+        };
+        setSavedSearches((searches) => [alert, ...searches.filter((item) => item.id !== alert.id)]);
+        setSubscriptionToast(true);
+      }
+      if (current.includes(id)) setSavedSearches((searches) => searches.filter((item) => item.id !== `favorite-${id}`));
+      return next;
+    });
   }
 
   function makeSearchTitle() {
@@ -477,7 +613,7 @@ export default function HomeScreen() {
     return `${number}${code}${region !== "Все" ? ` · ${region}` : ""}`;
   }
 
-  function saveCurrentSearch() {
+  function subscribeToCurrentSearch() {
     const current: SavedSearch = {
       id: `${Date.now()}`,
       title: makeSearchTitle(),
@@ -490,6 +626,7 @@ export default function HomeScreen() {
       priceLimit,
     };
     setSavedSearches((searches) => [current, ...searches.filter((item) => item.title !== current.title)].slice(0, 8));
+    setSubscriptionToast(true);
   }
 
   function applySavedSearch(search: SavedSearch) {
@@ -500,7 +637,7 @@ export default function HomeScreen() {
     setRegionCode(search.regionCode);
     setVehicle(search.vehicle);
     setPriceLimit(search.priceLimit);
-    setSavedSearchesOpen(false);
+    setActiveTab("favorites");
   }
 
   function choosePlatePart(value: string) {
@@ -676,6 +813,10 @@ export default function HomeScreen() {
           <Text style={styles.subtitle}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
+          <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
+            <Text style={styles.chatsButtonText}>💬</Text>
+            {chatThreads.some((thread) => thread.lastMessage.sender_id !== currentUserId) && <View style={styles.chatBadge} />}
+          </Pressable>
           <Pressable onPress={() => setAuthOpen((value) => !value)} style={styles.accountButton}>
             <Text style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
@@ -685,9 +826,9 @@ export default function HomeScreen() {
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
-          <SafeAreaView style={styles.authOverlay}>
+          <Pressable style={styles.authOverlay} onPress={() => { setAuthOpen(false); setAuthMessage(""); }}>
           <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
-          <View style={styles.authPanel}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.authPanel}>
           <View style={styles.authHeader}>
             <Text style={styles.authTitle}>{isSignedIn ? "Твой профиль" : authMode === "signup" ? "Регистрация в ЗаНомером" : "Вход в ЗаНомером"}</Text>
             <Pressable
@@ -722,6 +863,7 @@ export default function HomeScreen() {
               </Pressable>
               {managementOpen && <View style={styles.managementPanel}>
                 <Text style={styles.managementTitle}>Мои объявления</Text>
+                <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>0</Text><Text style={styles.statLabel}>сообщений</Text></View></View>
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
                   <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text></View>
                   {listing.listingStatus !== "archived" && <Pressable onPress={() => archiveMyListing(listing)} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Снять</Text></Pressable>}
@@ -732,9 +874,14 @@ export default function HomeScreen() {
                     <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text></View>
                     <View style={styles.reviewActions}><Pressable onPress={() => reviewListing(listing, "active")} style={styles.approveButton}><Text style={styles.approveButtonText}>Одобрить</Text></Pressable><Pressable onPress={() => reviewListing(listing, "archived")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable></View>
                   </View>)}
+                  <Text style={styles.managementTitle}>Жалобы на сообщения</Text>
+                  {moderationReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationReports.map((report) => <View key={report.id} style={styles.managementCard}>
+                    <View style={styles.reportReviewText}><Text style={styles.managementMeta}>Сообщение: {report.message?.body ?? "удалено"}</Text><Text style={styles.managementStatus}>Причина: {report.reason}</Text></View>
+                    <View style={styles.reviewActions}><Pressable onPress={() => reviewMessageReport(report, "approved")} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "rejected")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable></View>
+                  </View>)}
                 </>}
               </View>}
-              <Pressable onPress={async () => { if (supabase) await supabase.auth.signOut(); setProfileName(""); setIsSignedIn(false); setAuthOpen(false); }}><Text style={styles.logoutText}>Выйти из профиля</Text></Pressable>
+              <Pressable onPress={async () => { if (supabase) await supabase.auth.signOut(); setProfileName(""); setIsSignedIn(false); setIsAnonymous(false); setAuthOpen(false); }}><Text style={styles.logoutText}>Выйти из профиля</Text></Pressable>
             </>
           ) : (
             <>
@@ -749,9 +896,9 @@ export default function HomeScreen() {
               </View>
             </>
           )}
-          </View>
+          </Pressable>
           </ScrollView>
-          </SafeAreaView>
+          </Pressable>
         </Modal>
       )}
 
@@ -771,21 +918,22 @@ export default function HomeScreen() {
       </View>
       <View style={styles.vehicleTabs}>
         {([
-          ["car", "🚗"],
-          ["motorcycle", "🏍️"],
-          ["truck", "🚚"],
-        ] as const).map(([type, icon]) => (
+          ["car", "🚗", "Авто"],
+          ["motorcycle", "🏍️", "Мото"],
+          ["truck", "🚚", "Грузовые"],
+        ] as const).map(([type, icon, label]) => (
           <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, vehicle === type && styles.vehicleTabActive]}>
             <Text style={styles.vehicleIcon}>{icon}</Text>
+            <Text style={[styles.vehicleLabel, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
       </View>
       <View style={styles.plateSearch}>
-        <TextInput value={leftLetter} onChangeText={setLeftLetter} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={1} />
+        <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={1} />
         <View style={styles.plateDivider} />
-        <TextInput value={digits} onChangeText={setDigits} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={3} />
+        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={3} />
         <View style={styles.plateDivider} />
-        <TextInput value={rightLetters} onChangeText={setRightLetters} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
+        <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
         <View style={styles.plateDivider} />
         <Pressable onPress={() => setPlatePicker("region")} style={styles.regionCodeBox}>
           <Text numberOfLines={1} style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder]}>{selectedRegionLabel}</Text>
@@ -824,20 +972,17 @@ export default function HomeScreen() {
         })}
       </View>
 
-      <View style={styles.searchActions}>
-        <Pressable onPress={saveCurrentSearch} style={styles.saveSearchButton}>
-          <Text style={styles.saveSearchText}>☆ Сохранить поиск</Text>
+      {hasSearchCriteria && <View style={styles.searchActions}>
+        <Pressable onPress={subscribeToCurrentSearch} style={styles.saveSearchButton}>
+          <Text style={styles.saveSearchText}>🔔 Сообщить, когда номер появится</Text>
         </Pressable>
-        <Pressable onPress={() => setSavedSearchesOpen((value) => !value)} style={styles.savedSearchesButton}>
-          <Text style={styles.savedSearchesText}>Сохранённые {savedSearches.length ? `(${savedSearches.length})` : ""}</Text>
-        </Pressable>
-      </View>
+      </View>}
 
       {!leftLetter && !rightLetters && !digits && !regionCode && region === "Все" && priceLimit === null && specialFilters.length === 0 && !similarToId && (
         <View style={styles.featuredSection}>
           <View style={styles.featuredHeading}>
             <Text style={styles.featuredTitle}>🔥 Горячие предложения</Text>
-            <Text style={styles.featuredHint}>Подняты владельцами</Text>
+            <Text style={styles.featuredHint}>Добавлены владельцами</Text>
           </View>
           {hotPlates.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredList}>
@@ -850,27 +995,6 @@ export default function HomeScreen() {
               ))}
             </ScrollView>
           ) : <Text style={styles.noHotOffers}>Пока нет выделенных номеров</Text>}
-        </View>
-      )}
-
-      {savedSearchesOpen && (
-        <View style={styles.savedSearchesPanel}>
-          <Text style={styles.savedSearchesTitle}>Сохранённые поиски</Text>
-          {savedSearches.length === 0 ? (
-            <Text style={styles.savedSearchesEmpty}>Настрой номер и нажми «Сохранить поиск».</Text>
-          ) : (
-            savedSearches.map((search) => (
-              <View key={search.id} style={styles.savedSearchRow}>
-                <Pressable onPress={() => applySavedSearch(search)} style={styles.savedSearchApply}>
-                  <Text numberOfLines={1} style={styles.savedSearchName}>{search.title}</Text>
-                  <Text style={styles.savedSearchHint}>Применить</Text>
-                </Pressable>
-                <Pressable onPress={() => setSavedSearches((items) => items.filter((item) => item.id !== search.id))} hitSlop={8}>
-                  <Text style={styles.savedSearchRemove}>×</Text>
-                </Pressable>
-              </View>
-            ))
-          )}
         </View>
       )}
 
@@ -896,9 +1020,9 @@ export default function HomeScreen() {
             <Text style={styles.addPanelTitle}>Новое объявление</Text>
             {!profileName ? <Text style={styles.addPanelHint}>Сначала войди через кнопку «Войти» сверху.</Text> : <>
               <View style={styles.addPlateRow}>
-                <TextInput value={listingLeftLetter} onFocus={() => setListingPicker("left")} onChangeText={(value) => setListingLeftLetter(value.toUpperCase().replace(/[^АВЕКМНОРСТУХ]/g, "").slice(-1))} placeholder="А" placeholderTextColor="#98A2B3" style={styles.addSmallInput} autoCapitalize="characters" maxLength={1} />
-                <TextInput value={listingDigits} onFocus={() => setListingPicker("digits")} onChangeText={(value) => setListingDigits(value.replace(/\D/g, "").slice(0, 3))} placeholder="777" placeholderTextColor="#98A2B3" style={styles.addDigitsInput} keyboardType="number-pad" maxLength={3} />
-                <TextInput value={listingRightLetters} onFocus={() => setListingPicker("right")} onChangeText={(value) => setListingRightLetters(value.toUpperCase().replace(/[^АВЕКМНОРСТУХ]/g, "").slice(0, 2))} placeholder="АА" placeholderTextColor="#98A2B3" style={styles.addLettersInput} autoCapitalize="characters" maxLength={2} />
+                <TextInput value={listingLeftLetter} onFocus={() => setListingPicker("left")} onChangeText={(value) => setListingLeftLetter(normalizePlateLetters(value, 1, false))} placeholder="А" placeholderTextColor="#98A2B3" style={styles.addSmallInput} autoCapitalize="characters" maxLength={1} />
+                <TextInput value={listingDigits} onFocus={() => setListingPicker("digits")} onChangeText={(value) => setListingDigits(normalizePlateDigits(value, 3, false))} placeholder="777" placeholderTextColor="#98A2B3" style={styles.addDigitsInput} keyboardType="number-pad" maxLength={3} />
+                <TextInput value={listingRightLetters} onFocus={() => setListingPicker("right")} onChangeText={(value) => setListingRightLetters(normalizePlateLetters(value, 2, false))} placeholder="АА" placeholderTextColor="#98A2B3" style={styles.addLettersInput} autoCapitalize="characters" maxLength={2} />
               </View>
               {listingPicker && listingPicker !== "region" && <View style={styles.listingPickerPanel}>
                 <View style={styles.listingPickerHeader}>
@@ -982,11 +1106,10 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
-        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранные номера" : `Похожие на ${similarTo.value}`}</Text>}
+        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное и сохранённое" : `Похожие на ${similarTo.value}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>Найдено: {visiblePlates.length}</Text></View>}
       </View>
       {activeTab === "buy" && <View style={styles.listFilters}>
-        <Pressable onPress={() => setPlatePicker("region")} style={[styles.listFilterButton, !!regionCode && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, !!regionCode && styles.listFilterButtonTextActive]}>⌖ {selectedRegionFilterLabel}</Text></Pressable>
         {[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit(limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}
       </View>}
       {similarTo && (
@@ -994,6 +1117,23 @@ export default function HomeScreen() {
           <Text style={styles.clearSimilarText}>Показать все номера</Text>
         </Pressable>
       )}
+
+      {activeTab === "favorites" && <View style={styles.savedSearchesPanel}>
+        <Text style={styles.savedSearchesTitle}>Уведомления о поисках</Text>
+        {savedSearches.length === 0 ? (
+          <Text style={styles.savedSearchesEmpty}>Настрой номер в поиске и нажми «Сообщить, когда номер появится».</Text>
+        ) : savedSearches.map((search) => (
+          <View key={search.id} style={styles.savedSearchRow}>
+            <Pressable onPress={() => applySavedSearch(search)} style={styles.savedSearchApply}>
+              <Text numberOfLines={1} style={styles.savedSearchName}>🔔 {search.title}</Text>
+              <Text style={styles.savedSearchHint}>Уведомления включены · нажми, чтобы применить поиск</Text>
+            </Pressable>
+            <Pressable onPress={() => setSavedSearches((items) => items.filter((item) => item.id !== search.id))} hitSlop={8}>
+              <Text style={styles.savedSearchRemove}>×</Text>
+            </Pressable>
+          </View>
+        ))}
+      </View>}
 
       <FlatList
         data={visiblePlates}
@@ -1007,25 +1147,26 @@ export default function HomeScreen() {
           return (
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
               <View style={styles.plate}>
-                <Text style={styles.plateValue}>{item.value}</Text>
-                <Text style={styles.plateRegion}>{item.region.split(" · ")[1]}</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.plateValue}>{item.value}</Text>
+                <Text numberOfLines={1} style={styles.plateRegion}>{item.region.split(" · ")[1]}</Text>
               </View>
               <View style={styles.cardInfo}>
                 <View style={styles.cardTopRow}>
                   <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
                 </View>
-                <Text style={styles.region}>{item.region}</Text>
-                <Text style={styles.seller}>Продавец: {item.seller} · {item.createdAt}</Text>
+                <Text numberOfLines={1} style={styles.region}>{item.region}</Text>
+                <Text numberOfLines={1} style={styles.seller}>Продавец: {item.seller} · {item.createdAt}</Text>
+                {!!item.sellerRating && <View style={styles.catalogRating}><Text style={styles.catalogRatingText}>★ {item.sellerRating.toFixed(1)} · продавец оценён</Text></View>}
                 <View style={styles.cardBottomRow}>
                   <Text style={styles.price}>{item.price}</Text>
-                  <View style={styles.catalogSourceBadge}><Text style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
+                  <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
                 </View>
                 {!!item.sourceUrl && <Pressable onPress={() => Linking.openURL(item.sourceUrl!)} style={styles.sourceButton}>
-                  <Text style={styles.sourceButtonText}>Открыть объявление ↗</Text>
+                  <Text numberOfLines={1} style={styles.sourceButtonText}>Открыть объявление ↗</Text>
                 </Pressable>}
                 {activeTab === "buy" && <Pressable onPress={() => setSimilarToId(item.id)} style={styles.similarButton}>
-                  <Text style={styles.similarButtonText}>Похожие номера ›</Text>
+                  <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                 </Pressable>}
               </View>
               <Pressable onPress={() => toggleSaved(item.id)} hitSlop={10} style={styles.heart}>
@@ -1034,19 +1175,16 @@ export default function HomeScreen() {
             </Pressable>
           );
         }}
-        ListEmptyComponent={<Text style={styles.empty}>{activeTab === "favorites" ? "В избранном пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{activeTab === "favorites" ? "В избранном пока нет номеров. Сохранённые поиски находятся выше." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
       />
-      {activeTab === "favorites" && visiblePlates.length > 0 && <Pressable onPress={() => { setSubscribedNumbers(saved); setSubscriptionToast(true); }} style={styles.subscribeButton}>
-        <Text style={styles.subscribeButtonText}>{subscribedNumbers.length ? "✓ Подписка включена" : "🔔 Сообщить, когда номер появится в продаже"}</Text>
-      </Pressable>}
       </>}
 
       </ScrollView>
 
       <Modal visible={!!selectedPlate} transparent animationType="slide" onRequestClose={() => setSelectedPlate(null)}>
-        <SafeAreaView style={styles.detailsOverlay}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setSelectedPlate(null)}>
           <ScrollView contentContainerStyle={styles.detailsScroll}>
-            <View style={styles.detailsPanel}>
+            <Pressable onPress={(event) => event.stopPropagation()} style={styles.detailsPanel}>
               <View style={styles.detailsHeader}>
                 <View>
                   <Text style={styles.detailsTitle}>{selectedPlate?.value}</Text>
@@ -1090,6 +1228,9 @@ export default function HomeScreen() {
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Рейтинг продавца</Text>
                 <Text style={styles.detailsValue}>{selectedPlate.sellerRating ? `★ ${selectedPlate.sellerRating.toFixed(1)} / 5` : "Пока нет отзывов"}</Text>
+                {selectedPlate.sellerRating && selectedPlate.sellerRating >= 4.5 && <Text style={styles.verifiedSeller}>✓ Проверенный продавец</Text>}
+                {selectedPlate.ownerId !== currentUserId && <View style={styles.ratingRow}><Text style={styles.ratingPrompt}>Оценить продавца:</Text>{[1,2,3,4,5].map((score) => <Pressable key={score} onPress={() => { void rateSeller(score); }}><Text style={styles.ratingStar}>★</Text></Pressable>)}</View>}
+                {!!ratingMessage && <Text style={styles.detailsMuted}>{ratingMessage}</Text>}
                 {!!selectedPlate.sellerComment && <><Text style={styles.detailsLabel}>Комментарий продавца</Text><Text style={styles.detailsComment}>{selectedPlate.sellerComment}</Text></>}
                 <View style={styles.safeContactCard}>
                   <Text style={styles.safeContactTitle}>Безопасная связь</Text>
@@ -1105,30 +1246,62 @@ export default function HomeScreen() {
                 <Text style={styles.legalNoticeTitle}>Важно</Text>
                 <Text style={styles.legalNoticeText}>ЗаНомером — площадка объявлений, а не сторона сделки. Оформление автомобиля и регистрационные действия проходят по правилам ГИБДД.</Text>
               </View>
-            </View>
+              <View style={styles.safeDealGuide}><Text style={styles.safeDealTitle}>Как оформить безопасно</Text><Text style={styles.safeDealText}>1. Проверь номер и документы владельца.  2. Не переводи деньги незнакомому человеку заранее.  3. Оформляй сделку и регистрационные действия по правилам ГИБДД.</Text></View>
+            </Pressable>
           </ScrollView>
-        </SafeAreaView>
+        </Pressable>
       </Modal>
 
       <Modal visible={chatOpen} transparent animationType="slide" onRequestClose={() => setChatOpen(false)}>
-        <SafeAreaView style={styles.detailsOverlay}>
-          <View style={styles.chatPanel}>
-            <View style={styles.detailsHeader}><View><Text style={styles.detailsTitle}>Чат по объявлению</Text><Text style={styles.detailsMuted}>{selectedPlate?.value} · {selectedPlate?.seller}</Text></View><Pressable onPress={() => setChatOpen(false)} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable></View>
+        <Pressable style={styles.detailsOverlay} onPress={() => setChatOpen(false)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.chatPanel}>
+            <View style={styles.chatHeader}>
+              <View style={styles.chatSellerMark}><Text style={styles.chatSellerMarkText}>З</Text></View>
+              <View style={styles.chatHeaderText}><Text style={styles.chatTitle}>Чат по объявлению</Text><Text style={styles.chatSubtitle}>{selectedPlate?.value} · {selectedPlate?.seller}</Text></View>
+              <Pressable onPress={() => setChatOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable>
+            </View>
             <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatMessages}>
-              {chatMessages.length === 0 ? <Text style={styles.detailsMuted}>Пока нет сообщений. Напиши продавцу первым.</Text> : chatMessages.map((message) => <Pressable key={message.id} onPress={() => { if (selectedPlate?.ownerId === currentUserId && message.sender_id !== currentUserId) setChatRecipientId(message.sender_id); }} style={[styles.chatBubble, message.sender_id === currentUserId && styles.chatBubbleOwn]}><Text style={[styles.chatBubbleText, message.sender_id === currentUserId && styles.chatBubbleTextOwn]}>{message.body}</Text></Pressable>)}
+              {chatMessages.length === 0 ? <View style={styles.chatEmpty}><Text style={styles.chatEmptyIcon}>✦</Text><Text style={styles.chatEmptyTitle}>Начните переписку</Text><Text style={styles.chatEmptyText}>Уточните цену, оформление или детали номера.</Text></View> : chatMessages.map((message) => <View key={message.id} style={[styles.chatBubbleRow, message.sender_id === currentUserId && styles.chatBubbleRowOwn]}><Pressable onPress={() => { if (selectedPlate?.ownerId === currentUserId && message.sender_id !== currentUserId) setChatRecipientId(message.sender_id); }} style={[styles.chatBubble, message.sender_id === currentUserId && styles.chatBubbleOwn]}><Text style={[styles.chatBubbleText, message.sender_id === currentUserId && styles.chatBubbleTextOwn]}>{message.body}</Text></Pressable>{message.sender_id !== currentUserId && <Pressable onPress={() => { setReportingMessage(message); setReportReason(""); setReportMessage(""); }} style={styles.reportButton}><Text style={styles.reportButtonText}>⚑</Text></Pressable>}</View>)}
             </ScrollView>
-            <Text style={styles.chatSafety}>{selectedPlate?.ownerId === currentUserId ? "Нажми на сообщение покупателя, чтобы выбрать его для ответа. Не отправляй документы, банковские данные, номера карт или ссылки." : "Не отправляй документы, банковские данные, номера карт или ссылки."}</Text>
+            <View style={styles.chatSafetyCard}><Text style={styles.chatSafetyIcon}>⌁</Text><Text style={styles.chatSafety}>{selectedPlate?.ownerId === currentUserId ? "Нажми на сообщение покупателя, чтобы выбрать его для ответа." : "Не отправляй документы, банковские данные или номера карт."}</Text></View>
             {!!chatMessage && <Text style={styles.authMessage}>{chatMessage}</Text>}
-            <View style={styles.chatInputRow}><TextInput value={chatDraft} onChangeText={setChatDraft} placeholder="Сообщение" placeholderTextColor="#98A2B3" style={styles.chatInput} multiline /><Pressable onPress={sendChatMessage} style={styles.chatSend}><Text style={styles.chatSendText}>Отправить</Text></Pressable></View>
-          </View>
-        </SafeAreaView>
+            <View style={styles.chatInputRow}><TextInput value={chatDraft} onChangeText={setChatDraft} placeholder="Напишите сообщение…" placeholderTextColor="#98A2B3" style={styles.chatInput} multiline /><Pressable onPress={sendChatMessage} style={styles.chatSend}><Text style={styles.chatSendText}>➤</Text></Pressable></View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={chatsOpen} transparent animationType="slide" onRequestClose={() => setChatsOpen(false)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setChatsOpen(false)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.dialogsPanel}>
+            <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Диалоги</Text><Pressable onPress={() => setChatsOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
+            <Text style={styles.dialogsHint}>Все сообщения по объявлениям в одном месте.</Text>
+            <ScrollView contentContainerStyle={styles.dialogsList}>
+              {chatThreads.length === 0 ? <Text style={styles.dialogsEmpty}>Пока нет диалогов. Напиши продавцу из карточки объявления.</Text> : chatThreads.map((thread) => {
+                const listing = catalog.find((item) => item.id === thread.listingId);
+                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={async () => { setChatsOpen(false); if (listing) await openChat(listing); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы: " : "Новое: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
+              })}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!reportingMessage} transparent animationType="fade" onRequestClose={() => setReportingMessage(null)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setReportingMessage(null)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportPanel}>
+            <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Пожаловаться</Text><Pressable onPress={() => setReportingMessage(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
+            <Text style={styles.dialogsHint}>Жалоба попадёт модератору. Не указывай личные данные.</Text>
+            <TextInput value={reportReason} onChangeText={setReportReason} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline />
+            {!!reportMessage && <Text style={styles.authMessage}>{reportMessage}</Text>}
+            <Pressable onPress={() => { void sendReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>Отправить жалобу</Text></Pressable>
+          </Pressable>
+        </Pressable>
       </Modal>
 
       <View style={styles.bottomNav}>
         {([
           ["buy", "⌕", "Купить", "#155EEF"],
           ["sell", "＋", "Продать", "#F04438"],
-          ["favorites", "♡", "Избранное", "#D92D20"],
+          ["favorites", "♡", "Избранное и сохранённое", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
           <Pressable onPress={() => setActiveTab(tab)} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
@@ -1157,6 +1330,9 @@ const styles = StyleSheet.create({
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
   headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },
+  chatsButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 42, justifyContent: "center", position: "relative", width: 42 },
+  chatsButtonText: { fontSize: 18 },
+  chatBadge: { backgroundColor: "#F04438", borderColor: "#FFFFFF", borderRadius: 6, borderWidth: 2, height: 12, position: "absolute", right: 4, top: 4, width: 12 },
   catalogHeroButton: { alignSelf: "center", backgroundColor: "#5143C2", borderRadius: 18, marginTop: 16, maxWidth: 760, paddingHorizontal: 18, paddingVertical: 15, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.25, shadowRadius: 14, width: "100%" },
   catalogHeroButtonActive: { backgroundColor: "#E8F8F0", borderColor: "#B7E6CD", borderWidth: 1, shadowOpacity: 0 },
   catalogHeroButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900", textAlign: "center" },
@@ -1186,10 +1362,15 @@ const styles = StyleSheet.create({
   managementButtonText: { color: "#5143C2", fontSize: 13, fontWeight: "900" },
   managementPanel: { borderTopColor: "#E4E0F3", borderTopWidth: 1, marginTop: 12, paddingTop: 11 },
   managementTitle: { color: "#352F67", fontSize: 14, fontWeight: "900", marginTop: 6 },
+  reportReviewText: { flex: 1, paddingRight: 8 },
   managementHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 6 },
   managementCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#E4E0F3", borderRadius: 11, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 8, padding: 10 },
   managementPlate: { color: "#24213E", fontSize: 14, fontWeight: "900" },
   managementMeta: { color: "#716A88", fontSize: 11, marginTop: 2 },
+  statsRow: { flexDirection: "row", gap: 7, marginVertical: 10 },
+  statCard: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 10, flex: 1, paddingVertical: 8 },
+  statValue: { color: "#5143C2", fontSize: 17, fontWeight: "900" },
+  statLabel: { color: "#667085", fontSize: 10, marginTop: 2 },
   managementStatus: { color: "#5143C2", fontSize: 11, fontWeight: "800", marginTop: 4 },
   archiveButton: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6", borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
   archiveButtonText: { color: "#C01048", fontSize: 11, fontWeight: "900" },
@@ -1206,10 +1387,12 @@ const styles = StyleSheet.create({
   catalogCount: { alignItems: "center", backgroundColor: "#EEEBFF", borderRadius: 13, paddingHorizontal: 10, paddingVertical: 6 },
   catalogCountText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
   catalogCountCaption: { color: "#655F7A", fontSize: 10, fontWeight: "700" },
-  vehicleTabs: { flexDirection: "row", gap: 9, marginBottom: 13 },
-  vehicleTab: { alignItems: "center", backgroundColor: "#F2F4F7", borderColor: "#E2E8F0", borderRadius: 19, borderWidth: 1, height: 44, justifyContent: "center", width: 44 },
+  vehicleTabs: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "center", marginBottom: 15 },
+  vehicleTab: { alignItems: "center", backgroundColor: "#F2F4F7", borderColor: "#E2E8F0", borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 7, justifyContent: "center", minWidth: 96, paddingHorizontal: 14, paddingVertical: 11 },
   vehicleTabActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
-  vehicleIcon: { fontSize: 20 },
+  vehicleIcon: { fontSize: 18 },
+  vehicleLabel: { color: "#475467", fontSize: 13, fontWeight: "800" },
+  vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
   plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", height: "100%", letterSpacing: 1, minWidth: 0, textAlign: "center" },
   plateDivider: { backgroundColor: "#252525", height: "100%", width: 2 },
@@ -1337,26 +1520,28 @@ const styles = StyleSheet.create({
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
   listContainer: { alignSelf: "center", height: 540, maxWidth: 1100, width: "100%" },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
-  card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E5E1F2", borderRadius: 24, borderWidth: 1, flexDirection: "row", minHeight: 136, padding: 18, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.1, shadowRadius: 16 },
-  plate: { alignItems: "center", backgroundColor: "#F9F8FF", borderColor: "#4A4569", borderRadius: 12, borderWidth: 2, justifyContent: "center", minHeight: 70, minWidth: 138, paddingHorizontal: 9, shadowColor: "#2D2857", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.09, shadowRadius: 4 },
-  plateValue: { color: "#24213E", fontSize: 21, fontWeight: "900" },
-  plateRegion: { color: "#605A78", fontSize: 12, fontWeight: "800", marginTop: 2 },
-  cardInfo: { flex: 1, marginLeft: 15, minWidth: 0 },
-  cardTopRow: { alignItems: "center", flexDirection: "row", gap: 8, justifyContent: "space-between" },
-  tag: { color: "#5143C2", fontSize: 15, fontWeight: "850" },
-  availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 3 },
+  card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, flexDirection: "row", minHeight: 146, overflow: "hidden", paddingBottom: 16, paddingLeft: 14, paddingRight: 48, paddingTop: 16, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
+  plate: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#3E395D", borderRadius: 14, borderWidth: 2, flexShrink: 0, justifyContent: "center", minHeight: 76, paddingHorizontal: 7, width: 112 },
+  plateValue: { color: "#24213E", fontSize: 19, fontWeight: "900", maxWidth: "100%" },
+  plateRegion: { color: "#605A78", fontSize: 11, fontWeight: "900", marginTop: 3, maxWidth: "100%" },
+  cardInfo: { flex: 1, marginLeft: 12, minWidth: 0, overflow: "hidden" },
+  cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
+  tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
+  availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 7, paddingVertical: 3 },
   availableBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
   region: { color: "#68627D", fontSize: 13, marginTop: 5 },
   seller: { color: "#827B96", fontSize: 12, marginTop: 4 },
-  cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  price: { color: "#166A4C", fontSize: 17, fontWeight: "900" },
-  catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, paddingHorizontal: 7, paddingVertical: 4 },
+  catalogRating: { alignSelf: "flex-start", backgroundColor: "#FFF7E8", borderColor: "#FDE2A7", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
+  catalogRatingText: { color: "#9A5B00", fontSize: 10, fontWeight: "900" },
+  cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
+  price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
+  catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, flexShrink: 1, maxWidth: 126, paddingHorizontal: 7, paddingVertical: 4 },
   catalogSourceText: { color: "#5B4CC4", fontSize: 10, fontWeight: "900" },
-  sourceButton: { alignSelf: "flex-start", marginTop: 6 },
+  sourceButton: { alignSelf: "flex-start", marginTop: 6, maxWidth: "100%" },
   sourceButtonText: { color: "#7F1D5A", fontSize: 11, fontWeight: "800" },
-  similarButton: { alignSelf: "flex-start", marginTop: 7 },
+  similarButton: { alignSelf: "flex-start", marginTop: 7, maxWidth: "100%" },
   similarButtonText: { color: "#155EEF", fontSize: 12, fontWeight: "750" },
-  heart: { alignSelf: "flex-start", paddingLeft: 8 },
+  heart: { padding: 7, position: "absolute", right: 8, top: 8 },
   heartText: { color: "#98A2B3", fontSize: 27 },
   heartActive: { color: "#E31B54", fontSize: 27 },
   empty: { alignSelf: "center", color: "#667085", fontSize: 15, paddingTop: 24, textAlign: "center", width: "100%" },
@@ -1418,6 +1603,10 @@ const styles = StyleSheet.create({
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
   detailsComment: { color: "#344054", fontSize: 14, lineHeight: 20, marginTop: 4 },
+  verifiedSeller: { alignSelf: "flex-start", backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderRadius: 8, borderWidth: 1, color: "#067647", fontSize: 12, fontWeight: "800", marginTop: 8, paddingHorizontal: 8, paddingVertical: 5 },
+  ratingRow: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 12 },
+  ratingPrompt: { color: "#667085", fontSize: 12, marginRight: 3 },
+  ratingStar: { color: "#F79009", fontSize: 21 },
   detailsMuted: { color: "#667085", fontSize: 13, lineHeight: 19 },
   detailsSource: { alignSelf: "flex-start", backgroundColor: "#F4EBFF", borderRadius: 10, marginTop: 14, paddingHorizontal: 12, paddingVertical: 10 },
   detailsSourceText: { color: "#7F1D5A", fontSize: 13, fontWeight: "800" },
@@ -1425,21 +1614,59 @@ const styles = StyleSheet.create({
   safeContactTitle: { color: "#175CD3", fontSize: 13, fontWeight: "800", marginBottom: 5 },
   chatOpenButton: { alignSelf: "flex-start", backgroundColor: "#5143C2", borderRadius: 10, marginTop: 12, paddingHorizontal: 13, paddingVertical: 10 },
   chatOpenButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  chatPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, flex: 1, marginVertical: 22, maxHeight: 620, maxWidth: 660, padding: 18, width: "94%" },
-  chatScroll: { flex: 1, marginTop: 16 },
-  chatMessages: { gap: 8, paddingBottom: 10 },
-  chatBubble: { alignSelf: "flex-start", backgroundColor: "#F2F4F7", borderRadius: 13, maxWidth: "84%", paddingHorizontal: 11, paddingVertical: 9 },
-  chatBubbleOwn: { alignSelf: "flex-end", backgroundColor: "#5143C2" },
-  chatBubbleText: { color: "#344054", fontSize: 13, lineHeight: 18 },
+  chatPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 28, flex: 1, marginVertical: 22, maxHeight: 650, maxWidth: 660, overflow: "hidden", padding: 16, width: "94%" },
+  chatHeader: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#E5E0FF", borderRadius: 18, borderWidth: 1, flexDirection: "row", padding: 11 },
+  chatSellerMark: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 15, height: 42, justifyContent: "center", width: 42 },
+  chatSellerMarkText: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  chatHeaderText: { flex: 1, marginLeft: 10, minWidth: 0 },
+  chatTitle: { color: "#101828", fontSize: 16, fontWeight: "900" },
+  chatSubtitle: { color: "#716A88", fontSize: 12, marginTop: 2 },
+  chatClose: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 14, height: 30, justifyContent: "center", width: 30 },
+  chatCloseText: { color: "#5143C2", fontSize: 24, fontWeight: "400", lineHeight: 27 },
+  chatScroll: { backgroundColor: "#FCFCFF", borderRadius: 17, flex: 1, marginTop: 12, paddingHorizontal: 10 },
+  chatMessages: { flexGrow: 1, gap: 9, justifyContent: "flex-end", paddingBottom: 12, paddingTop: 12 },
+  chatEmpty: { alignItems: "center", justifyContent: "center", paddingHorizontal: 28, paddingVertical: 50 },
+  chatEmptyIcon: { color: "#7C6EE6", fontSize: 32, marginBottom: 8 },
+  chatEmptyTitle: { color: "#101828", fontSize: 16, fontWeight: "900" },
+  chatEmptyText: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 5, textAlign: "center" },
+  chatBubble: { alignSelf: "flex-start", backgroundColor: "#EEF1F6", borderBottomLeftRadius: 5, borderRadius: 17, maxWidth: "84%", paddingHorizontal: 13, paddingVertical: 10 },
+  chatBubbleRow: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: 5, maxWidth: "92%" },
+  chatBubbleRowOwn: { alignSelf: "flex-end" },
+  chatBubbleOwn: { alignSelf: "flex-end", backgroundColor: "#5143C2", borderBottomLeftRadius: 17, borderBottomRightRadius: 5, shadowColor: "#5143C2", shadowOpacity: 0.2, shadowRadius: 8 },
+  chatBubbleText: { color: "#344054", fontSize: 14, lineHeight: 19 },
   chatBubbleTextOwn: { color: "#FFFFFF" },
-  chatSafety: { color: "#716A88", fontSize: 11, lineHeight: 15, marginBottom: 7 },
-  chatInputRow: { alignItems: "flex-end", flexDirection: "row", gap: 8 },
-  chatInput: { backgroundColor: "#F8FAFC", borderColor: "#D0D5DD", borderRadius: 11, borderWidth: 1, color: "#101828", flex: 1, fontSize: 13, maxHeight: 86, minHeight: 42, paddingHorizontal: 10, paddingVertical: 9 },
-  chatSend: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 10, justifyContent: "center", minHeight: 42, paddingHorizontal: 10 },
-  chatSendText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
+  chatSafetyCard: { alignItems: "center", flexDirection: "row", marginBottom: 8, marginTop: 9 },
+  chatSafetyIcon: { color: "#7C6EE6", fontSize: 17, marginRight: 6 },
+  chatSafety: { color: "#716A88", flex: 1, fontSize: 11, lineHeight: 15 },
+  chatInputRow: { alignItems: "flex-end", backgroundColor: "#F4F3FA", borderColor: "#E1DDF1", borderRadius: 17, borderWidth: 1, flexDirection: "row", gap: 8, padding: 5 },
+  chatInput: { color: "#101828", flex: 1, fontSize: 14, maxHeight: 86, minHeight: 42, paddingHorizontal: 9, paddingVertical: 9 },
+  chatSend: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, height: 42, justifyContent: "center", width: 44 },
+  chatSendText: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
+  reportButton: { alignItems: "center", borderRadius: 12, height: 28, justifyContent: "center", width: 28 },
+  reportButtonText: { color: "#98A2B3", fontSize: 17 },
+  dialogsPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 25, maxHeight: 620, maxWidth: 620, padding: 18, width: "94%" },
+  dialogsHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  dialogsTitle: { color: "#101828", fontSize: 20, fontWeight: "900" },
+  dialogsHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 6 },
+  dialogsList: { gap: 9, paddingTop: 16 },
+  dialogsEmpty: { color: "#667085", fontSize: 14, lineHeight: 21, paddingVertical: 30, textAlign: "center" },
+  dialogCard: { alignItems: "center", backgroundColor: "#F8F7FC", borderColor: "#E7E3F4", borderRadius: 17, borderWidth: 1, flexDirection: "row", padding: 11 },
+  dialogMark: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 15, height: 39, justifyContent: "center", width: 39 },
+  dialogMarkText: { color: "#FFFFFF", fontSize: 17, fontWeight: "900" },
+  dialogBody: { flex: 1, marginHorizontal: 10, minWidth: 0 },
+  dialogPlate: { color: "#101828", fontSize: 14, fontWeight: "900" },
+  dialogPreview: { color: "#667085", fontSize: 12, marginTop: 3 },
+  dialogTime: { color: "#98A2B3", fontSize: 11, fontWeight: "700" },
+  reportPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 520, padding: 18, width: "92%" },
+  reportInput: { borderColor: "#D0D5DD", borderRadius: 13, borderWidth: 1, color: "#101828", fontSize: 14, marginTop: 15, minHeight: 92, padding: 11, textAlignVertical: "top" },
+  reportSubmit: { alignItems: "center", backgroundColor: "#D92D20", borderRadius: 13, marginTop: 12, paddingVertical: 13 },
+  reportSubmitText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   legalNotice: { backgroundColor: "#FFFAEB", borderColor: "#FEDF89", borderRadius: 12, borderWidth: 1, marginTop: 18, padding: 12 },
   legalNoticeTitle: { color: "#B54708", fontSize: 13, fontWeight: "800" },
   legalNoticeText: { color: "#7A2E0E", fontSize: 12, lineHeight: 18, marginTop: 4 },
+  safeDealGuide: { backgroundColor: "#EFF8FF", borderColor: "#B2DDFF", borderRadius: 12, borderWidth: 1, marginTop: 12, padding: 12 },
+  safeDealTitle: { color: "#175CD3", fontSize: 13, fontWeight: "900" },
+  safeDealText: { color: "#344054", fontSize: 12, lineHeight: 18, marginTop: 5 },
   bottomNav: { backgroundColor: "#FFFFFF", borderTopColor: "#EAECF0", borderTopWidth: 1, bottom: 0, flexDirection: "row", left: 0, paddingBottom: 8, paddingHorizontal: 12, paddingTop: 8, position: "absolute", right: 0 },
   navSlot: { flex: 1, position: "relative" },
   navItem: { alignItems: "center", borderRadius: 12, paddingVertical: 5 },

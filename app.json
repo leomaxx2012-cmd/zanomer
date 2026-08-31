@@ -1,11 +1,31 @@
 {
   "expo": {
     "name": "ЗаНомером",
-    "slug": "avtonomer",
+    "slug": "zanomer",
     "scheme": "avtonomer",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "plugins": ["expo-router"],
-    "experiments": { "typedRoutes": true }
+    "plugins": [
+      "expo-router",
+      "expo-notifications"
+    ],
+    "android": {
+      "package": "ru.zanomer.app",
+      "versionCode": 1,
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ]
+    },
+    "version": "1.0.0",
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4f39246d-f506-4126-9019-4e1a4ebb1586"
+      }
+    },
+    "owner": "zanomer"
   }
 }
