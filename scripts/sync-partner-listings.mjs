@@ -168,11 +168,23 @@ function extractPosts(html, source) {
 function wasPublishedWithinLastDay(postedAt) {
   if (!postedAt) return false;
   const timestamp = Date.parse(postedAt);
-  return Number.isFinite(timestamp) && timestamp <= Date.now() && Date.now() - timestamp <= ONE_DAY_MS;
+  // Telegram timestamps are UTC, while a freshly published post can appear a
+  // few hours ahead of a GitHub runner because of edge-cache clock skew.
+  // Permit that small skew, but never import posts older than one day.
+  return Number.isFinite(timestamp)
+    && timestamp <= Date.now() + 6 * 60 * 60 * 1000
+    && Date.now() - timestamp <= ONE_DAY_MS;
 }
 
 async function syncSource(source) {
-  const response = await fetch(`https://t.me/s/${source.handle}`, { headers: { "user-agent": "ZaNomer catalog checker/1.0" } });
+  // A changing query parameter bypasses Telegram's CDN cache. Without it a
+  // runner can receive a channel page from the previous day.
+  const response = await fetch(`https://t.me/s/${source.handle}?check=${Date.now()}`, {
+    headers: {
+      "user-agent": "ZaNomer catalog checker/1.0",
+      "cache-control": "no-cache",
+    },
+  });
   if (!response.ok) throw new Error(`${source.handle}: HTTP ${response.status}`);
   const posts = extractPosts(await response.text(), source);
   let added = 0;
