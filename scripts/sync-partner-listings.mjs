@@ -147,7 +147,9 @@ function parsePost(text, source, postId, postedAt) {
 }
 
 function extractPosts(html, source) {
-  const message = /<div class="tgme_widget_message[^>]*data-post="([^"]+)"[\s\S]*?(?=<div class="tgme_widget_message|<div class="tgme_widget_message_wrap|$)/g;
+  // Do not stop at nested elements such as `tgme_widget_message_text`.
+  // `\b` after "message" matches a new message block but not an underscore.
+  const message = /<div class="tgme_widget_message\b[^>]*data-post="([^"]+)"[\s\S]*?(?=<div class="tgme_widget_message\b|<div class="tgme_widget_message_wrap|$)/g;
   const posts = [];
   for (const found of html.matchAll(message)) {
     const [, identifier] = found;
