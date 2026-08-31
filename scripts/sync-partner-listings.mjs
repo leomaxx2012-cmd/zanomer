@@ -118,11 +118,11 @@ function createRow({ source, postId, postedAt, rawLeft, digits, rawRight, region
 }
 
 function parsePost(text, source, postId, postedAt) {
-  // Each accepted row must have a plate, a price after it on the same line,
-  // and a known region code. Telegram posts commonly use “P 747 EP 323 —
-  // 💰 45,000”; keep this matcher direct instead of relying on a look-ahead.
+  // Each accepted row must have a plate, a price immediately following it
+  // (on the same or the next caption line), and a known region code.
+  // Telegram posts commonly use “P 747 EP 323\n💰 45,000”.
   // Contacts are irrelevant and purposely ignored.
-  const row = /([АВЕКМНОРСТУХA-Z])\s?(\d{3})\s?([АВЕКМНОРСТУХA-Z]{2})\s?(\d{2,3})[^\n]{0,120}?(?:💰|цена\s*[:—-]?)\s*(\d[\d\s,]*)/gim;
+  const row = /([АВЕКМНОРСТУХA-Z])\s?(\d{3})\s?([АВЕКМНОРСТУХA-Z]{2})\s?(\d{2,3})[\s\S]{0,120}?(?:💰|цена\s*[:—-]?)\s*(\d[\d\s,]*)/gim;
   const entries = [];
   for (const match of text.matchAll(row)) {
     const [, rawLeft, digits, rawRight, regionCode, rawPrice] = match;
