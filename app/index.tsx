@@ -13,7 +13,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { supabase } from "../lib/supabase";
-import { registerForPushNotifications } from "../lib/push-notifications";
+import { registerForPushNotifications, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
   id: string;
@@ -184,6 +184,7 @@ export default function HomeScreen() {
   const [chatRecipientId, setChatRecipientId] = useState("");
   const [chatsOpen, setChatsOpen] = useState(false);
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [reportingMessage, setReportingMessage] = useState<ChatMessage | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportMessage, setReportMessage] = useState("");
@@ -346,6 +347,7 @@ export default function HomeScreen() {
       return;
     }
     await loadChatThreads();
+    setUnreadChatCount(0);
     setChatsOpen(true);
   }
 
@@ -530,6 +532,22 @@ export default function HomeScreen() {
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => setProfile(session?.user ?? null));
     return () => subscription.subscription.unsubscribe();
   }, []);
+
+  // Получатель узнаёт о новом сообщении, не обновляя вручную страницу.
+  useEffect(() => {
+    if (!supabase || !currentUserId) return;
+    const channel = supabase
+      .channel(`listing-messages-${currentUserId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "listing_messages", filter: `recipient_id=eq.${currentUserId}` }, (payload) => {
+        const message = payload.new as ChatMessage & { listing_id?: string };
+        if (message.sender_id === currentUserId) return;
+        const plate = catalog.find((item) => item.id === message.listing_id);
+        setUnreadChatCount((count) => count + 1);
+        void showChatNotification(plate?.value ?? "объявлению");
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [currentUserId, catalog]);
 
   const plates = useMemo(
     () => {
@@ -842,7 +860,7 @@ export default function HomeScreen() {
         <View style={styles.headerActions}>
           <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
             <Text style={styles.chatsButtonText}>💬</Text>
-            {chatThreads.some((thread) => thread.lastMessage.sender_id !== currentUserId) && <View style={styles.chatBadge} />}
+            {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
           <Pressable onPress={() => setAuthOpen((value) => !value)} style={styles.accountButton}>
             <Text style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
@@ -1386,7 +1404,8 @@ const styles = StyleSheet.create({
   headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },
   chatsButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 42, justifyContent: "center", position: "relative", width: 42 },
   chatsButtonText: { fontSize: 18 },
-  chatBadge: { backgroundColor: "#F04438", borderColor: "#FFFFFF", borderRadius: 6, borderWidth: 2, height: 12, position: "absolute", right: 4, top: 4, width: 12 },
+  chatBadge: { alignItems: "center", backgroundColor: "#F04438", borderColor: "#FFFFFF", borderRadius: 10, borderWidth: 2, justifyContent: "center", minHeight: 18, minWidth: 18, paddingHorizontal: 3, position: "absolute", right: -4, top: -4 },
+  chatBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900" },
   catalogHeroButton: { alignSelf: "center", backgroundColor: "#5143C2", borderRadius: 18, marginTop: 16, maxWidth: 760, paddingHorizontal: 18, paddingVertical: 15, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.25, shadowRadius: 14, width: "100%" },
   catalogHeroButtonActive: { backgroundColor: "#E8F8F0", borderColor: "#B7E6CD", borderWidth: 1, shadowOpacity: 0 },
   catalogHeroButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900", textAlign: "center" },

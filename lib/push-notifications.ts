@@ -48,3 +48,15 @@ export async function registerForPushNotifications(userId: string) {
   }, { onConflict: "token" });
   return error ? { ok: false, reason: "storage" as const } : { ok: true, token };
 }
+
+// Показывает уведомление, пока приложение открыто. Для push при закрытом
+// приложении потребуется отдельный защищённый серверный отправитель Expo Push.
+export async function showChatNotification(plate: string) {
+  if (!Device.isDevice) return;
+  const permission = await Notifications.getPermissionsAsync();
+  if (permission.status !== "granted") return;
+  await Notifications.scheduleNotificationAsync({
+    content: { title: "Новое сообщение по объявлению", body: `По номеру ${plate} пришло новое сообщение`, sound: "default" },
+    trigger: null,
+  });
+}
