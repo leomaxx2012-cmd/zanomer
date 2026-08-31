@@ -468,10 +468,9 @@ export default function HomeScreen() {
       }));
 
       const loaded = [...fromDatabase, ...partners];
-      setCatalog([
-        ...loaded,
-        ...initialPlates.filter((plate) => !loaded.some((item) => item.id === plate.id)),
-      ]);
+      // Demo cards are useful only before the first database data arrives.
+      // Mixing them into a real catalogue inflated the public count.
+      setCatalog(loaded.length > 0 ? loaded : initialPlates);
     }
 
     void loadCatalog();
