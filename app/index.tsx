@@ -144,6 +144,7 @@ export default function HomeScreen() {
   const [similarToId, setSimilarToId] = useState<string | null>(null);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
+  const [freshOnly, setFreshOnly] = useState(false);
   const [shownListingsCount, setShownListingsCount] = useState(30);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
@@ -167,6 +168,7 @@ export default function HomeScreen() {
   const [listingConfirmed, setListingConfirmed] = useState(false);
   const [listingMessage, setListingMessage] = useState("");
   const [selectedPlate, setSelectedPlate] = useState<Plate | null>(null);
+  const [sellerProfile, setSellerProfile] = useState<string | null>(null);
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
   const [listingPicker, setListingPicker] = useState<PlatePicker>(null);
   const [myListings, setMyListings] = useState<Plate[]>([]);
@@ -553,13 +555,15 @@ export default function HomeScreen() {
           if (filter === "roundHundred") return plate.digits.endsWith("00");
           return plate.digits === plate.digits.split("").reverse().join("");
         });
-        return isAvailable && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && plate.vehicle === vehicle;
+        const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
+        const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
+        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const withSimilar = !source ? filtered : filtered.filter((plate) => plate.id !== source.id && (plate.digits === source.digits || plate.rightLetters === source.rightLetters));
-      return [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : b.createdAt.localeCompare(a.createdAt));
+      return [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
     },
-    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort],
+    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
@@ -572,7 +576,10 @@ export default function HomeScreen() {
   // at a time keeps web and older phones responsive when the sources grow.
   useEffect(() => {
     setShownListingsCount(30);
-  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, vehicle, priceLimit, specialFilters, sort, similarToId]);
+  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, vehicle, priceLimit, specialFilters, sort, similarToId, freshOnly]);
+
+  const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
+  const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
   const hotPlates = useMemo(() => {
     const now = new Date().toISOString();
     return plates.filter((plate) => !!plate.featuredUntil && plate.featuredUntil > now)
@@ -1132,6 +1139,10 @@ export default function HomeScreen() {
       {activeTab === "buy" && <View style={styles.listFilters}>
         {[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit(limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}
       </View>}
+      {activeTab === "buy" && <View style={styles.listFilters}>
+        <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
+        {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort(value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
+      </View>}
       {similarTo && (
         <Pressable onPress={() => setSimilarToId(null)} style={styles.clearSimilarButton}>
           <Text style={styles.clearSimilarText}>Показать все номера</Text>
@@ -1176,7 +1187,7 @@ export default function HomeScreen() {
                   {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
                 </View>
                 <Text numberOfLines={1} style={styles.region}>{item.region}</Text>
-                <Text numberOfLines={1} style={styles.seller}>Продавец: {item.seller}</Text>
+                <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
                 <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
                 {!!item.sellerRating && <View style={styles.catalogRating}><Text style={styles.catalogRatingText}>★ {item.sellerRating.toFixed(1)} · продавец оценён</Text></View>}
                 <View style={styles.cardBottomRow}>
@@ -1202,6 +1213,27 @@ export default function HomeScreen() {
       </>}
 
       </ScrollView>
+
+      <Modal visible={!!sellerProfile} transparent animationType="slide" onRequestClose={() => setSellerProfile(null)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setSellerProfile(null)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.sellerProfilePanel}>
+            <View style={styles.detailsHeader}>
+              <View><Text style={styles.detailsTitle}>{sellerProfile}</Text><Text style={styles.sellerProfileSubtitle}>Профиль продавца</Text></View>
+              <Pressable onPress={() => setSellerProfile(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
+            </View>
+            <View style={styles.sellerProfileStats}>
+              <View><Text style={styles.sellerProfileNumber}>{sellerProfileListings.length}</Text><Text style={styles.sellerProfileLabel}>активных объявлений</Text></View>
+              <View><Text style={styles.sellerProfileNumber}>{sellerProfileRating ? `★ ${sellerProfileRating.toFixed(1)}` : "—"}</Text><Text style={styles.sellerProfileLabel}>рейтинг</Text></View>
+            </View>
+            <ScrollView style={styles.sellerProfileList} contentContainerStyle={styles.sellerProfileListContent}>
+              {sellerProfileListings.map((plate) => <Pressable key={plate.id} onPress={() => { setSellerProfile(null); setSelectedPlate(plate); }} style={styles.sellerProfileItem}>
+                <View><Text style={styles.sellerProfilePlate}>{plate.value}</Text><Text style={styles.sellerProfileMeta}>{plate.region} · {formatListingDate(plate.publishedAt ?? plate.createdAt)}</Text></View>
+                <Text style={styles.sellerProfilePrice}>{plate.price}</Text>
+              </Pressable>)}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={!!selectedPlate} transparent animationType="slide" onRequestClose={() => setSelectedPlate(null)}>
         <Pressable style={styles.detailsOverlay} onPress={() => setSelectedPlate(null)}>
@@ -1555,6 +1587,7 @@ const styles = StyleSheet.create({
   availableBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
   region: { color: "#68627D", fontSize: 13, marginTop: 5 },
   seller: { color: "#827B96", fontSize: 12, marginTop: 4 },
+  sellerLink: { color: "#5143C2", textDecorationLine: "underline" },
   catalogRating: { alignSelf: "flex-start", backgroundColor: "#FFF7E8", borderColor: "#FDE2A7", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   catalogRatingText: { color: "#9A5B00", fontSize: 10, fontWeight: "900" },
   cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
@@ -1626,6 +1659,17 @@ const styles = StyleSheet.create({
   priceHistoryHint: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 11 },
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
+  sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "78%", maxWidth: 560, padding: 20, width: "92%" },
+  sellerProfileSubtitle: { color: "#716A88", fontSize: 13, marginTop: 3 },
+  sellerProfileStats: { backgroundColor: "#F4F3FF", borderRadius: 16, flexDirection: "row", gap: 40, marginTop: 18, padding: 14 },
+  sellerProfileNumber: { color: "#5143C2", fontSize: 20, fontWeight: "900" },
+  sellerProfileLabel: { color: "#716A88", fontSize: 11, fontWeight: "700", marginTop: 2 },
+  sellerProfileList: { marginTop: 14 },
+  sellerProfileListContent: { gap: 8, paddingBottom: 4 },
+  sellerProfileItem: { alignItems: "center", backgroundColor: "#FAFAFF", borderColor: "#E7E3F8", borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", padding: 12 },
+  sellerProfilePlate: { color: "#24213E", fontSize: 16, fontWeight: "900" },
+  sellerProfileMeta: { color: "#716A88", fontSize: 11, marginTop: 3 },
+  sellerProfilePrice: { color: "#167250", fontSize: 14, fontWeight: "900", marginLeft: 8 },
   detailsComment: { color: "#344054", fontSize: 14, lineHeight: 20, marginTop: 4 },
   verifiedSeller: { alignSelf: "flex-start", backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderRadius: 8, borderWidth: 1, color: "#067647", fontSize: 12, fontWeight: "800", marginTop: 8, paddingHorizontal: 8, paddingVertical: 5 },
   ratingRow: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 12 },
