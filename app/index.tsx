@@ -194,6 +194,13 @@ export default function HomeScreen() {
   const [reportReason, setReportReason] = useState("");
   const [reportMessage, setReportMessage] = useState("");
   const [ratingMessage, setRatingMessage] = useState("");
+  const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
+  const [testPaymentDone, setTestPaymentDone] = useState(false);
+
+  function openTestPayment(title: string, amount: string) {
+    setTestPayment({ title, amount });
+    setTestPaymentDone(false);
+  }
 
   useEffect(() => {
     if (!selectedPlate) {
@@ -1148,30 +1155,30 @@ export default function HomeScreen() {
           <Text style={styles.boostTitle}>🔥 Переместить в горячие предложения</Text>
           <Text style={styles.boostText}>Подними объявление в блок «Горячие предложения» и выше в каталоге.</Text>
           <View style={styles.priceRow}>
-            <View style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Выделение объявления на 48 часов", "129 ₽")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>1 выделение</Text>
               <Text style={styles.priceValue}>129 ₽</Text>
               <Text style={styles.priceTerm}>на 48 часов</Text>
-            </View>
-            <View style={styles.priceOption}>
+            </Pressable>
+            <Pressable onPress={() => openTestPayment("Пакет из 5 выделений", "499 ₽")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>5 выделений</Text>
               <Text style={styles.priceValue}>499 ₽</Text>
               <Text style={styles.priceTerm}>99,80 ₽ за одно · на 48 ч.</Text>
-            </View>
+            </Pressable>
           </View>
           <Text style={styles.priceDiscount}>В пакете экономия 146 ₽</Text>
           <Text style={styles.permanentLabel}>Закрепление вверху навсегда</Text>
           <View style={styles.priceRow}>
-            <View style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Закрепление объявления", "399 ₽")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>1 закрепление</Text>
               <Text style={styles.priceValue}>399 ₽</Text>
               <Text style={styles.priceTerm}>пока объявление активно</Text>
-            </View>
-            <View style={styles.priceOption}>
+            </Pressable>
+            <Pressable onPress={() => openTestPayment("Пакет из 5 закреплений", "1 599 ₽")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>5 закреплений</Text>
               <Text style={styles.priceValue}>1 599 ₽</Text>
               <Text style={styles.priceTerm}>319,80 ₽ за одно</Text>
-            </View>
+            </Pressable>
           </View>
           <Text style={styles.priceDiscount}>В пакете экономия 396 ₽</Text>
         </View>
@@ -1185,7 +1192,7 @@ export default function HomeScreen() {
           <Text style={styles.premiumItem}>◉ Ранний доступ к объявлениям — на 15 минут раньше</Text>
           <Text style={styles.premiumItem}>◉ История изменения цены номера</Text>
           <Text style={styles.premiumItem}>◉ До 30 сохранённых поисков и отслеживаний</Text>
-          <Pressable style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Подписка появится позже</Text></Pressable>
+          <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Попробовать оплату в тестовом режиме</Text></Pressable>
         </View>
       </View>}
 
@@ -1414,6 +1421,23 @@ export default function HomeScreen() {
             <TextInput value={reportReason} onChangeText={setReportReason} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline />
             {!!reportMessage && <Text style={styles.authMessage}>{reportMessage}</Text>}
             <Pressable onPress={() => { void sendReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>Отправить жалобу</Text></Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!testPayment} transparent animationType="fade" onRequestClose={() => setTestPayment(null)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setTestPayment(null)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.paymentPanel}>
+            <View style={styles.detailsHeader}>
+              <View><Text style={styles.paymentKicker}>ТЕСТОВЫЙ РЕЖИМ</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
+              <Pressable onPress={() => setTestPayment(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
+            </View>
+            {testPaymentDone ? <View style={styles.paymentSuccess}><Text style={styles.paymentSuccessIcon}>✓</Text><Text style={styles.paymentSuccessTitle}>Тест прошёл успешно</Text><Text style={styles.paymentHint}>Деньги не списывались. При подключении ЮKassa здесь появится настоящая безопасная оплата.</Text></View> : <>
+              <Text style={styles.paymentItem}>{testPayment?.title}</Text>
+              <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
+              <Text style={styles.paymentHint}>Это имитация платежа: карту вводить не нужно, деньги не списываются и услуга пока не активируется.</Text>
+              <Pressable onPress={() => setTestPaymentDone(true)} style={styles.paymentButton}><Text style={styles.paymentButtonText}>Подтвердить тест</Text></Pressable>
+            </>}
           </Pressable>
         </Pressable>
       </Modal>
@@ -1705,6 +1729,17 @@ const styles = StyleSheet.create({
   premiumItem: { color: "#D0D5DD", fontSize: 13, lineHeight: 20, marginTop: 10 },
   comingSoonButton: { alignItems: "center", backgroundColor: "#344054", borderRadius: 11, marginTop: 17, paddingVertical: 12 },
   comingSoonButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  paymentPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 470, padding: 22, width: "92%" },
+  paymentKicker: { color: "#7F56D9", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  paymentTitle: { color: "#101828", fontSize: 23, fontWeight: "900", marginTop: 3 },
+  paymentItem: { color: "#344054", fontSize: 15, fontWeight: "750", marginTop: 22 },
+  paymentAmount: { color: "#155EEF", fontSize: 29, fontWeight: "900", marginTop: 7 },
+  paymentHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 15 },
+  paymentButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, marginTop: 20, paddingVertical: 13 },
+  paymentButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+  paymentSuccess: { alignItems: "center", paddingTop: 25 },
+  paymentSuccessIcon: { alignItems: "center", backgroundColor: "#D1FADF", borderRadius: 28, color: "#067647", fontSize: 30, fontWeight: "900", height: 56, lineHeight: 56, textAlign: "center", width: 56 },
+  paymentSuccessTitle: { color: "#067647", fontSize: 18, fontWeight: "900", marginTop: 12 },
   subscribeButton: { alignItems: "center", backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderRadius: 13, borderWidth: 1, marginBottom: 84, paddingHorizontal: 13, paddingVertical: 13 },
   subscribeButtonText: { color: "#067647", fontSize: 13, fontWeight: "800", textAlign: "center" },
   detailsOverlay: { backgroundColor: "rgba(16,24,40,0.5)", flex: 1 },
