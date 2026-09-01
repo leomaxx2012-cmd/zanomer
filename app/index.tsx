@@ -406,6 +406,32 @@ export default function HomeScreen() {
     return { max, min, points };
   }, [priceHistory]);
 
+  const priceComparison = useMemo(() => {
+    if (!selectedPlate) return null;
+    const candidates = catalog.filter((plate) => {
+      if (plate.id === selectedPlate.id || plate.vehicle !== selectedPlate.vehicle) return false;
+      const available = !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl);
+      return available && (plate.digits === selectedPlate.digits || plate.tag === selectedPlate.tag);
+    });
+    // Если точных аналогов мало, сравниваем с остальными номерами того же транспорта.
+    const pool = candidates.length >= 2
+      ? candidates
+      : catalog.filter((plate) => plate.id !== selectedPlate.id && plate.vehicle === selectedPlate.vehicle && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)));
+    if (!pool.length) return null;
+    const prices = pool.map((plate) => plate.priceValue).filter((price) => Number.isFinite(price) && price > 0);
+    if (!prices.length) return null;
+    const average = Math.round(prices.reduce((sum, price) => sum + price, 0) / prices.length);
+    const delta = selectedPlate.priceValue - average;
+    return {
+      count: prices.length,
+      average,
+      min: Math.min(...prices),
+      max: Math.max(...prices),
+      delta,
+      isExact: candidates.length >= 2,
+    };
+  }, [selectedPlate, catalog, archivedPartnerSources]);
+
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
@@ -1262,7 +1288,8 @@ export default function HomeScreen() {
                 <Text numberOfLines={1} style={styles.region}>{item.region}</Text>
                 <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
                 <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
-                {!!item.sellerRating && <View style={styles.catalogRating}><Text style={styles.catalogRatingText}>★ {item.sellerRating.toFixed(1)} · продавец оценён</Text></View>}
+                {!!item.sourceUrl && <View style={styles.trustBadge}><Text style={styles.trustBadgeText}>✓ Проверенный источник</Text></View>}
+                {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Проверенный продавец" : `★ ${item.sellerRating.toFixed(1)} · есть отзывы`}</Text></View>}
                 <View style={styles.cardBottomRow}>
                   <Text style={styles.price}>{item.price}</Text>
                   <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
@@ -1353,6 +1380,17 @@ export default function HomeScreen() {
                 </View>}
                 {priceChart.points.length === 1 && <Text style={styles.priceHistoryHint}>Цена пока не менялась. График появится после первого подтверждённого изменения.</Text>}
               </View>
+              {!!priceComparison && <View style={styles.priceComparisonCard}>
+                <View style={styles.priceComparisonHeader}>
+                  <Text style={styles.priceComparisonTitle}>Сравнение цены</Text>
+                  <Text style={styles.priceComparisonHint}>{priceComparison.isExact ? "Похожие номера" : "Номера этого типа"}</Text>
+                </View>
+                <Text style={styles.priceComparisonMain}>В среднем {priceComparison.average.toLocaleString("ru-RU")} ₽</Text>
+                <Text style={[styles.priceComparisonDelta, priceComparison.delta <= 0 ? styles.priceComparisonGood : styles.priceComparisonHigh]}>
+                  {priceComparison.delta === 0 ? "Цена соответствует среднему" : priceComparison.delta < 0 ? `На ${Math.abs(priceComparison.delta).toLocaleString("ru-RU")} ₽ ниже средней` : `На ${priceComparison.delta.toLocaleString("ru-RU")} ₽ выше средней`}
+                </Text>
+                <Text style={styles.priceComparisonRange}>По {priceComparison.count} объявлениям: от {priceComparison.min.toLocaleString("ru-RU")} до {priceComparison.max.toLocaleString("ru-RU")} ₽</Text>
+              </View>}
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Рейтинг продавца</Text>
                 <Text style={styles.detailsValue}>{selectedPlate.sellerRating ? `★ ${selectedPlate.sellerRating.toFixed(1)} / 5` : "Пока нет отзывов"}</Text>
@@ -1367,6 +1405,7 @@ export default function HomeScreen() {
                 {selectedPlate.ownerId !== currentUserId && <Pressable onPress={() => openChat(selectedPlate)} style={styles.chatOpenButton}><Text style={styles.chatOpenButtonText}>Написать продавцу</Text></Pressable>}
                 {!selectedPlate.sellerComment && <Text style={styles.detailsMuted}>Продавец пока не оставил комментарий.</Text>}
               </View> : <View style={styles.detailsBlock}>
+                <View style={styles.detailsTrustBadge}><Text style={styles.detailsTrustBadgeText}>✓ Источник объявления проверен</Text></View>
                 <Text style={styles.detailsMuted}>Это объявление партнёрского канала. Личные контакты и комментарий продавца в ЗаНомером не публикуются.</Text>
                 {!!selectedPlate?.sourceUrl && <Pressable onPress={() => Linking.openURL(selectedPlate.sourceUrl!)} style={styles.detailsSource}><Text style={styles.detailsSourceText}>Открыть исходное объявление ↗</Text></Pressable>}
               </View>}
@@ -1690,6 +1729,8 @@ const styles = StyleSheet.create({
   sellerLink: { color: "#5143C2", textDecorationLine: "underline" },
   catalogRating: { alignSelf: "flex-start", backgroundColor: "#FFF7E8", borderColor: "#FDE2A7", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   catalogRatingText: { color: "#9A5B00", fontSize: 10, fontWeight: "900" },
+  trustBadge: { alignSelf: "flex-start", backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
+  trustBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
   cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
   price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
   catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, flexShrink: 1, maxWidth: 126, paddingHorizontal: 7, paddingVertical: 4 },
@@ -1769,6 +1810,15 @@ const styles = StyleSheet.create({
   priceHistoryEmptyValue: { color: "#5143C2", fontSize: 23, fontWeight: "900" },
   priceHistoryEmptyDate: { color: "#716A88", fontSize: 11, fontWeight: "700", marginTop: 3 },
   priceHistoryHint: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 11 },
+  priceComparisonCard: { backgroundColor: "#EFF8FF", borderColor: "#B2DDFF", borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 14 },
+  priceComparisonHeader: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
+  priceComparisonTitle: { color: "#175CD3", fontSize: 15, fontWeight: "900" },
+  priceComparisonHint: { color: "#5285C9", fontSize: 11, fontWeight: "800", textAlign: "right" },
+  priceComparisonMain: { color: "#101828", fontSize: 18, fontWeight: "900", marginTop: 9 },
+  priceComparisonDelta: { fontSize: 13, fontWeight: "800", lineHeight: 19, marginTop: 5 },
+  priceComparisonGood: { color: "#067647" },
+  priceComparisonHigh: { color: "#B54708" },
+  priceComparisonRange: { color: "#667085", fontSize: 11, lineHeight: 16, marginTop: 8 },
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
   sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "78%", maxWidth: 560, padding: 20, width: "92%" },
@@ -1784,6 +1834,8 @@ const styles = StyleSheet.create({
   sellerProfilePrice: { color: "#167250", fontSize: 14, fontWeight: "900", marginLeft: 8 },
   detailsComment: { color: "#344054", fontSize: 14, lineHeight: 20, marginTop: 4 },
   verifiedSeller: { alignSelf: "flex-start", backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderRadius: 8, borderWidth: 1, color: "#067647", fontSize: 12, fontWeight: "800", marginTop: 8, paddingHorizontal: 8, paddingVertical: 5 },
+  detailsTrustBadge: { alignSelf: "flex-start", backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 9, borderWidth: 1, marginBottom: 10, paddingHorizontal: 9, paddingVertical: 5 },
+  detailsTrustBadgeText: { color: "#18794E", fontSize: 11, fontWeight: "900" },
   ratingRow: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 12 },
   ratingPrompt: { color: "#667085", fontSize: 12, marginRight: 3 },
   ratingStar: { color: "#F79009", fontSize: 21 },
