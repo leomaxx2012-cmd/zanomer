@@ -50,6 +50,7 @@ type PricePoint = {
 type ChatMessage = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string };
 type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessage };
 type MessageReport = { id: string; reason: string; created_at: string; message?: { body?: string } | null };
+type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
 
 type SavedSearch = {
   id: string;
@@ -75,6 +76,16 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+function getSiteVisitorKey() {
+  if (typeof window === "undefined") return `native-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const storageKey = "zanomer-visitor-key";
+  const existing = window.localStorage.getItem(storageKey);
+  if (existing) return existing;
+  const created = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  window.localStorage.setItem(storageKey, created);
+  return created;
+}
 
 function formatListingDate(value?: string) {
   if (!value) return "Дата не указана";
@@ -179,6 +190,7 @@ export default function HomeScreen() {
   const [myListings, setMyListings] = useState<Plate[]>([]);
   const [moderationListings, setModerationListings] = useState<Plate[]>([]);
   const [moderationReports, setModerationReports] = useState<MessageReport[]>([]);
+  const [siteTraffic, setSiteTraffic] = useState<SiteTrafficAnalytics | null>(null);
   const [isModerator, setIsModerator] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
@@ -201,6 +213,11 @@ export default function HomeScreen() {
     setTestPayment({ title, amount });
     setTestPaymentDone(false);
   }
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.rpc("record_site_visit", { new_visitor_key: getSiteVisitorKey() });
+  }, []);
 
   useEffect(() => {
     if (!selectedPlate) {
@@ -265,6 +282,8 @@ export default function HomeScreen() {
     const canModerate = Boolean(moderator);
     setIsModerator(canModerate);
     if (!canModerate) return;
+    const { data: traffic } = await client.rpc("get_site_analytics");
+    if (traffic?.[0]) setSiteTraffic(traffic[0] as SiteTrafficAnalytics);
     const { data: pending } = await client
       .from("auto_listings")
       .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status")
@@ -1016,7 +1035,7 @@ export default function HomeScreen() {
                       <Text style={styles.analyticsTitle}>Аналитика каталога</Text>
                       <Text style={styles.analyticsLive}>● обновляется</Text>
                     </View>
-                    <Text style={styles.analyticsHint}>Данные только для модератора. Просмотры посетителей пока не собираются.</Text>
+                    <Text style={styles.analyticsHint}>Данные доступны только модератору.</Text>
                     <View style={styles.analyticsMetrics}>
                       <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{catalogAnalytics.total}</Text><Text style={styles.analyticsMetricLabel}>в каталоге</Text></View>
                       <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{catalogAnalytics.newToday}</Text><Text style={styles.analyticsMetricLabel}>за 24 часа</Text></View>
@@ -1027,6 +1046,18 @@ export default function HomeScreen() {
                     {catalogAnalytics.topRegions.map(([title, count]) => <View key={title} style={styles.analyticsRegionRow}><Text numberOfLines={1} style={styles.analyticsRegionName}>{title}</Text><Text style={styles.analyticsRegionCount}>{count}</Text></View>)}
                     <Text style={styles.analyticsSubtitle}>По типам транспорта</Text>
                     <View style={styles.analyticsVehicleRow}>{catalogAnalytics.vehicles.map((item) => <View key={item.vehicle} style={styles.analyticsVehiclePill}><Text style={styles.analyticsVehicleText}>{item.icon} {item.label}: {item.count}</Text></View>)}</View>
+                  </View>
+                  <View style={styles.analyticsPanel}>
+                    <View style={styles.analyticsHeader}>
+                      <Text style={styles.analyticsTitle}>Посещаемость ЗаНомера</Text>
+                      <Text style={styles.analyticsLive}>● зафиксировано</Text>
+                    </View>
+                    {!siteTraffic ? <Text style={styles.analyticsHint}>Статистика появится после подключения таблицы посещений в Supabase.</Text> : <View style={styles.analyticsMetrics}>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{siteTraffic.total_visits}</Text><Text style={styles.analyticsMetricLabel}>всего визитов</Text></View>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{siteTraffic.unique_today}</Text><Text style={styles.analyticsMetricLabel}>посетителей сегодня</Text></View>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{siteTraffic.visits_today}</Text><Text style={styles.analyticsMetricLabel}>визитов сегодня</Text></View>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{siteTraffic.unique_week}</Text><Text style={styles.analyticsMetricLabel}>за 7 дней</Text></View>
+                    </View>}
                   </View>
                   <Text style={styles.managementTitle}>Очередь на проверку</Text>
                   {moderationListings.length === 0 ? <Text style={styles.managementHint}>Сейчас нет объявлений на проверке.</Text> : moderationListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
