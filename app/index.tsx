@@ -661,6 +661,34 @@ export default function HomeScreen() {
       })),
     ];
   }, [catalog]);
+  const catalogAnalytics = useMemo(() => {
+    const active = catalog.filter((plate) => !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl));
+    const now = Date.now();
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    const newToday = active.filter((plate) => {
+      const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
+      return Number.isFinite(publishedAt) && publishedAt >= dayAgo && publishedAt <= now;
+    }).length;
+    const regions = new Map<string, number>();
+    active.forEach((plate) => {
+      const label = plate.region;
+      regions.set(label, (regions.get(label) ?? 0) + 1);
+    });
+    const vehicles = (["car", "motorcycle", "truck"] as const).map((vehicle) => ({
+      vehicle,
+      label: vehicle === "car" ? "Авто" : vehicle === "motorcycle" ? "Мото" : "Грузовые",
+      icon: vehicle === "car" ? "🚗" : vehicle === "motorcycle" ? "🏍️" : "🚚",
+      count: active.filter((plate) => plate.vehicle === vehicle).length,
+    }));
+    return {
+      total: active.length,
+      newToday,
+      sourceCount: new Set(active.filter((plate) => !!plate.sourceUrl).map((plate) => plate.seller)).size,
+      sellerCount: new Set(active.filter((plate) => plate.isSiteListing && !!plate.ownerId).map((plate) => plate.ownerId)).size,
+      topRegions: Array.from(regions.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "ru")).slice(0, 3),
+      vehicles,
+    };
+  }, [catalog, archivedPartnerSources]);
   const selectedRegionOption = availableRegions.find((item) => item.value === regionCode);
   const selectedRegionLabel = regionCode || "77";
   const selectedRegionFilterLabel = selectedRegionOption?.title ?? "Все регионы";
@@ -983,6 +1011,23 @@ export default function HomeScreen() {
                   {listing.listingStatus !== "archived" && <Pressable onPress={() => archiveMyListing(listing)} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Снять</Text></Pressable>}
                 </View>)}
                 {isModerator && <>
+                  <View style={styles.analyticsPanel}>
+                    <View style={styles.analyticsHeader}>
+                      <Text style={styles.analyticsTitle}>Аналитика каталога</Text>
+                      <Text style={styles.analyticsLive}>● обновляется</Text>
+                    </View>
+                    <Text style={styles.analyticsHint}>Данные только для модератора. Просмотры посетителей пока не собираются.</Text>
+                    <View style={styles.analyticsMetrics}>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{catalogAnalytics.total}</Text><Text style={styles.analyticsMetricLabel}>в каталоге</Text></View>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{catalogAnalytics.newToday}</Text><Text style={styles.analyticsMetricLabel}>за 24 часа</Text></View>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{catalogAnalytics.sellerCount}</Text><Text style={styles.analyticsMetricLabel}>продавцов</Text></View>
+                      <View style={styles.analyticsMetric}><Text style={styles.analyticsMetricValue}>{catalogAnalytics.sourceCount}</Text><Text style={styles.analyticsMetricLabel}>источников</Text></View>
+                    </View>
+                    <Text style={styles.analyticsSubtitle}>Популярные регионы</Text>
+                    {catalogAnalytics.topRegions.map(([title, count]) => <View key={title} style={styles.analyticsRegionRow}><Text numberOfLines={1} style={styles.analyticsRegionName}>{title}</Text><Text style={styles.analyticsRegionCount}>{count}</Text></View>)}
+                    <Text style={styles.analyticsSubtitle}>По типам транспорта</Text>
+                    <View style={styles.analyticsVehicleRow}>{catalogAnalytics.vehicles.map((item) => <View key={item.vehicle} style={styles.analyticsVehiclePill}><Text style={styles.analyticsVehicleText}>{item.icon} {item.label}: {item.count}</Text></View>)}</View>
+                  </View>
                   <Text style={styles.managementTitle}>Очередь на проверку</Text>
                   {moderationListings.length === 0 ? <Text style={styles.managementHint}>Сейчас нет объявлений на проверке.</Text> : moderationListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
                     <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text></View>
@@ -1556,6 +1601,22 @@ const styles = StyleSheet.create({
   statCard: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 10, flex: 1, paddingVertical: 8 },
   statValue: { color: "#5143C2", fontSize: 17, fontWeight: "900" },
   statLabel: { color: "#667085", fontSize: 10, marginTop: 2 },
+  analyticsPanel: { backgroundColor: "#F7F5FF", borderColor: "#DDD6FE", borderRadius: 12, borderWidth: 1, marginTop: 14, padding: 11 },
+  analyticsHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  analyticsTitle: { color: "#352F67", fontSize: 14, fontWeight: "900" },
+  analyticsLive: { color: "#18834E", fontSize: 10, fontWeight: "800" },
+  analyticsHint: { color: "#716A88", fontSize: 10, lineHeight: 14, marginTop: 4 },
+  analyticsMetrics: { flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10 },
+  analyticsMetric: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 9, flexGrow: 1, minWidth: "44%", paddingHorizontal: 7, paddingVertical: 8 },
+  analyticsMetricValue: { color: "#5143C2", fontSize: 17, fontWeight: "900" },
+  analyticsMetricLabel: { color: "#667085", fontSize: 10, marginTop: 2 },
+  analyticsSubtitle: { color: "#5143C2", fontSize: 11, fontWeight: "900", marginTop: 11 },
+  analyticsRegionRow: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 8, flexDirection: "row", justifyContent: "space-between", marginTop: 5, paddingHorizontal: 8, paddingVertical: 6 },
+  analyticsRegionName: { color: "#475467", flex: 1, fontSize: 11, fontWeight: "700", paddingRight: 8 },
+  analyticsRegionCount: { color: "#5143C2", fontSize: 12, fontWeight: "900" },
+  analyticsVehicleRow: { flexDirection: "row", flexWrap: "wrap", gap: 5, marginTop: 6 },
+  analyticsVehiclePill: { backgroundColor: "#FFFFFF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
+  analyticsVehicleText: { color: "#475467", fontSize: 10, fontWeight: "800" },
   managementStatus: { color: "#5143C2", fontSize: 11, fontWeight: "800", marginTop: 4 },
   archiveButton: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6", borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
   archiveButtonText: { color: "#C01048", fontSize: 11, fontWeight: "900" },
