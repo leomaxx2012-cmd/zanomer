@@ -21,8 +21,7 @@
     },
     "version": "1.0.0",
     "experiments": {
-      "typedRoutes": true,
-      "baseUrl": "/zanomer"
+      "typedRoutes": true
     },
     "extra": {
       "router": {},
