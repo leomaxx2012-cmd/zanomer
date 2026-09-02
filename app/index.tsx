@@ -146,6 +146,7 @@ const initialPlates: Plate[] = [
 
 export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const compactLayout = windowWidth < 430;
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
@@ -1106,7 +1107,7 @@ export default function HomeScreen() {
       {activeTab === "buy" && !catalogOnly && <>
       <View style={styles.searchArea}>
       <View style={styles.searchHeading}>
-        <View>
+        <View style={styles.searchHeadingText}>
           <Text style={styles.searchLabel}>Найди свой номер</Text>
           <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
         </View>
@@ -1357,12 +1358,12 @@ export default function HomeScreen() {
         renderItem={({ item }) => {
           const isSaved = saved.includes(item.id);
           return (
-            <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
-              <View style={styles.plate}>
+            <Pressable onPress={() => setSelectedPlate(item)} style={[styles.card, compactLayout && styles.cardCompact]}>
+              <View style={[styles.plate, compactLayout && styles.plateCompact]}>
                 <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.plateValue}>{item.value}</Text>
                 <Text numberOfLines={1} style={styles.plateRegion}>{item.region.split(" · ")[1]}</Text>
               </View>
-              <View style={styles.cardInfo}>
+              <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                 <View style={styles.cardTopRow}>
                   <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
@@ -1572,7 +1573,7 @@ export default function HomeScreen() {
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
           <Pressable onPress={() => setActiveTab(tab)} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
             <Text style={[styles.navIcon, { color }]}>{icon}</Text>
-            <Text style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{label}</Text>
+            <Text numberOfLines={2} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout && tab === "favorites" ? "Сохранённое" : label}</Text>
           </Pressable>
           {index < 3 && <View style={styles.navDivider} />}
         </View>)}
@@ -1664,10 +1665,11 @@ const styles = StyleSheet.create({
   rejectButtonText: { color: "#C01048", fontSize: 11, fontWeight: "900" },
   logoutText: { color: "#D92D20", fontSize: 13, fontWeight: "750", marginTop: 9 },
   searchArea: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E2DEF7", borderRadius: 28, borderWidth: 1, maxWidth: 760, marginTop: 20, padding: 19, position: "relative", shadowColor: "#5A4FB2", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.12, shadowRadius: 24, width: "100%" },
-  searchHeading: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
+  searchHeading: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: 14, minWidth: 0 },
+  searchHeadingText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
   searchLabel: { color: "#24213E", fontSize: 21, fontWeight: "900" },
   searchHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 3 },
-  catalogCount: { alignItems: "center", backgroundColor: "#EEEBFF", borderRadius: 13, paddingHorizontal: 10, paddingVertical: 6 },
+  catalogCount: { alignItems: "center", backgroundColor: "#EEEBFF", borderRadius: 13, flexShrink: 0, minWidth: 58, paddingHorizontal: 8, paddingVertical: 6 },
   catalogCountText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
   catalogCountCaption: { color: "#655F7A", fontSize: 10, fontWeight: "700" },
   vehicleTabs: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "center", marginBottom: 15 },
@@ -1814,10 +1816,13 @@ const styles = StyleSheet.create({
   listContainer: { alignSelf: "center", height: 540, maxWidth: 1100, width: "100%" },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, flexDirection: "row", minHeight: 146, overflow: "hidden", paddingBottom: 16, paddingLeft: 14, paddingRight: 48, paddingTop: 16, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
+  cardCompact: { alignItems: "stretch", flexDirection: "column", minHeight: 0, paddingRight: 14 },
   plate: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#3E395D", borderRadius: 14, borderWidth: 2, flexShrink: 0, justifyContent: "center", minHeight: 76, paddingHorizontal: 7, width: 112 },
+  plateCompact: { alignSelf: "stretch", minHeight: 68, width: "100%" },
   plateValue: { color: "#24213E", fontSize: 19, fontWeight: "900", maxWidth: "100%" },
   plateRegion: { color: "#605A78", fontSize: 11, fontWeight: "900", marginTop: 3, maxWidth: "100%" },
   cardInfo: { flex: 1, marginLeft: 12, minWidth: 0, overflow: "hidden" },
+  cardInfoCompact: { marginLeft: 0, marginTop: 12 },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
   availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 7, paddingVertical: 3 },
@@ -1999,11 +2004,11 @@ const styles = StyleSheet.create({
   safeDealText: { color: "#344054", fontSize: 12, lineHeight: 18, marginTop: 5 },
   bottomNav: { backgroundColor: "#FFFFFF", borderTopColor: "#EAECF0", borderTopWidth: 1, bottom: 0, flexDirection: "row", left: 0, paddingBottom: 8, paddingHorizontal: 12, paddingTop: 8, position: "absolute", right: 0 },
   navSlot: { flex: 1, position: "relative" },
-  navItem: { alignItems: "center", borderRadius: 12, paddingVertical: 5 },
+  navItem: { alignItems: "center", borderRadius: 12, minHeight: 58, paddingHorizontal: 3, paddingVertical: 5 },
   navItemActive: { backgroundColor: "#EFF4FF" },
   navDivider: { backgroundColor: "#D0D5DD", bottom: 7, position: "absolute", right: 0, top: 7, width: 1 },
   navIcon: { fontSize: 20, lineHeight: 22 },
-  navText: { color: "#667085", fontSize: 11, fontWeight: "700", marginTop: 2 },
+  navText: { color: "#667085", fontSize: 11, fontWeight: "700", lineHeight: 13, marginTop: 2, textAlign: "center" },
   navTextActive: { color: "#155EEF" },
   toast: { alignSelf: "center", backgroundColor: "#067647", borderRadius: 14, bottom: 82, paddingHorizontal: 18, paddingVertical: 12, position: "absolute" },
   toastText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
