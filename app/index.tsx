@@ -6,6 +6,7 @@ import {
   Modal,
   Pressable,
   SafeAreaView,
+  Share,
   ScrollView,
   StyleSheet,
   Text,
@@ -48,6 +49,7 @@ type PricePoint = {
 };
 
 type ChatMessage = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string };
+type PublicComment = { id: string; listing_id: string; author_name: string; body: string; created_at: string };
 type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessage };
 type MessageReport = { id: string; reason: string; created_at: string; message?: { body?: string } | null };
 type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
@@ -157,9 +159,8 @@ export default function HomeScreen() {
   const [vehicle, setVehicle] = useState<Plate["vehicle"]>("car");
   const [priceLimit, setPriceLimit] = useState<number | null>(null);
   const [specialFilters, setSpecialFilters] = useState<SpecialFilter[]>([]);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [catalogOnly, setCatalogOnly] = useState(false);
   const [saved, setSaved] = useState<string[]>([]);
+  const [likedListingIds, setLikedListingIds] = useState<string[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"buy" | "sell" | "favorites" | "subscriptions">("buy");
   const [subscribedNumbers, setSubscribedNumbers] = useState<string[]>([]);
@@ -167,7 +168,6 @@ export default function HomeScreen() {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [freshOnly, setFreshOnly] = useState(false);
-  const [shownListingsCount, setShownListingsCount] = useState(30);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -213,6 +213,10 @@ export default function HomeScreen() {
   const [reportReason, setReportReason] = useState("");
   const [reportMessage, setReportMessage] = useState("");
   const [ratingMessage, setRatingMessage] = useState("");
+  const [publicComments, setPublicComments] = useState<PublicComment[]>([]);
+  const [publicCommentDraft, setPublicCommentDraft] = useState("");
+  const [publicCommentMessage, setPublicCommentMessage] = useState("");
+  const [regionPickerGroup, setRegionPickerGroup] = useState<string | null>(null);
   const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
   const [testPaymentDone, setTestPaymentDone] = useState(false);
 
@@ -255,6 +259,40 @@ export default function HomeScreen() {
         setPriceHistory(history);
       });
   }, [selectedPlate]);
+
+  useEffect(() => {
+    if (!selectedPlate || !supabase) {
+      setPublicComments([]);
+      setPublicCommentDraft("");
+      setPublicCommentMessage("");
+      return;
+    }
+    setPublicComments([]);
+    setPublicCommentDraft("");
+    setPublicCommentMessage("");
+    void supabase
+      .from("listing_public_comments")
+      .select("id, listing_id, author_name, body, created_at")
+      .eq("listing_id", selectedPlate.id)
+      .order("created_at", { ascending: true })
+      .then(({ data, error }) => {
+        if (!error) setPublicComments((data ?? []) as PublicComment[]);
+      });
+  }, [selectedPlate]);
+
+  useEffect(() => {
+    if (!supabase || !currentUserId) {
+      setLikedListingIds([]);
+      return;
+    }
+    void supabase
+      .from("listing_likes")
+      .select("listing_id")
+      .eq("user_id", currentUserId)
+      .then(({ data, error }) => {
+        if (!error) setLikedListingIds((data ?? []).map((item) => String(item.listing_id)));
+      });
+  }, [currentUserId]);
 
   function mapManagedListing(item: any, ownerName: string): Plate {
     return {
@@ -422,6 +460,63 @@ export default function HomeScreen() {
     }
     setChatDraft("");
     await openChat(selectedPlate);
+  }
+
+  async function shareListing(listing: Plate) {
+    const url = listing.sourceUrl ?? `https://zanomer.vercel.app/?listing=${encodeURIComponent(listing.id)}`;
+    try {
+      await Share.share({ message: `${listing.value} · ${listing.price}\n${url}`, url });
+    } catch {
+      // Пользователь мог закрыть системное меню «Поделиться» — это не ошибка.
+    }
+  }
+
+  async function toggleListingLike(listing: Plate) {
+    if (!supabase || !currentUserId) {
+      setAuthMode("signup");
+      setAuthStep(1);
+      setAuthMessage("Чтобы поставить лайк, зарегистрируйся или войди.");
+      setAuthOpen(true);
+      return;
+    }
+    const liked = likedListingIds.includes(listing.id);
+    const request = liked
+      ? supabase.from("listing_likes").delete().eq("listing_id", listing.id).eq("user_id", currentUserId)
+      : supabase.from("listing_likes").insert({ listing_id: listing.id });
+    const { error } = await request;
+    if (error) {
+      setPublicCommentMessage("Лайки подключатся после запуска listing-social.sql в Supabase.");
+      return;
+    }
+    setLikedListingIds((items) => liked ? items.filter((id) => id !== listing.id) : [...items, listing.id]);
+  }
+
+  async function sendPublicComment() {
+    if (!selectedPlate || !publicCommentDraft.trim()) return;
+    if (!supabase || !currentUserId) {
+      setAuthMode("signup");
+      setAuthStep(1);
+      setAuthMessage("Чтобы оставить публичный комментарий, зарегистрируйся или войди.");
+      setAuthOpen(true);
+      return;
+    }
+    if (prohibitedChatPattern.test(publicCommentDraft)) {
+      setPublicCommentMessage("Комментарий содержит запрещённые слова. Измени текст.");
+      return;
+    }
+    const authorName = profileName || "Пользователь";
+    const { data, error } = await supabase
+      .from("listing_public_comments")
+      .insert({ listing_id: selectedPlate.id, author_name: authorName, body: publicCommentDraft.trim() })
+      .select("id, listing_id, author_name, body, created_at")
+      .single();
+    if (error) {
+      setPublicCommentMessage("Комментарии подключатся после запуска listing-social.sql в Supabase.");
+      return;
+    }
+    setPublicComments((items) => [...items, data as PublicComment]);
+    setPublicCommentDraft("");
+    setPublicCommentMessage("Комментарий опубликован — его видят все пользователи и продавец.");
   }
 
   const priceChart = useMemo(() => {
@@ -652,15 +747,11 @@ export default function HomeScreen() {
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
   const visiblePlates = activeTab === "favorites"
-    ? catalog.filter((plate) => saved.includes(plate.id) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
+    ? catalog.filter((plate) => (saved.includes(plate.id) || likedListingIds.includes(plate.id)) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
     : plates;
-  const renderedPlates = visiblePlates.slice(0, shownListingsCount);
-
-  // The catalogue is inside the main page scroll. Rendering a few dozen cards
-  // at a time keeps web and older phones responsive when the sources grow.
-  useEffect(() => {
-    setShownListingsCount(30);
-  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, vehicle, priceLimit, specialFilters, sort, similarToId, freshOnly]);
+  // FlatList виртуализирует карточки, поэтому в каталоге сразу доступны все
+  // совпадения, даже когда объявлений уже много.
+  const renderedPlates = visiblePlates;
 
   const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
   const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
@@ -669,24 +760,29 @@ export default function HomeScreen() {
     return plates.filter((plate) => !!plate.featuredUntil && plate.featuredUntil > now)
       .sort((a, b) => (b.featuredUntil ?? "").localeCompare(a.featuredUntil ?? ""));
   }, [plates]);
-  const availableRegions = useMemo(() => {
-    const counts = new Map<string, { title: string; count: number }>();
+  const regionGroups = useMemo(() => {
+    const groups = new Map<string, Map<string, number>>();
     catalog.forEach((plate) => {
       const title = plate.region.split(" · ")[0].trim();
       const code = plate.region.split(" · ")[1]?.trim();
       if (!code || title === "Регион не указан") return;
-      const current = counts.get(code);
-      counts.set(code, { title, count: (current?.count ?? 0) + 1 });
+      const codes = groups.get(title) ?? new Map<string, number>();
+      codes.set(code, (codes.get(code) ?? 0) + 1);
+      groups.set(title, codes);
     });
-    return [
-      { value: "", title: "Все доступные регионы", count: catalog.length },
-      ...Array.from(counts.entries()).sort(([codeA, a], [codeB, b]) => a.title.localeCompare(b.title, "ru") || Number(codeA) - Number(codeB)).map(([value, item]) => ({
-        value,
-        title: `${value} (${item.title})`,
-        count: item.count,
-      })),
-    ];
+    return Array.from(groups.entries())
+      .map(([title, codes]) => ({
+        title,
+        count: Array.from(codes.values()).reduce((total, value) => total + value, 0),
+        codes: Array.from(codes.entries()).map(([value, count]) => ({ value, count })).sort((a, b) => Number(a.value) - Number(b.value)),
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title, "ru"));
   }, [catalog]);
+  const availableRegions = useMemo(() => regionGroups.flatMap((group) => group.codes.map((code) => ({
+    value: code.value,
+    title: `${code.value} (${group.title})`,
+    count: code.count,
+  }))), [regionGroups]);
   const catalogAnalytics = useMemo(() => {
     const active = catalog.filter((plate) => !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl));
     const now = Date.now();
@@ -715,9 +811,9 @@ export default function HomeScreen() {
       vehicles,
     };
   }, [catalog, archivedPartnerSources]);
-  const selectedRegionOption = availableRegions.find((item) => item.value === regionCode);
+  const selectedRegionOption = regionGroups.find((item) => item.title === region);
   const selectedRegionLabel = regionCode || "77";
-  const selectedRegionFilterLabel = selectedRegionOption?.title ?? "Все регионы";
+  const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${regionCode ? ` · ${regionCode}` : ""}`;
   const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || specialFilters.length);
 
   function toggleSaved(id: string) {
@@ -1099,12 +1195,12 @@ export default function HomeScreen() {
         </Modal>
       )}
 
-      {activeTab === "buy" && <Pressable onPress={() => setCatalogOnly((value) => !value)} style={[styles.catalogHeroButton, catalogOnly && styles.catalogHeroButtonActive]}>
-        <Text style={[styles.catalogHeroButtonText, catalogOnly && styles.catalogHeroButtonTextActive]}>{catalogOnly ? "← Вернуться к подбору номера" : "▦ Смотреть все объявления"}</Text>
-        <Text style={[styles.catalogHeroButtonHint, catalogOnly && styles.catalogHeroButtonHintActive]}>{catalogOnly ? "Поиск по буквам, цифрам и региону" : `${catalog.length} номеров из проверенных источников`}</Text>
-      </Pressable>}
+      {activeTab === "buy" && <View style={styles.catalogHeroButton}>
+        <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
+        <Text style={styles.catalogHeroButtonHint}>Каталог показан сразу под поиском · {catalog.length} номеров</Text>
+      </View>}
 
-      {activeTab === "buy" && !catalogOnly && <>
+      {activeTab === "buy" && <>
       <View style={styles.searchArea}>
       <View style={styles.searchHeading}>
         <View style={styles.searchHeadingText}>
@@ -1132,7 +1228,7 @@ export default function HomeScreen() {
         <View style={styles.plateDivider} />
         <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
         <View style={styles.plateDivider} />
-        <Pressable onPress={() => setPlatePicker("region")} style={styles.regionCodeBox}>
+        <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text numberOfLines={1} style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder]}>{selectedRegionLabel}</Text>
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
@@ -1144,9 +1240,16 @@ export default function HomeScreen() {
           <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
         </View>
         {platePicker === "region" ? <View style={styles.regionPickerContent}>
-          <Text style={styles.regionPickerHint}>Код региона и название. В списке только регионы из текущих объявлений.</Text>
+          <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Коды региона «${regionPickerGroup}».` : "Сначала выбери название региона, затем его код."}</Text>
           <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
-          {availableRegions.map((item) => <Pressable key={item.value || "all"} onPress={() => { setRegion("Все"); setRegionCode(item.value); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, regionCode === item.value && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, regionCode === item.value && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, regionCode === item.value && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
+          {!regionPickerGroup ? <>
+            <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{catalog.length}</Text></Pressable>
+            {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, region === item.title && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === item.title && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, region === item.title && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
+          </> : <>
+            <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
+            <Pressable onPress={() => { setRegion(regionPickerGroup); setRegionCode(""); setPlatePicker(null); setRegionPickerGroup(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === regionPickerGroup && !regionCode && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === regionPickerGroup && !regionCode && styles.pickerOptionTextActive]}>Все номера региона</Text></Pressable>
+            {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => <Pressable key={item.value} onPress={() => { setRegion(regionPickerGroup); setRegionCode(item.value); setPlatePicker(null); setRegionPickerGroup(null); }} style={[styles.pickerOption, styles.regionPickerOption, regionCode === item.value && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, regionCode === item.value && styles.pickerOptionTextActive]}>Регион {item.value}</Text><Text style={[styles.regionPickerCount, regionCode === item.value && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
+          </>}
           </ScrollView>
         </View> : <View style={styles.pickerGrid}>
           {(platePicker === "digits" ? allowedDigits : allowedLetters).map((item) => <Pressable key={item} onPress={() => choosePlatePart(item)} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{item}</Text></Pressable>)}
@@ -1157,7 +1260,7 @@ export default function HomeScreen() {
 
       <Text style={styles.quickFiltersTitle}>Особенности номера</Text>
       <View style={styles.quickFilters}>
-        <Pressable onPress={() => setPlatePicker("region")} style={styles.quickSelect}>
+          <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.quickSelect}>
           <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}</Text>
           <Text style={styles.quickSelectChevron}>⌄</Text>
         </Pressable>
@@ -1195,12 +1298,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      {filtersOpen && <>
-        <View style={styles.filterPanelTitleRow}>
-          <Text style={styles.sectionTitle}>Дополнительные параметры</Text>
-          <Pressable onPress={() => setFiltersOpen(false)} hitSlop={8}><Text style={styles.closeFiltersText}>Скрыть ×</Text></Pressable>
-        </View>
-      </>}
       </View>
       </>}
 
@@ -1307,15 +1404,22 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
-        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное и сохранённое" : `Похожие на ${similarTo.value}`}</Text>}
+        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие на ${similarTo.value}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>Объявлений: {visiblePlates.length}</Text></View>}
       </View>
-      {activeTab === "buy" && <View style={styles.listFilters}>
-        {[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit(limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}
-      </View>}
-      {activeTab === "buy" && <View style={styles.listFilters}>
-        <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
-        {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort(value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
+      {activeTab === "buy" && <View style={styles.filterControlPanel}>
+        <View style={styles.filterControlGroup}>
+          <Text style={styles.filterControlTitle}>Цена</Text>
+          <View style={styles.listFilters}>{[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit(limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}</View>
+        </View>
+        <View style={styles.filterControlDivider} />
+        <View style={styles.filterControlGroup}>
+          <Text style={styles.filterControlTitle}>Время и порядок</Text>
+          <View style={styles.listFilters}>
+            <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
+            {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort(value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
+          </View>
+        </View>
       </View>}
       {similarTo && (
         <Pressable onPress={() => setSimilarToId(null)} style={styles.clearSimilarButton}>
@@ -1357,6 +1461,7 @@ export default function HomeScreen() {
         contentContainerStyle={styles.list}
         renderItem={({ item }) => {
           const isSaved = saved.includes(item.id);
+          const isLiked = likedListingIds.includes(item.id);
           return (
             <Pressable onPress={() => setSelectedPlate(item)} style={[styles.card, compactLayout && styles.cardCompact]}>
               <View style={[styles.plate, compactLayout && styles.plateCompact]}>
@@ -1383,6 +1488,11 @@ export default function HomeScreen() {
                 {activeTab === "buy" && <Pressable onPress={() => setSimilarToId(item.id)} style={styles.similarButton}>
                   <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                 </Pressable>}
+                <View style={styles.cardActions}>
+                  <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>
+                  <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>
+                  <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
+                </View>
               </View>
               <Pressable onPress={() => toggleSaved(item.id)} hitSlop={10} style={styles.heart}>
                 <Text style={isSaved ? styles.heartActive : styles.heartText}>{isSaved ? "♥" : "♡"}</Text>
@@ -1390,8 +1500,7 @@ export default function HomeScreen() {
             </Pressable>
           );
         }}
-        ListFooterComponent={renderedPlates.length < visiblePlates.length ? <Pressable onPress={() => setShownListingsCount((count) => count + 30)} style={styles.loadMoreButton}><Text style={styles.loadMoreText}>Показать ещё · осталось {visiblePlates.length - renderedPlates.length}</Text></Pressable> : null}
-        ListEmptyComponent={<Text style={styles.empty}>{activeTab === "favorites" ? "В избранном пока нет номеров. Сохранённые поиски находятся выше." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
       />
       </>}
 
@@ -1474,6 +1583,18 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={styles.priceComparisonRange}>По {priceComparison.count} объявлениям: от {priceComparison.min.toLocaleString("ru-RU")} до {priceComparison.max.toLocaleString("ru-RU")} ₽</Text>
               </View>}
+              <View style={styles.publicDiscussionBlock}>
+                <View style={styles.publicDiscussionHeader}>
+                  <View><Text style={styles.publicDiscussionTitle}>Комментарии к объявлению</Text><Text style={styles.publicDiscussionHint}>Их видят все пользователи, включая продавца.</Text></View>
+                  <View style={styles.detailsActionsRow}>
+                    <Pressable onPress={() => { if (selectedPlate) void toggleListingLike(selectedPlate); }} style={[styles.detailsActionButton, likedListingIds.includes(selectedPlate?.id ?? "") && styles.detailsActionButtonLiked]}><Text style={[styles.detailsActionText, likedListingIds.includes(selectedPlate?.id ?? "") && styles.detailsActionTextLiked]}>{likedListingIds.includes(selectedPlate?.id ?? "") ? "♥ Лайк" : "♡ Лайк"}</Text></Pressable>
+                    <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
+                  </View>
+                </View>
+                {publicComments.length === 0 ? <Text style={styles.publicCommentsEmpty}>Пока нет комментариев. Можно задать продавцу общий вопрос здесь.</Text> : <View style={styles.publicCommentList}>{publicComments.map((comment) => <View key={comment.id} style={styles.publicComment}><View style={styles.publicCommentMeta}><Text style={styles.publicCommentAuthor}>{comment.author_name}</Text><Text style={styles.publicCommentDate}>{formatListingDate(comment.created_at)}</Text></View><Text style={styles.publicCommentText}>{comment.body}</Text></View>)}</View>}
+                <View style={styles.publicCommentInputRow}><TextInput value={publicCommentDraft} onChangeText={setPublicCommentDraft} placeholder="Написать публичный комментарий…" placeholderTextColor="#98A2B3" style={styles.publicCommentInput} multiline maxLength={600} /><Pressable onPress={() => { void sendPublicComment(); }} style={styles.publicCommentSend}><Text style={styles.publicCommentSendText}>Отправить</Text></Pressable></View>
+                {!!publicCommentMessage && <Text style={styles.publicCommentMessage}>{publicCommentMessage}</Text>}
+              </View>
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Рейтинг продавца</Text>
                 <Text style={styles.detailsValue}>{selectedPlate.sellerRating ? `★ ${selectedPlate.sellerRating.toFixed(1)} / 5` : "Пока нет отзывов"}</Text>
@@ -1568,12 +1689,12 @@ export default function HomeScreen() {
         {([
           ["buy", "⌕", "Купить", "#155EEF"],
           ["sell", "＋", "Продать", "#F04438"],
-          ["favorites", "♡", "Избранное и сохранённое", "#D92D20"],
+          ["favorites", "♡", "Избранное, сохранённое и лайки", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
           <Pressable onPress={() => setActiveTab(tab)} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
             <Text style={[styles.navIcon, { color }]}>{icon}</Text>
-            <Text numberOfLines={2} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout && tab === "favorites" ? "Сохранённое" : label}</Text>
+            <Text numberOfLines={2} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout && tab === "favorites" ? "Сохранённое и лайки" : label}</Text>
           </Pressable>
           {index < 3 && <View style={styles.navDivider} />}
         </View>)}
@@ -1797,6 +1918,10 @@ const styles = StyleSheet.create({
   pickerErase: { backgroundColor: "#FEF3F2", borderColor: "#FECDCA" },
   listHeader: { alignItems: "center", alignSelf: "center", flexDirection: "row", justifyContent: "space-between", maxWidth: 1100, minWidth: 0, width: "100%" },
   listFilters: { alignSelf: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: 1100, paddingBottom: 3, paddingTop: 10, width: "100%" },
+  filterControlPanel: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 18, borderWidth: 1, marginTop: 10, maxWidth: 1100, padding: 13, width: "100%" },
+  filterControlGroup: { width: "100%" },
+  filterControlTitle: { color: "#352F67", fontSize: 13, fontWeight: "900" },
+  filterControlDivider: { backgroundColor: "#E7E3F8", height: 1, marginTop: 12 },
   listFilterButton: { backgroundColor: "#FFFEFF", borderColor: "#E0DCF1", borderRadius: 15, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
   listFilterButtonActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   listFilterButtonText: { color: "#4B4662", fontSize: 12, fontWeight: "800" },
@@ -1842,6 +1967,11 @@ const styles = StyleSheet.create({
   sourceButtonText: { color: "#7F1D5A", fontSize: 11, fontWeight: "800" },
   similarButton: { alignSelf: "flex-start", marginTop: 7, maxWidth: "100%" },
   similarButtonText: { color: "#155EEF", fontSize: 12, fontWeight: "750" },
+  cardActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
+  cardAction: { backgroundColor: "#F7F6FF", borderColor: "#DDD8FF", borderRadius: 9, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 6 },
+  cardActionText: { color: "#5143C2", fontSize: 10, fontWeight: "900" },
+  cardActionLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
+  cardActionLikedText: { color: "#C01048" },
   heart: { padding: 7, position: "absolute", right: 8, top: 8 },
   heartText: { color: "#98A2B3", fontSize: 27 },
   heartActive: { color: "#E31B54", fontSize: 27 },
@@ -1922,6 +2052,27 @@ const styles = StyleSheet.create({
   priceComparisonGood: { color: "#067647" },
   priceComparisonHigh: { color: "#B54708" },
   priceComparisonRange: { color: "#667085", fontSize: 11, lineHeight: 16, marginTop: 8 },
+  publicDiscussionBlock: { backgroundColor: "#FAFAFF", borderColor: "#E5E1F7", borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 14 },
+  publicDiscussionHeader: { gap: 10 },
+  publicDiscussionTitle: { color: "#24213E", fontSize: 16, fontWeight: "900" },
+  publicDiscussionHint: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 3 },
+  detailsActionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  detailsActionButton: { backgroundColor: "#FFFFFF", borderColor: "#D8D2FF", borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  detailsActionButtonLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
+  detailsActionText: { color: "#5143C2", fontSize: 12, fontWeight: "900" },
+  detailsActionTextLiked: { color: "#C01048" },
+  publicCommentsEmpty: { color: "#667085", fontSize: 12, lineHeight: 18, marginTop: 13 },
+  publicCommentList: { gap: 8, marginTop: 13 },
+  publicComment: { backgroundColor: "#FFFFFF", borderColor: "#ECEAF5", borderRadius: 12, borderWidth: 1, padding: 10 },
+  publicCommentMeta: { alignItems: "center", flexDirection: "row", gap: 7, justifyContent: "space-between" },
+  publicCommentAuthor: { color: "#352F67", flex: 1, fontSize: 12, fontWeight: "900" },
+  publicCommentDate: { color: "#98A2B3", fontSize: 10 },
+  publicCommentText: { color: "#344054", fontSize: 13, lineHeight: 18, marginTop: 5 },
+  publicCommentInputRow: { alignItems: "flex-end", flexDirection: "row", gap: 8, marginTop: 13 },
+  publicCommentInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 12, borderWidth: 1, color: "#101828", flex: 1, fontSize: 13, maxHeight: 100, minHeight: 44, paddingHorizontal: 11, paddingVertical: 9 },
+  publicCommentSend: { backgroundColor: "#5143C2", borderRadius: 11, paddingHorizontal: 11, paddingVertical: 12 },
+  publicCommentSendText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  publicCommentMessage: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 7 },
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
   sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "78%", maxWidth: 560, padding: 20, width: "92%" },
