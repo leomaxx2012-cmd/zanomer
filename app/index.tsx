@@ -78,13 +78,19 @@ const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "�
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 function getSiteVisitorKey() {
-  if (typeof window === "undefined") return `native-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  // React Native тоже может объявлять window, но localStorage там нет.
+  // В приложении используем временный ключ, а постоянный — только на сайте.
+  if (typeof window === "undefined" || !window.localStorage) return `native-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   const storageKey = "zanomer-visitor-key";
-  const existing = window.localStorage.getItem(storageKey);
-  if (existing) return existing;
-  const created = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  window.localStorage.setItem(storageKey, created);
-  return created;
+  try {
+    const existing = window.localStorage.getItem(storageKey);
+    if (existing) return existing;
+    const created = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(storageKey, created);
+    return created;
+  } catch {
+    return `web-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
 }
 
 function formatListingDate(value?: string) {
