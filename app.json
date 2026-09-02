@@ -20,6 +20,14 @@
       ]
     },
     "version": "1.0.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4f39246d-f506-4126-9019-4e1a4ebb1586",
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "experiments": {
       "typedRoutes": true
     },
