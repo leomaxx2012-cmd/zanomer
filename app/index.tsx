@@ -1201,6 +1201,44 @@ export default function HomeScreen() {
       </View>}
 
       {activeTab === "buy" && <>
+      <View style={styles.filterControlPanel}>
+        <View style={styles.filterControlGroup}>
+          <Text style={styles.filterControlTitle}>Регион и особенности</Text>
+          <View style={styles.quickFilters}>
+            <Pressable onPress={() => {
+              if (region !== "Все" || regionCode) {
+                setRegion("Все");
+                setRegionCode("");
+                return;
+              }
+              setRegionPickerGroup(null);
+              setPlatePicker("region");
+            }} style={styles.quickSelect}>
+              <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}{region !== "Все" || regionCode ? "  ×" : ""}</Text>
+              {region === "Все" && !regionCode && <Text style={styles.quickSelectChevron}>⌄</Text>}
+            </Pressable>
+            {(Object.keys(specialFilterLabels) as SpecialFilter[]).map((filter) => {
+              const active = specialFilters.includes(filter);
+              return <Pressable key={filter} onPress={() => setSpecialFilters((current) => active ? current.filter((item) => item !== filter) : [...current, filter])} style={[styles.quickFilter, active && styles.quickFilterActive]}>
+                <Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text>
+              </Pressable>;
+            })}
+          </View>
+        </View>
+        <View style={styles.filterControlDivider} />
+        <View style={styles.filterControlGroup}>
+          <Text style={styles.filterControlTitle}>Цена</Text>
+          <View style={styles.listFilters}>{[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit((current) => current === limit ? null : limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}</View>
+        </View>
+        <View style={styles.filterControlDivider} />
+        <View style={styles.filterControlGroup}>
+          <Text style={styles.filterControlTitle}>Время и порядок</Text>
+          <View style={styles.listFilters}>
+            <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
+            {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort((current) => current === value ? "date" : value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
+          </View>
+        </View>
+      </View>
       <View style={styles.searchArea}>
       <View style={styles.searchHeading}>
         <View style={styles.searchHeadingText}>
@@ -1258,45 +1296,11 @@ export default function HomeScreen() {
         </View>}
       </View>}
 
-      <Text style={styles.quickFiltersTitle}>Особенности номера</Text>
-      <View style={styles.quickFilters}>
-          <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.quickSelect}>
-          <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}</Text>
-          <Text style={styles.quickSelectChevron}>⌄</Text>
-        </Pressable>
-        {(Object.keys(specialFilterLabels) as SpecialFilter[]).map((filter) => {
-          const active = specialFilters.includes(filter);
-          return <Pressable key={filter} onPress={() => setSpecialFilters((current) => active ? current.filter((item) => item !== filter) : [...current, filter])} style={[styles.quickFilter, active && styles.quickFilterActive]}>
-            <Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text>
-          </Pressable>;
-        })}
-      </View>
-
       {hasSearchCriteria && <View style={styles.searchActions}>
         <Pressable onPress={subscribeToCurrentSearch} style={styles.saveSearchButton}>
           <Text style={styles.saveSearchText}>🔔 Сообщить, когда номер появится</Text>
         </Pressable>
       </View>}
-
-      {!leftLetter && !rightLetters && !digits && !regionCode && region === "Все" && priceLimit === null && specialFilters.length === 0 && !similarToId && (
-        <View style={styles.featuredSection}>
-          <View style={styles.featuredHeading}>
-            <Text style={styles.featuredTitle}>🔥 Горячие предложения</Text>
-            <Text style={styles.featuredHint}>Добавлены владельцами</Text>
-          </View>
-          {hotPlates.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredList}>
-              {hotPlates.map((plate) => (
-                <Pressable key={plate.id} onPress={() => setSelectedPlate(plate)} style={styles.featuredCard}>
-                  <Text numberOfLines={1} style={styles.featuredPlate}>{plate.value}</Text>
-                  <Text numberOfLines={1} style={styles.featuredPrice}>{plate.price}</Text>
-                  <Text numberOfLines={1} style={styles.featuredMeta}>{plate.region}</Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          ) : <Text style={styles.noHotOffers}>Пока нет выделенных номеров</Text>}
-        </View>
-      )}
 
       </View>
       </>}
@@ -1407,20 +1411,6 @@ export default function HomeScreen() {
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие на ${similarTo.value}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>Объявлений: {visiblePlates.length}</Text></View>}
       </View>
-      {activeTab === "buy" && <View style={styles.filterControlPanel}>
-        <View style={styles.filterControlGroup}>
-          <Text style={styles.filterControlTitle}>Цена</Text>
-          <View style={styles.listFilters}>{[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit(limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}</View>
-        </View>
-        <View style={styles.filterControlDivider} />
-        <View style={styles.filterControlGroup}>
-          <Text style={styles.filterControlTitle}>Время и порядок</Text>
-          <View style={styles.listFilters}>
-            <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
-            {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort(value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
-          </View>
-        </View>
-      </View>}
       {similarTo && (
         <Pressable onPress={() => setSimilarToId(null)} style={styles.clearSimilarButton}>
           <Text style={styles.clearSimilarText}>Показать все номера</Text>
