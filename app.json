@@ -5,6 +5,7 @@
     "scheme": "avtonomer",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
+    "newArchEnabled": false,
     "web": {
       "output": "static"
     },
