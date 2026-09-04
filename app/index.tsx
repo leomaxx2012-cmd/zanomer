@@ -587,6 +587,24 @@ export default function HomeScreen() {
     const client = supabase;
 
     async function loadCatalog() {
+      // Supabase возвращает не более 1 000 строк за запрос. Каталог партнёров
+      // уже больше этого лимита, поэтому загружаем его страницами.
+      async function loadAllPartnerListings() {
+        const rows: Record<string, any>[] = [];
+        for (let from = 0; ; from += 1000) {
+          const result = await client
+            .from("partner_listings")
+            .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
+            .eq("status", "active")
+            .order("created_at", { ascending: false })
+            .range(from, from + 999);
+          if (result.error) return { data: rows, error: result.error };
+          const page = result.data ?? [];
+          rows.push(...page);
+          if (page.length < 1000) return { data: rows, error: null };
+        }
+      }
+
       // Таблицы загружаются независимо: партнёрский каталог не должен исчезать,
       // если пользовательские объявления временно недоступны гостю по RLS.
       const [siteResult, partnerResult] = await Promise.all([
@@ -595,11 +613,7 @@ export default function HomeScreen() {
           .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url")
           .eq("status", "active")
           .order("created_at", { ascending: false }),
-        client
-          .from("partner_listings")
-          .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
-          .eq("status", "active")
-          .order("created_at", { ascending: false }),
+        loadAllPartnerListings(),
       ]);
       const data = siteResult.data ?? [];
       const partnerData = partnerResult.data ?? [];
