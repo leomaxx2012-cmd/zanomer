@@ -36,6 +36,7 @@ type Plate = {
   sourceUrl?: string;
   isSiteListing?: boolean;
   sellerRating?: number | null;
+  sellerJoinedAt?: string;
   sellerComment?: string;
   featuredUntil?: string | null;
   listingStatus?: "active" | "moderation" | "archived";
@@ -586,9 +587,9 @@ export default function HomeScreen() {
 
       const ownerIds = data.map((item) => item.owner_id).filter(Boolean);
       const { data: profiles } = ownerIds.length
-        ? await client.from("auto_profiles").select("id, username").in("id", ownerIds)
-        : { data: [] as { id: string; username: string }[] };
-      const names = new Map((profiles ?? []).map((profile) => [profile.id, profile.username]));
+        ? await client.from("auto_profiles").select("id, username, created_at").in("id", ownerIds)
+        : { data: [] as { id: string; username: string; created_at: string }[] };
+      const profilesById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
       const { data: reviewRows } = ownerIds.length
         ? await client.from("seller_reviews").select("seller_id, score").in("seller_id", ownerIds)
         : { data: [] as { seller_id: string; score: number }[] };
@@ -610,12 +611,13 @@ export default function HomeScreen() {
         price: `${Number(item.price_rub).toLocaleString("ru-RU")} ₽`,
         priceValue: Number(item.price_rub),
         vehicle: item.vehicle_type as Plate["vehicle"],
-        seller: names.get(item.owner_id) ?? "Пользователь ЗаНомером",
+        seller: profilesById.get(item.owner_id)?.username ?? "Пользователь ЗаНомером",
         createdAt: item.created_at.slice(0, 10),
         publishedAt: item.created_at,
         tag: "Объявление",
         isSiteListing: true,
         ownerId: item.owner_id,
+        sellerJoinedAt: profilesById.get(item.owner_id)?.created_at,
         sellerRating: sellerReviews ? sellerReviews.total / sellerReviews.count : null,
         featuredUntil: item.featured_until,
         photoUrl: item.photo_url ?? undefined,
@@ -763,6 +765,7 @@ export default function HomeScreen() {
 
   const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
   const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
+  const sellerProfileJoinedAt = sellerProfileListings.find((plate) => plate.sellerJoinedAt)?.sellerJoinedAt;
   const hotPlates = useMemo(() => {
     const now = new Date().toISOString();
     return plates.filter((plate) => !!plate.featuredUntil && plate.featuredUntil > now)
@@ -1514,6 +1517,7 @@ export default function HomeScreen() {
             <View style={styles.sellerProfileStats}>
               <View><Text style={styles.sellerProfileNumber}>{sellerProfileListings.length}</Text><Text style={styles.sellerProfileLabel}>активных объявлений</Text></View>
               <View><Text style={styles.sellerProfileNumber}>{sellerProfileRating ? `★ ${sellerProfileRating.toFixed(1)}` : "—"}</Text><Text style={styles.sellerProfileLabel}>рейтинг</Text></View>
+              <View><Text numberOfLines={1} style={styles.sellerProfileJoined}>{sellerProfileJoinedAt ? formatListingDate(sellerProfileJoinedAt).slice(0, 10) : "—"}</Text><Text style={styles.sellerProfileLabel}>на сайте с</Text></View>
             </View>
             <ScrollView style={styles.sellerProfileList} contentContainerStyle={styles.sellerProfileListContent}>
               {sellerProfileListings.map((plate) => <Pressable key={plate.id} onPress={() => { setSellerProfile(null); setSelectedPlate(plate); }} style={styles.sellerProfileItem}>
@@ -2078,8 +2082,9 @@ const styles = StyleSheet.create({
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
   sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "78%", maxWidth: 560, padding: 20, width: "92%" },
   sellerProfileSubtitle: { color: "#716A88", fontSize: 13, marginTop: 3 },
-  sellerProfileStats: { backgroundColor: "#F4F3FF", borderRadius: 16, flexDirection: "row", gap: 40, marginTop: 18, padding: 14 },
+  sellerProfileStats: { backgroundColor: "#F4F3FF", borderRadius: 16, flexDirection: "row", flexWrap: "wrap", gap: 18, justifyContent: "space-between", marginTop: 18, padding: 14 },
   sellerProfileNumber: { color: "#5143C2", fontSize: 20, fontWeight: "900" },
+  sellerProfileJoined: { color: "#5143C2", fontSize: 14, fontWeight: "900", maxWidth: 94 },
   sellerProfileLabel: { color: "#716A88", fontSize: 11, fontWeight: "700", marginTop: 2 },
   sellerProfileList: { marginTop: 14 },
   sellerProfileListContent: { gap: 8, paddingBottom: 4 },
