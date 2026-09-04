@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  FlatList,
   Image,
   Linking,
   Modal,
@@ -150,6 +149,8 @@ const initialPlates: Plate[] = [
 export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const compactLayout = windowWidth < 430;
+  const catalogScrollRef = useRef<ScrollView>(null);
+  const [catalogResultsOffset, setCatalogResultsOffset] = useState(0);
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
@@ -1119,7 +1120,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-      <ScrollView style={styles.mainScroll} contentContainerStyle={styles.mainScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={styles.mainScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -1228,10 +1229,18 @@ export default function HomeScreen() {
         </Modal>
       )}
 
-      {activeTab === "buy" && <View style={styles.catalogHeroButton}>
+      {activeTab === "buy" && <Pressable
+        onPress={() => {
+          setPlatePicker(null);
+          catalogScrollRef.current?.scrollTo({ y: catalogResultsOffset, animated: true });
+        }}
+        accessibilityRole="button"
+        accessibilityLabel="Перейти ко всем объявлениям"
+        style={styles.catalogHeroButton}
+      >
         <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
         <Text style={styles.catalogHeroButtonHint}>Каталог показан сразу под поиском · {catalog.length} номеров</Text>
-      </View>}
+      </Pressable>}
 
       {activeTab === "buy" && <>
       <View style={styles.filterControlPanel}>
@@ -1286,9 +1295,9 @@ export default function HomeScreen() {
           ["motorcycle", "🏍️", "Мото"],
           ["truck", "🚚", "Грузовые"],
         ] as const).map(([type, icon, label]) => (
-          <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, vehicle === type && styles.vehicleTabActive]}>
-            <Text style={styles.vehicleIcon}>{icon}</Text>
-            <Text style={[styles.vehicleLabel, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
+          <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
+            <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
+            <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
       </View>
@@ -1475,14 +1484,9 @@ export default function HomeScreen() {
         </ScrollView>
       </View>}
 
-      <FlatList
-        data={renderedPlates}
-        keyExtractor={(item) => item.id}
-        nestedScrollEnabled
-        scrollEnabled
-        style={styles.listContainer}
-        contentContainerStyle={styles.list}
-        renderItem={({ item }) => {
+      <View onLayout={(event) => setCatalogResultsOffset(event.nativeEvent.layout.y)} style={styles.listContainer}>
+        <View style={styles.list}>
+        {renderedPlates.map((item) => {
           const isSaved = saved.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
           return (
@@ -1522,9 +1526,10 @@ export default function HomeScreen() {
               </Pressable>
             </Pressable>
           );
-        }}
-        ListEmptyComponent={<Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
-      />
+        })}
+        {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
+        </View>
+      </View>
       </>}
 
       </ScrollView>
@@ -1845,11 +1850,14 @@ const styles = StyleSheet.create({
   catalogCount: { alignItems: "center", backgroundColor: "#EEEBFF", borderRadius: 13, flexShrink: 0, minWidth: 58, paddingHorizontal: 8, paddingVertical: 6 },
   catalogCountText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
   catalogCountCaption: { color: "#655F7A", fontSize: 10, fontWeight: "700" },
-  vehicleTabs: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "center", marginBottom: 15 },
-  vehicleTab: { alignItems: "center", backgroundColor: "#F2F4F7", borderColor: "#E2E8F0", borderRadius: 16, borderWidth: 1, flexDirection: "row", gap: 7, justifyContent: "center", minWidth: 96, paddingHorizontal: 14, paddingVertical: 11 },
+  vehicleTabs: { alignItems: "stretch", flexDirection: "row", gap: 8, marginBottom: 15, width: "100%" },
+  vehicleTab: { alignItems: "center", backgroundColor: "#F2F4F7", borderColor: "#E2E8F0", borderRadius: 16, borderWidth: 1, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", minWidth: 0, paddingHorizontal: 10, paddingVertical: 11 },
+  vehicleTabCompact: { gap: 4, paddingHorizontal: 6, paddingVertical: 10 },
   vehicleTabActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   vehicleIcon: { fontSize: 18 },
-  vehicleLabel: { color: "#475467", fontSize: 13, fontWeight: "800" },
+  vehicleIconCompact: { fontSize: 16 },
+  vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
+  vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
   plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", height: "100%", letterSpacing: 1, minWidth: 0, textAlign: "center" },
@@ -1990,7 +1998,7 @@ const styles = StyleSheet.create({
   counter: { color: "#667085", fontSize: 13, marginTop: 22, textAlign: "right" },
   clearSimilarButton: { alignSelf: "flex-start", marginTop: 8 },
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
-  listContainer: { alignSelf: "center", height: 540, maxWidth: 1100, width: "100%" },
+  listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, flexDirection: "row", minHeight: 146, overflow: "hidden", paddingBottom: 16, paddingLeft: 14, paddingRight: 48, paddingTop: 16, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardCompact: { alignItems: "stretch", flexDirection: "column", minHeight: 0, paddingRight: 14 },
