@@ -344,9 +344,17 @@ export default function HomeScreen() {
   }
 
   async function archiveMyListing(listing: Plate) {
-    if (!supabase) return;
-    const { error } = await supabase.from("auto_listings").update({ status: "archived" }).eq("id", listing.id);
+    if (!supabase || !currentUserId) return;
+    if (listing.ownerId && listing.ownerId !== currentUserId) return;
+    const { error } = await supabase
+      .from("auto_listings")
+      .update({ status: "archived" })
+      .eq("id", listing.id)
+      .eq("owner_id", currentUserId);
     if (error) return setAuthMessage("Не удалось снять объявление. Попробуй ещё раз.");
+    setCatalog((items) => items.filter((item) => item.id !== listing.id));
+    setSelectedPlate((item) => item?.id === listing.id ? null : item);
+    setAuthMessage("Объявление отмечено проданным и скрыто из каталога.");
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
   }
@@ -1130,7 +1138,7 @@ export default function HomeScreen() {
                 <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>0</Text><Text style={styles.statLabel}>сообщений</Text></View></View>
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
                   <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text></View>
-                  {listing.listingStatus !== "archived" && <Pressable onPress={() => archiveMyListing(listing)} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Снять</Text></Pressable>}
+                  {listing.listingStatus !== "archived" && <Pressable onPress={() => archiveMyListing(listing)} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>}
                 </View>)}
                 {isModerator && <>
                   <View style={styles.analyticsPanel}>
@@ -1599,6 +1607,7 @@ export default function HomeScreen() {
                   <Text style={styles.detailsMuted}>Контакты продавца не показываются всем посетителям. Для общения используй внутренний чат.</Text>
                 </View>
                 {selectedPlate.ownerId !== currentUserId && <Pressable onPress={() => openChat(selectedPlate)} style={styles.chatOpenButton}><Text style={styles.chatOpenButtonText}>Написать продавцу</Text></Pressable>}
+                {selectedPlate.ownerId === currentUserId && <Pressable onPress={() => { void archiveMyListing(selectedPlate); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>✓ Продано — скрыть объявление</Text></Pressable>}
                 {!selectedPlate.sellerComment && <Text style={styles.detailsMuted}>Продавец пока не оставил комментарий.</Text>}
               </View> : <View style={styles.detailsBlock}>
                 <View style={styles.detailsTrustBadge}><Text style={styles.detailsTrustBadgeText}>✓ Источник объявления проверен</Text></View>
