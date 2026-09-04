@@ -170,6 +170,7 @@ export default function HomeScreen() {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [freshOnly, setFreshOnly] = useState(false);
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -1116,25 +1117,25 @@ export default function HomeScreen() {
       <View pointerEvents="none" style={styles.backgroundGlowTop} />
       <View pointerEvents="none" style={styles.backgroundGlowRight} />
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
-      <View style={styles.header}>
+      <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={styles.headerBrand}>
           <View style={styles.headerBrandRow}>
-            <Image source={require("../assets/zanomer-plate-avatar.png")} style={styles.headerAvatar} accessibilityLabel="ЗаНомером" />
-            <Text style={styles.brand}>ЗаНомером</Text>
+            <Image source={require("../assets/zanomer-plate-avatar.png")} style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.brand, compactLayout && styles.brandCompact]}>ЗаНомером</Text>
           </View>
-          <Text style={styles.subtitle}>Красивые номера — без лишнего</Text>
+          <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
           <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
             <Text style={styles.chatsButtonText}>💬</Text>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
-          <Pressable onPress={() => setAuthOpen((value) => !value)} style={styles.accountButton}>
-            <Text style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
+          <Pressable onPress={() => setAuthOpen((value) => !value)} style={[styles.accountButton, compactLayout && styles.accountButtonCompact]}>
+            <Text numberOfLines={1} style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
         </View>
       </View>
-      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={styles.mainScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} scrollEnabled={!compactLayout || activeTab !== "buy" || filterPanelOpen} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && activeTab === "buy" && !filterPanelOpen && styles.mainScrollContentFixed]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -1250,14 +1251,17 @@ export default function HomeScreen() {
         }}
         accessibilityRole="button"
         accessibilityLabel="Перейти ко всем объявлениям"
-        style={styles.catalogHeroButton}
+        style={[styles.catalogHeroButton, compactLayout && styles.catalogHeroButtonCompact]}
       >
         <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
         <Text style={styles.catalogHeroButtonHint}>Каталог показан сразу под поиском · {catalog.length} номеров</Text>
       </Pressable>}
 
       {activeTab === "buy" && <>
-      <View style={styles.filterControlPanel}>
+      {compactLayout && <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle}>
+        <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть фильтры" : "☷ Фильтры и сортировка"}</Text>
+      </Pressable>}
+      {(!compactLayout || filterPanelOpen) && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
           <Text style={styles.filterControlTitle}>Регион и особенности</Text>
           <View style={styles.quickFilters}>
@@ -1294,7 +1298,7 @@ export default function HomeScreen() {
             {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort((current) => current === value ? "date" : value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
           </View>
         </View>
-      </View>
+      </View>}
       <View style={styles.searchArea}>
       <View style={styles.searchHeading}>
         <View style={styles.searchHeadingText}>
@@ -1498,8 +1502,7 @@ export default function HomeScreen() {
         </ScrollView>
       </View>}
 
-      <View onLayout={(event) => setCatalogResultsOffset(event.nativeEvent.layout.y)} style={styles.listContainer}>
-        <View style={styles.list}>
+      <ScrollView nestedScrollEnabled={compactLayout && activeTab === "buy" && !filterPanelOpen} onLayout={(event) => setCatalogResultsOffset(event.nativeEvent.layout.y)} style={[styles.listContainer, compactLayout && activeTab === "buy" && !filterPanelOpen && styles.listContainerFixed]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
         {renderedPlates.map((item) => {
           const isSaved = saved.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
@@ -1542,8 +1545,7 @@ export default function HomeScreen() {
           );
         })}
         {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
-        </View>
-      </View>
+      </ScrollView>
       </>}
 
       </ScrollView>
@@ -1777,27 +1779,34 @@ const styles = StyleSheet.create({
   page: { backgroundColor: "#F8F7FC", flex: 1, overflow: "hidden", paddingLeft: 24, paddingRight: 24, width: "100%" },
   mainScroll: { flex: 1, marginHorizontal: -24 },
   mainScrollContent: { paddingBottom: 112, paddingHorizontal: 24 },
+  mainScrollContentFixed: { flexGrow: 1 },
   backgroundGlowTop: { backgroundColor: "#DDE7FF", borderRadius: 999, height: 250, left: -50, opacity: 0.56, position: "absolute", top: 170, transform: [{ rotate: "-18deg" }], width: 250 },
   backgroundGlowRight: { backgroundColor: "#EADFFF", borderRadius: 999, height: 390, opacity: 0.72, position: "absolute", right: -190, top: 235, width: 440 },
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
   header: { backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: -24, paddingHorizontal: 24, paddingTop: 18, paddingBottom: 18, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10 },
+  headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: 12 },
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
-  headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 9 },
+  headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
   headerAvatar: { borderRadius: 7, height: 34, width: 62 },
+  headerAvatarCompact: { borderRadius: 5, height: 25, width: 45 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
+  brandCompact: { flexShrink: 1, fontSize: 25, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
+  subtitleCompact: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },
   chatsButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 42, justifyContent: "center", position: "relative", width: 42 },
   chatsButtonText: { fontSize: 18 },
   chatBadge: { alignItems: "center", backgroundColor: "#F04438", borderColor: "#FFFFFF", borderRadius: 10, borderWidth: 2, justifyContent: "center", minHeight: 18, minWidth: 18, paddingHorizontal: 3, position: "absolute", right: -4, top: -4 },
   chatBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900" },
   catalogHeroButton: { alignSelf: "center", backgroundColor: "#5143C2", borderRadius: 18, marginTop: 16, maxWidth: 760, paddingHorizontal: 18, paddingVertical: 15, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.25, shadowRadius: 14, width: "100%" },
+  catalogHeroButtonCompact: { borderRadius: 17, marginTop: 12, paddingHorizontal: 12, paddingVertical: 12 },
   catalogHeroButtonActive: { backgroundColor: "#E8F8F0", borderColor: "#B7E6CD", borderWidth: 1, shadowOpacity: 0 },
   catalogHeroButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "900", textAlign: "center" },
   catalogHeroButtonTextActive: { color: "#18794E" },
   catalogHeroButtonHint: { color: "#DCD8FF", fontSize: 11, fontWeight: "700", marginTop: 3, textAlign: "center" },
   catalogHeroButtonHintActive: { color: "#4B8A69" },
   accountButton: { backgroundColor: "#F0EEFF", borderColor: "#E2DFFF", borderRadius: 14, borderWidth: 1, maxWidth: 150, paddingHorizontal: 12, paddingVertical: 9 },
+  accountButtonCompact: { maxWidth: 76, paddingHorizontal: 10 },
   accountButtonText: { color: "#5143C2", fontSize: 13, fontWeight: "800" },
   savedButton: { backgroundColor: "#F2F4F7", borderRadius: 14, paddingHorizontal: 13, paddingVertical: 9 },
   savedButtonText: { color: "#344054", fontSize: 16, fontWeight: "700" },
@@ -1993,6 +2002,8 @@ const styles = StyleSheet.create({
   listHeader: { alignItems: "center", alignSelf: "center", flexDirection: "row", justifyContent: "space-between", maxWidth: 1100, minWidth: 0, width: "100%" },
   listFilters: { alignSelf: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: 1100, paddingBottom: 3, paddingTop: 10, width: "100%" },
   filterControlPanel: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 18, borderWidth: 1, marginTop: 10, maxWidth: 1100, padding: 13, width: "100%" },
+  filterToggle: { alignItems: "center", alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#D9D3F5", borderRadius: 14, borderWidth: 1, marginTop: 12, maxWidth: 760, paddingVertical: 11, width: "100%" },
+  filterToggleText: { color: "#5143C2", fontSize: 14, fontWeight: "900" },
   filterControlGroup: { width: "100%" },
   filterControlTitle: { color: "#352F67", fontSize: 13, fontWeight: "900" },
   filterControlDivider: { backgroundColor: "#E7E3F8", height: 1, marginTop: 12 },
@@ -2013,6 +2024,7 @@ const styles = StyleSheet.create({
   clearSimilarButton: { alignSelf: "flex-start", marginTop: 8 },
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
+  listContainerFixed: { flex: 1, minHeight: 120 },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, flexDirection: "row", minHeight: 146, overflow: "hidden", paddingBottom: 16, paddingLeft: 14, paddingRight: 48, paddingTop: 16, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardCompact: { alignItems: "stretch", flexDirection: "column", minHeight: 0, paddingRight: 14 },
