@@ -1103,7 +1103,10 @@ export default function HomeScreen() {
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
       <View style={styles.header}>
         <View style={styles.headerBrand}>
-          <Text style={styles.brand}>ЗаНомером</Text>
+          <View style={styles.headerBrandRow}>
+            <Image source={require("../assets/zanomer-plate-avatar.png")} style={styles.headerAvatar} accessibilityLabel="ЗаНомером" />
+            <Text style={styles.brand}>ЗаНомером</Text>
+          </View>
           <Text style={styles.subtitle}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
@@ -1760,6 +1763,8 @@ const styles = StyleSheet.create({
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
   header: { backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: -24, paddingHorizontal: 24, paddingTop: 18, paddingBottom: 18, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10 },
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
+  headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 9 },
+  headerAvatar: { borderRadius: 7, height: 34, width: 62 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
   headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },

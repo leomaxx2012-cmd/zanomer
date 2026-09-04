@@ -2,12 +2,14 @@
   "expo": {
     "name": "ЗаНомером",
     "slug": "zanomer",
+    "icon": "./assets/zanomer-plate-avatar.png",
     "scheme": "avtonomer",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "web": {
-      "output": "static"
+      "output": "static",
+      "favicon": "./assets/zanomer-plate-avatar.png"
     },
     "plugins": [
       "expo-router",
@@ -16,6 +18,10 @@
     "android": {
       "package": "ru.zanomer.app",
       "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/zanomer-plate-avatar.png",
+        "backgroundColor": "#21154F"
+      },
       "permissions": [
         "POST_NOTIFICATIONS"
       ]
