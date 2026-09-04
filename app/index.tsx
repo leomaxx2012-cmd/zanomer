@@ -49,10 +49,10 @@ type PricePoint = {
   priceValue: number;
 };
 
-type ChatMessage = { id: string; sender_id: string; recipient_id: string; body: string; created_at: string };
+type ChatMessage = { id: string; listing_id?: string; sender_id: string; recipient_id: string; body: string; created_at: string };
 type PublicComment = { id: string; listing_id: string; author_name: string; body: string; created_at: string };
 type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessage };
-type MessageReport = { id: string; reason: string; created_at: string; message?: { body?: string } | null };
+type MessageReport = { id: string; reason: string; created_at: string; message?: { body?: string; sender_id?: string; listing_id?: string } | null };
 type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
 
 type SavedSearch = {
@@ -213,6 +213,9 @@ export default function HomeScreen() {
   const [reportingMessage, setReportingMessage] = useState<ChatMessage | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportMessage, setReportMessage] = useState("");
+  const [moderationReport, setModerationReport] = useState<MessageReport | null>(null);
+  const [moderationChatMessages, setModerationChatMessages] = useState<ChatMessage[]>([]);
+  const [moderationChatMessage, setModerationChatMessage] = useState("");
   const [ratingMessage, setRatingMessage] = useState("");
   const [publicComments, setPublicComments] = useState<PublicComment[]>([]);
   const [publicCommentDraft, setPublicCommentDraft] = useState("");
@@ -338,10 +341,13 @@ export default function HomeScreen() {
     setModerationListings((pending ?? []).map((item) => mapManagedListing(item, "Пользователь ЗаНомером")));
     const { data: reports } = await client
       .from("listing_message_reports")
-      .select("id, reason, created_at, listing_messages(body)")
+      .select("id, reason, created_at, listing_messages(body, sender_id, listing_id)")
       .eq("status", "pending")
       .order("created_at", { ascending: true });
-    setModerationReports((reports ?? []) as MessageReport[]);
+    setModerationReports((reports ?? []).map((report: any) => ({
+      ...report,
+      message: Array.isArray(report.listing_messages) ? report.listing_messages[0] : report.listing_messages,
+    })) as MessageReport[]);
   }
 
   async function archiveMyListing(listing: Plate) {
@@ -469,6 +475,19 @@ export default function HomeScreen() {
     }
     setChatDraft("");
     await openChat(selectedPlate);
+  }
+
+  async function openReportedChat(report: MessageReport) {
+    if (!supabase) return;
+    setModerationReport(report);
+    setModerationChatMessages([]);
+    setModerationChatMessage("");
+    const { data, error } = await supabase.rpc("get_reported_listing_chat", { report: report.id });
+    if (error) {
+      setModerationChatMessage("Не удалось открыть чат. Выполни обновлённый файл chat.sql в Supabase.");
+      return;
+    }
+    setModerationChatMessages((data ?? []) as ChatMessage[]);
   }
 
   async function shareListing(listing: Plate) {
@@ -1181,7 +1200,7 @@ export default function HomeScreen() {
                   <Text style={styles.managementTitle}>Жалобы на сообщения</Text>
                   {moderationReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationReports.map((report) => <View key={report.id} style={styles.managementCard}>
                     <View style={styles.reportReviewText}><Text style={styles.managementMeta}>Сообщение: {report.message?.body ?? "удалено"}</Text><Text style={styles.managementStatus}>Причина: {report.reason}</Text></View>
-                    <View style={styles.reviewActions}><Pressable onPress={() => reviewMessageReport(report, "approved")} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "rejected")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable></View>
+                    <View style={styles.reviewActions}><Pressable onPress={() => { void openReportedChat(report); }} style={styles.viewChatButton}><Text style={styles.viewChatButtonText}>Чат</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "approved")} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "rejected")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable></View>
                   </View>)}
                 </>}
               </View>}
@@ -1637,7 +1656,7 @@ export default function HomeScreen() {
               <Pressable onPress={() => setChatOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable>
             </View>
             <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatMessages}>
-              {chatMessages.length === 0 ? <View style={styles.chatEmpty}><Text style={styles.chatEmptyIcon}>✦</Text><Text style={styles.chatEmptyTitle}>Начните переписку</Text><Text style={styles.chatEmptyText}>Уточните цену, оформление или детали номера.</Text></View> : chatMessages.map((message) => <View key={message.id} style={[styles.chatBubbleRow, message.sender_id === currentUserId && styles.chatBubbleRowOwn]}><Pressable onPress={() => { if (selectedPlate?.ownerId === currentUserId && message.sender_id !== currentUserId) setChatRecipientId(message.sender_id); }} style={[styles.chatBubble, message.sender_id === currentUserId && styles.chatBubbleOwn]}><Text style={[styles.chatBubbleText, message.sender_id === currentUserId && styles.chatBubbleTextOwn]}>{message.body}</Text></Pressable>{message.sender_id !== currentUserId && <Pressable onPress={() => { setReportingMessage(message); setReportReason(""); setReportMessage(""); }} style={styles.reportButton}><Text style={styles.reportButtonText}>⚑</Text></Pressable>}</View>)}
+              {chatMessages.length === 0 ? <View style={styles.chatEmpty}><Text style={styles.chatEmptyIcon}>✦</Text><Text style={styles.chatEmptyTitle}>Начните переписку</Text><Text style={styles.chatEmptyText}>Уточните цену, оформление или детали номера.</Text></View> : chatMessages.map((message) => <View key={message.id} style={[styles.chatBubbleRow, message.sender_id === currentUserId && styles.chatBubbleRowOwn]}><Pressable onPress={() => { if (selectedPlate?.ownerId === currentUserId && message.sender_id !== currentUserId) setChatRecipientId(message.sender_id); }} style={[styles.chatBubble, message.sender_id === currentUserId && styles.chatBubbleOwn]}><Text style={[styles.chatBubbleText, message.sender_id === currentUserId && styles.chatBubbleTextOwn]}>{message.body}</Text></Pressable>{message.sender_id !== currentUserId && <Pressable onPress={() => { setReportingMessage(message); setReportReason(""); setReportMessage(""); }} style={styles.reportButton}><Text style={styles.reportButtonText}>⚑ Жалоба</Text></Pressable>}</View>)}
             </ScrollView>
             <View style={styles.chatSafetyCard}><Text style={styles.chatSafetyIcon}>⌁</Text><Text style={styles.chatSafety}>{selectedPlate?.ownerId === currentUserId ? "Нажми на сообщение покупателя, чтобы выбрать его для ответа." : "Не отправляй документы, банковские данные или номера карт."}</Text></View>
             {!!chatMessage && <Text style={styles.authMessage}>{chatMessage}</Text>}
@@ -1665,10 +1684,31 @@ export default function HomeScreen() {
         <Pressable style={styles.detailsOverlay} onPress={() => setReportingMessage(null)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportPanel}>
             <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Пожаловаться</Text><Pressable onPress={() => setReportingMessage(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
-            <Text style={styles.dialogsHint}>Жалоба попадёт модератору. Не указывай личные данные.</Text>
+            <Text style={styles.dialogsHint}>Ты жалуешься на пользователя, написавшего это сообщение. Модератор увидит причину и чат по этому объявлению. Не указывай личные данные.</Text>
             <TextInput value={reportReason} onChangeText={setReportReason} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline />
             {!!reportMessage && <Text style={styles.authMessage}>{reportMessage}</Text>}
-            <Pressable onPress={() => { void sendReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>Отправить жалобу</Text></Pressable>
+            <Pressable onPress={() => { void sendReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>Пожаловаться на пользователя</Text></Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!moderationReport} transparent animationType="slide" onRequestClose={() => setModerationReport(null)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setModerationReport(null)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.chatPanel}>
+            <View style={styles.chatHeader}>
+              <View style={styles.chatSellerMark}><Text style={styles.chatSellerMarkText}>⚑</Text></View>
+              <View style={styles.chatHeaderText}><Text style={styles.chatTitle}>Жалоба на пользователя</Text><Text style={styles.chatSubtitle}>Причина: {moderationReport?.reason}</Text></View>
+              <Pressable onPress={() => setModerationReport(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable>
+            </View>
+            <Text style={styles.moderationChatHint}>Полная переписка доступна только модератору для рассмотрения жалобы.</Text>
+            <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatMessages}>
+              {moderationChatMessages.length === 0 ? <Text style={styles.dialogsEmpty}>Сообщения не найдены.</Text> : moderationChatMessages.map((message) => <View key={message.id} style={styles.moderationChatBubble}><Text style={styles.moderationChatAuthor}>{message.sender_id === moderationReport?.message?.sender_id ? "Пользователь, на которого пожаловались" : "Собеседник"}</Text><Text style={styles.chatBubbleText}>{message.body}</Text><Text style={styles.moderationChatDate}>{formatListingDate(message.created_at)}</Text></View>)}
+            </ScrollView>
+            {!!moderationChatMessage && <Text style={styles.authMessage}>{moderationChatMessage}</Text>}
+            <View style={styles.reviewActions}>
+              <Pressable onPress={async () => { if (!moderationReport) return; await reviewMessageReport(moderationReport, "approved"); setModerationReport(null); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять жалобу</Text></Pressable>
+              <Pressable onPress={async () => { if (!moderationReport) return; await reviewMessageReport(moderationReport, "rejected"); setModerationReport(null); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1784,7 +1824,9 @@ const styles = StyleSheet.create({
   managementStatus: { color: "#5143C2", fontSize: 11, fontWeight: "800", marginTop: 4 },
   archiveButton: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6", borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
   archiveButtonText: { color: "#C01048", fontSize: 11, fontWeight: "900" },
-  reviewActions: { flexDirection: "row", gap: 5 },
+  reviewActions: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
+  viewChatButton: { backgroundColor: "#EEF4FF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7 },
+  viewChatButtonText: { color: "#175CD3", fontSize: 11, fontWeight: "900" },
   approveButton: { backgroundColor: "#E8F8F0", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7 },
   approveButtonText: { color: "#18794E", fontSize: 11, fontWeight: "900" },
   rejectButton: { backgroundColor: "#FFF1F3", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7 },
@@ -2134,8 +2176,12 @@ const styles = StyleSheet.create({
   chatInput: { color: "#101828", flex: 1, fontSize: 14, maxHeight: 86, minHeight: 42, paddingHorizontal: 9, paddingVertical: 9 },
   chatSend: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, height: 42, justifyContent: "center", width: 44 },
   chatSendText: { color: "#FFFFFF", fontSize: 19, fontWeight: "900" },
-  reportButton: { alignItems: "center", borderRadius: 12, height: 28, justifyContent: "center", width: 28 },
-  reportButtonText: { color: "#98A2B3", fontSize: 17 },
+  reportButton: { alignItems: "center", borderColor: "#EAECF0", borderRadius: 9, borderWidth: 1, justifyContent: "center", paddingHorizontal: 7, paddingVertical: 5 },
+  reportButtonText: { color: "#667085", fontSize: 10, fontWeight: "800" },
+  moderationChatHint: { color: "#667085", fontSize: 12, lineHeight: 17, marginTop: 10 },
+  moderationChatBubble: { alignSelf: "stretch", backgroundColor: "#FFFFFF", borderColor: "#E7E3F4", borderRadius: 14, borderWidth: 1, padding: 11 },
+  moderationChatAuthor: { color: "#5143C2", fontSize: 11, fontWeight: "900", marginBottom: 4 },
+  moderationChatDate: { color: "#98A2B3", fontSize: 10, marginTop: 6 },
   dialogsPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 25, maxHeight: 620, maxWidth: 620, padding: 18, width: "94%" },
   dialogsHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   dialogsTitle: { color: "#101828", fontSize: 20, fontWeight: "900" },

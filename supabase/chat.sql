@@ -85,6 +85,40 @@ create table if not exists public.listing_message_reports (
   unique (message_id, reporter_id)
 );
 
+-- Жалоба относится к пользователю, отправившему выбранное сообщение. Эти поля
+-- заполняются на сервере: клиент не может подменить, на кого жалуется.
+alter table public.listing_message_reports
+  add column if not exists listing_id uuid references public.auto_listings(id) on delete cascade,
+  add column if not exists reported_user_id uuid references auth.users(id) on delete cascade;
+
+update public.listing_message_reports r
+set listing_id = m.listing_id,
+    reported_user_id = m.sender_id
+from public.listing_messages m
+where m.id = r.message_id
+  and (r.listing_id is null or r.reported_user_id is null);
+
+create or replace function public.fill_listing_message_report_details()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  select listing_id, sender_id into new.listing_id, new.reported_user_id
+  from public.listing_messages
+  where id = new.message_id;
+  if new.listing_id is null or new.reported_user_id is null then
+    raise exception 'Сообщение для жалобы не найдено';
+  end if;
+  if new.reported_user_id = auth.uid() then
+    raise exception 'Нельзя пожаловаться на самого себя';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists listing_message_reports_details on public.listing_message_reports;
+create trigger listing_message_reports_details
+  before insert on public.listing_message_reports
+  for each row execute function public.fill_listing_message_report_details();
+
 alter table public.listing_message_reports enable row level security;
 
 alter table public.listing_message_reports
@@ -129,6 +163,34 @@ $$;
 
 revoke all on function public.review_listing_message_report(uuid, text) from public;
 grant execute on function public.review_listing_message_report(uuid, text) to authenticated;
+
+-- Модератор может открыть чат только из карточки жалобы. Обычные пользователи
+-- по-прежнему видят только свои сообщения благодаря RLS-политике выше.
+create or replace function public.get_reported_listing_chat(report uuid)
+returns table (id uuid, listing_id uuid, sender_id uuid, recipient_id uuid, body text, created_at timestamptz)
+language plpgsql security definer set search_path = public as $$
+declare
+  report_listing_id uuid;
+begin
+  if not exists (select 1 from public.auto_moderators where user_id = auth.uid()) then
+    raise exception 'Недостаточно прав модератора';
+  end if;
+  select r.listing_id into report_listing_id
+  from public.listing_message_reports r
+  where r.id = report;
+  if report_listing_id is null then
+    raise exception 'Жалоба не найдена';
+  end if;
+  return query
+  select m.id, m.listing_id, m.sender_id, m.recipient_id, m.body, m.created_at
+  from public.listing_messages m
+  where m.listing_id = report_listing_id
+  order by m.created_at asc;
+end;
+$$;
+
+revoke all on function public.get_reported_listing_chat(uuid) from public;
+grant execute on function public.get_reported_listing_chat(uuid) to authenticated;
 
 -- Ник владельца доступен всем для отображения в карточке, без контактов.
 -- Политика уже есть в schema.sql; эта строка безопасна при повторном запуске.
