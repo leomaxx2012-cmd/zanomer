@@ -747,7 +747,7 @@ export default function HomeScreen() {
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
   const visiblePlates = activeTab === "favorites"
-    ? catalog.filter((plate) => (saved.includes(plate.id) || likedListingIds.includes(plate.id)) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
+    ? catalog.filter((plate) => (saved.includes(plate.id) || (plate.isSiteListing && likedListingIds.includes(plate.id))) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
     : plates;
   // FlatList виртуализирует карточки, поэтому в каталоге сразу доступны все
   // совпадения, даже когда объявлений уже много.
@@ -1479,8 +1479,8 @@ export default function HomeScreen() {
                   <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                 </Pressable>}
                 <View style={styles.cardActions}>
-                  <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>
-                  <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>
+                  {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
+                  {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
                   <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
                 </View>
               </View>
@@ -1573,17 +1573,19 @@ export default function HomeScreen() {
                 </Text>
                 <Text style={styles.priceComparisonRange}>По {priceComparison.count} объявлениям: от {priceComparison.min.toLocaleString("ru-RU")} до {priceComparison.max.toLocaleString("ru-RU")} ₽</Text>
               </View>}
-              <View style={styles.publicDiscussionBlock}>
+              {selectedPlate?.isSiteListing && <View style={styles.publicDiscussionBlock}>
                 <View style={styles.publicDiscussionHeader}>
                   <View><Text style={styles.publicDiscussionTitle}>Комментарии к объявлению</Text><Text style={styles.publicDiscussionHint}>Их видят все пользователи, включая продавца.</Text></View>
                   <View style={styles.detailsActionsRow}>
                     <Pressable onPress={() => { if (selectedPlate) void toggleListingLike(selectedPlate); }} style={[styles.detailsActionButton, likedListingIds.includes(selectedPlate?.id ?? "") && styles.detailsActionButtonLiked]}><Text style={[styles.detailsActionText, likedListingIds.includes(selectedPlate?.id ?? "") && styles.detailsActionTextLiked]}>{likedListingIds.includes(selectedPlate?.id ?? "") ? "♥ Лайк" : "♡ Лайк"}</Text></Pressable>
-                    <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
                   </View>
                 </View>
                 {publicComments.length === 0 ? <Text style={styles.publicCommentsEmpty}>Пока нет комментариев. Можно задать продавцу общий вопрос здесь.</Text> : <View style={styles.publicCommentList}>{publicComments.map((comment) => <View key={comment.id} style={styles.publicComment}><View style={styles.publicCommentMeta}><Text style={styles.publicCommentAuthor}>{comment.author_name}</Text><Text style={styles.publicCommentDate}>{formatListingDate(comment.created_at)}</Text></View><Text style={styles.publicCommentText}>{comment.body}</Text></View>)}</View>}
                 <View style={styles.publicCommentInputRow}><TextInput value={publicCommentDraft} onChangeText={setPublicCommentDraft} placeholder="Написать публичный комментарий…" placeholderTextColor="#98A2B3" style={styles.publicCommentInput} multiline maxLength={600} /><Pressable onPress={() => { void sendPublicComment(); }} style={styles.publicCommentSend}><Text style={styles.publicCommentSendText}>Отправить</Text></Pressable></View>
                 {!!publicCommentMessage && <Text style={styles.publicCommentMessage}>{publicCommentMessage}</Text>}
+              </View>}
+              <View style={styles.detailsActionsRow}>
+                <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
               </View>
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Рейтинг продавца</Text>
