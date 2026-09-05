@@ -3,10 +3,12 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   Pressable,
   SafeAreaView,
   Share,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
@@ -150,11 +152,11 @@ export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const compactLayout = windowWidth < 430;
   const catalogScrollRef = useRef<ScrollView>(null);
-  const [catalogResultsOffset, setCatalogResultsOffset] = useState(0);
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogLoadError, setCatalogLoadError] = useState("");
   const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(40);
+  const [catalogOnly, setCatalogOnly] = useState(false);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
   const [rightLetters, setRightLetters] = useState("");
@@ -233,6 +235,23 @@ export default function HomeScreen() {
   function openTestPayment(title: string, amount: string) {
     setTestPayment({ title, amount });
     setTestPaymentDone(false);
+  }
+
+  function resetSearchAndFilters() {
+    setLeftLetter("");
+    setRightLetters("");
+    setDigits("");
+    setRegion("Все");
+    setRegionCode("");
+    setVehicle("car");
+    setPriceLimit(null);
+    setSpecialFilters([]);
+    setFreshOnly(false);
+    setSort("date");
+    setSimilarToId(null);
+    setPlatePicker(null);
+    setRegionPickerGroup(null);
+    setCatalogDisplayLimit(40);
   }
 
   useEffect(() => {
@@ -809,6 +828,8 @@ export default function HomeScreen() {
   const similarTo = catalog.find((plate) => plate.id === similarToId);
   const visiblePlates = activeTab === "favorites"
     ? catalog.filter((plate) => (saved.includes(plate.id) || (plate.isSiteListing && likedListingIds.includes(plate.id))) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
+    : catalogOnly
+      ? [...catalog].filter((plate) => !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt))
     : plates;
   // Мобильное приложение не должно строить тысячи тяжёлых карточек за один раз:
   // это блокирует прокрутку и нажатия. Все номера доступны через «Показать ещё».
@@ -1259,10 +1280,21 @@ export default function HomeScreen() {
         </Modal>
       )}
 
-      {activeTab === "buy" && <Pressable
+      {activeTab === "buy" && catalogOnly && <View style={styles.catalogOnlyToolbar}>
+        <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(40); catalogScrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={styles.catalogOnlyBack}>
+          <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
+        </Pressable>
+        <Text style={styles.catalogOnlyTitle}>Все объявления</Text>
+        <Text style={styles.catalogOnlyCount}>{catalogLoading ? "…" : visiblePlates.length}</Text>
+      </View>}
+
+      {activeTab === "buy" && !catalogOnly && <Pressable
         onPress={() => {
           setPlatePicker(null);
-          catalogScrollRef.current?.scrollTo({ y: catalogResultsOffset, animated: true });
+          setFilterPanelOpen(false);
+          resetSearchAndFilters();
+          setCatalogOnly(true);
+          catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
         }}
         accessibilityRole="button"
         accessibilityLabel="Перейти ко всем объявлениям"
@@ -1272,13 +1304,21 @@ export default function HomeScreen() {
         <Text style={styles.catalogHeroButtonHint}>{catalogLoading ? "Обновляем каталог…" : catalogLoadError ? "Нет связи с каталогом — проверь интернет" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
       </Pressable>}
 
-      {activeTab === "buy" && <>
-      {compactLayout && <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle}>
-        <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть фильтры" : "☷ Фильтры и сортировка"}</Text>
-      </Pressable>}
+      {activeTab === "buy" && !catalogOnly && <>
+      {compactLayout && <View style={styles.filterToolbar}>
+        <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle}>
+          <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть" : "☷ Фильтры"}</Text>
+        </Pressable>
+        <Pressable onPress={resetSearchAndFilters} style={styles.resetFiltersButton}>
+          <Text style={styles.resetFiltersText}>↺ Сбросить</Text>
+        </Pressable>
+      </View>}
       {(!compactLayout || filterPanelOpen) && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
-          <Text style={styles.filterControlTitle}>Регион и особенности</Text>
+          <View style={styles.filterControlTitleRow}>
+            <Text style={styles.filterControlTitle}>Регион и особенности</Text>
+            {!compactLayout && <Pressable onPress={resetSearchAndFilters}><Text style={styles.resetFiltersText}>↺ Сбросить</Text></Pressable>}
+          </View>
           <View style={styles.quickFilters}>
             <Pressable onPress={() => {
               if (region !== "Все" || regionCode) {
@@ -1482,12 +1522,12 @@ export default function HomeScreen() {
       </View>}
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
-      <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
+      {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие на ${similarTo.value}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
-      </View>
-      {!!catalogLoadError && activeTab === "buy" && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
-      {similarTo && (
+      </View>}
+      {!!catalogLoadError && activeTab === "buy" && !catalogOnly && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
+      {similarTo && !catalogOnly && (
         <Pressable onPress={() => setSimilarToId(null)} style={styles.clearSimilarButton}>
           <Text style={styles.clearSimilarText}>Показать все номера</Text>
         </Pressable>
@@ -1518,7 +1558,7 @@ export default function HomeScreen() {
         </ScrollView>
       </View>}
 
-      <View onLayout={(event) => setCatalogResultsOffset(event.nativeEvent.layout.y)} style={styles.listContainer}>
+      <View style={styles.listContainer}>
       <View style={styles.list}>
         {renderedPlates.map((item) => {
           const isSaved = saved.includes(item.id);
@@ -1782,7 +1822,7 @@ export default function HomeScreen() {
           ["favorites", "♡", "Избранное, сохранённое и лайки", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
-          <Pressable onPress={() => setActiveTab(tab)} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
+          <Pressable onPress={() => { setActiveTab(tab); if (tab === "buy") setCatalogOnly(false); }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
             <Text style={[styles.navIcon, { color }]}>{icon}</Text>
             <Text numberOfLines={2} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout && tab === "favorites" ? "Сохранённое и лайки" : label}</Text>
           </Pressable>
@@ -1803,8 +1843,8 @@ const styles = StyleSheet.create({
   backgroundGlowTop: { backgroundColor: "#DDE7FF", borderRadius: 999, height: 250, left: -50, opacity: 0.56, position: "absolute", top: 170, transform: [{ rotate: "-18deg" }], width: 250 },
   backgroundGlowRight: { backgroundColor: "#EADFFF", borderRadius: 999, height: 390, opacity: 0.72, position: "absolute", right: -190, top: 235, width: 440 },
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
-  header: { backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: -24, paddingHorizontal: 24, paddingTop: 18, paddingBottom: 18, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10 },
-  headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: 12 },
+  header: { alignItems: "center", backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, elevation: 6, flexDirection: "row", justifyContent: "space-between", marginHorizontal: -24, paddingBottom: 18, paddingHorizontal: 24, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 14 : 18, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, zIndex: 10 },
+  headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 12 },
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
   headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
   headerAvatar: { borderRadius: 7, height: 34, width: 62 },
@@ -2022,9 +2062,18 @@ const styles = StyleSheet.create({
   listHeader: { alignItems: "center", alignSelf: "center", flexDirection: "row", justifyContent: "space-between", maxWidth: 1100, minWidth: 0, width: "100%" },
   listFilters: { alignSelf: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: 1100, paddingBottom: 3, paddingTop: 10, width: "100%" },
   filterControlPanel: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 18, borderWidth: 1, marginTop: 10, maxWidth: 1100, padding: 13, width: "100%" },
-  filterToggle: { alignItems: "center", alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#D9D3F5", borderRadius: 14, borderWidth: 1, marginTop: 12, maxWidth: 760, paddingVertical: 11, width: "100%" },
+  catalogOnlyToolbar: { alignItems: "center", alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 16, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, maxWidth: 1100, padding: 11, width: "100%" },
+  catalogOnlyBack: { backgroundColor: "#F0EEFF", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  catalogOnlyBackText: { color: "#5143C2", fontSize: 13, fontWeight: "900" },
+  catalogOnlyTitle: { color: "#24213E", flex: 1, fontSize: 15, fontWeight: "900", marginHorizontal: 10, textAlign: "center" },
+  catalogOnlyCount: { color: "#5143C2", fontSize: 14, fontWeight: "900", minWidth: 24, textAlign: "right" },
+  filterToolbar: { alignItems: "stretch", alignSelf: "center", flexDirection: "row", gap: 8, marginTop: 12, maxWidth: 760, width: "100%" },
+  filterToggle: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D9D3F5", borderRadius: 14, borderWidth: 1, flex: 1, justifyContent: "center", paddingVertical: 11 },
   filterToggleText: { color: "#5143C2", fontSize: 14, fontWeight: "900" },
+  resetFiltersButton: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#D9D3F5", borderRadius: 14, borderWidth: 1, justifyContent: "center", paddingHorizontal: 12, paddingVertical: 11 },
+  resetFiltersText: { color: "#5143C2", fontSize: 12, fontWeight: "900" },
   filterControlGroup: { width: "100%" },
+  filterControlTitleRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   filterControlTitle: { color: "#352F67", fontSize: 13, fontWeight: "900" },
   filterControlDivider: { backgroundColor: "#E7E3F8", height: 1, marginTop: 12 },
   listFilterButton: { backgroundColor: "#FFFEFF", borderColor: "#E0DCF1", borderRadius: 15, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 9 },
