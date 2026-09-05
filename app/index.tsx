@@ -1135,7 +1135,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-      <ScrollView ref={catalogScrollRef} scrollEnabled={!compactLayout || activeTab !== "buy" || filterPanelOpen} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && activeTab === "buy" && !filterPanelOpen && styles.mainScrollContentFixed]} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={styles.mainScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -1779,7 +1779,6 @@ const styles = StyleSheet.create({
   page: { backgroundColor: "#F8F7FC", flex: 1, overflow: "hidden", paddingLeft: 24, paddingRight: 24, width: "100%" },
   mainScroll: { flex: 1, marginHorizontal: -24 },
   mainScrollContent: { paddingBottom: 112, paddingHorizontal: 24 },
-  mainScrollContentFixed: { flexGrow: 1 },
   backgroundGlowTop: { backgroundColor: "#DDE7FF", borderRadius: 999, height: 250, left: -50, opacity: 0.56, position: "absolute", top: 170, transform: [{ rotate: "-18deg" }], width: 250 },
   backgroundGlowRight: { backgroundColor: "#EADFFF", borderRadius: 999, height: 390, opacity: 0.72, position: "absolute", right: -190, top: 235, width: 440 },
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
@@ -2024,7 +2023,7 @@ const styles = StyleSheet.create({
   clearSimilarButton: { alignSelf: "flex-start", marginTop: 8 },
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
-  listContainerFixed: { flex: 1, minHeight: 120 },
+  listContainerFixed: { flexGrow: 0, height: 360, minHeight: 120 },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, flexDirection: "row", minHeight: 146, overflow: "hidden", paddingBottom: 16, paddingLeft: 14, paddingRight: 48, paddingTop: 16, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardCompact: { alignItems: "stretch", flexDirection: "column", minHeight: 0, paddingRight: 14 },
