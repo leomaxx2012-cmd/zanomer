@@ -152,6 +152,9 @@ export default function HomeScreen() {
   const catalogScrollRef = useRef<ScrollView>(null);
   const [catalogResultsOffset, setCatalogResultsOffset] = useState(0);
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogLoadError, setCatalogLoadError] = useState("");
+  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(40);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
   const [rightLetters, setRightLetters] = useState("");
@@ -589,6 +592,8 @@ export default function HomeScreen() {
     const client = supabase;
 
     async function loadCatalog() {
+      setCatalogLoading(true);
+      setCatalogLoadError("");
       // Supabase возвращает не более 1 000 строк за запрос. Каталог партнёров
       // уже больше этого лимита, поэтому загружаем его страницами.
       async function loadAllPartnerListings() {
@@ -609,6 +614,7 @@ export default function HomeScreen() {
 
       // Таблицы загружаются независимо: партнёрский каталог не должен исчезать,
       // если пользовательские объявления временно недоступны гостю по RLS.
+      try {
       const [siteResult, partnerResult] = await Promise.all([
         client
           .from("auto_listings")
@@ -619,7 +625,10 @@ export default function HomeScreen() {
       ]);
       const data = siteResult.data ?? [];
       const partnerData = partnerResult.data ?? [];
-      if (siteResult.error && partnerResult.error) return;
+      if (siteResult.error && partnerResult.error) {
+        setCatalogLoadError("Не удалось обновить каталог. Проверь интернет или VPN и перезапусти приложение.");
+        return;
+      }
 
       const ownerIds = data.map((item) => item.owner_id).filter(Boolean);
       const { data: profiles } = ownerIds.length
@@ -682,6 +691,12 @@ export default function HomeScreen() {
       // Demo cards are useful only before the first database data arrives.
       // Mixing them into a real catalogue inflated the public count.
       setCatalog(loaded.length > 0 ? loaded : initialPlates);
+      if (partnerResult.error) setCatalogLoadError("Каталог загружен не полностью. Проверь интернет и обнови страницу позже.");
+      } catch {
+        setCatalogLoadError("Не удалось обновить каталог. Проверь интернет или VPN и перезапусти приложение.");
+      } finally {
+        setCatalogLoading(false);
+      }
     }
 
     void loadCatalog();
@@ -795,9 +810,13 @@ export default function HomeScreen() {
   const visiblePlates = activeTab === "favorites"
     ? catalog.filter((plate) => (saved.includes(plate.id) || (plate.isSiteListing && likedListingIds.includes(plate.id))) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
     : plates;
-  // FlatList виртуализирует карточки, поэтому в каталоге сразу доступны все
-  // совпадения, даже когда объявлений уже много.
-  const renderedPlates = visiblePlates;
+  // Мобильное приложение не должно строить тысячи тяжёлых карточек за один раз:
+  // это блокирует прокрутку и нажатия. Все номера доступны через «Показать ещё».
+  const renderedPlates = visiblePlates.slice(0, catalogDisplayLimit);
+
+  useEffect(() => {
+    setCatalogDisplayLimit(40);
+  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly]);
 
   const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
   const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
@@ -1250,7 +1269,7 @@ export default function HomeScreen() {
         style={[styles.catalogHeroButton, compactLayout && styles.catalogHeroButtonCompact]}
       >
         <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
-        <Text style={styles.catalogHeroButtonHint}>Каталог показан сразу под поиском · {catalog.length} номеров</Text>
+        <Text style={styles.catalogHeroButtonHint}>{catalogLoading ? "Обновляем каталог…" : catalogLoadError ? "Нет связи с каталогом — проверь интернет" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
       </Pressable>}
 
       {activeTab === "buy" && <>
@@ -1465,8 +1484,9 @@ export default function HomeScreen() {
       {(activeTab === "buy" || activeTab === "favorites") && <>
       <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие на ${similarTo.value}`}</Text>}
-        {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>Объявлений: {visiblePlates.length}</Text></View>}
+        {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>
+      {!!catalogLoadError && activeTab === "buy" && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
       {similarTo && (
         <Pressable onPress={() => setSimilarToId(null)} style={styles.clearSimilarButton}>
           <Text style={styles.clearSimilarText}>Показать все номера</Text>
@@ -1498,7 +1518,8 @@ export default function HomeScreen() {
         </ScrollView>
       </View>}
 
-      <ScrollView nestedScrollEnabled={compactLayout && activeTab === "buy" && !filterPanelOpen} onLayout={(event) => setCatalogResultsOffset(event.nativeEvent.layout.y)} style={[styles.listContainer, compactLayout && activeTab === "buy" && !filterPanelOpen && styles.listContainerFixed]} contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+      <View onLayout={(event) => setCatalogResultsOffset(event.nativeEvent.layout.y)} style={styles.listContainer}>
+      <View style={styles.list}>
         {renderedPlates.map((item) => {
           const isSaved = saved.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
@@ -1541,7 +1562,11 @@ export default function HomeScreen() {
           );
         })}
         {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
-      </ScrollView>
+      </View>
+      {renderedPlates.length < visiblePlates.length && <Pressable onPress={() => setCatalogDisplayLimit((current) => current + 40)} style={styles.showMoreButton}>
+        <Text style={styles.showMoreText}>Показать ещё · осталось {visiblePlates.length - renderedPlates.length}</Text>
+      </Pressable>}
+      </View>
       </>}
 
       </ScrollView>
@@ -2019,8 +2044,10 @@ const styles = StyleSheet.create({
   clearSimilarButton: { alignSelf: "flex-start", marginTop: 8 },
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
-  listContainerFixed: { flexGrow: 0, height: 360, minHeight: 120 },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
+  catalogError: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
+  showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F3F0FF", borderColor: "#7A5AF8", borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
+  showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
   card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, flexDirection: "row", minHeight: 146, overflow: "hidden", paddingBottom: 16, paddingLeft: 14, paddingRight: 48, paddingTop: 16, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardCompact: { alignItems: "stretch", flexDirection: "column", minHeight: 0, paddingRight: 14 },
   plate: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#3E395D", borderRadius: 14, borderWidth: 2, flexShrink: 0, justifyContent: "center", minHeight: 76, paddingHorizontal: 7, width: 112 },
