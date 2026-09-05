@@ -11,8 +11,10 @@ jobs:
     name: Собрать установочный APK
     runs-on: ubuntu-latest
     env:
-      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      # These are the existing repository-secret names.  They are exposed to
+      # Expo at build time under the EXPO_PUBLIC_ names used by the app.
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
     steps:
       - name: Забрать исходный код
         uses: actions/checkout@v4
