@@ -1087,7 +1087,7 @@ export default function HomeScreen() {
       const { error } = await supabase.auth.signInWithOtp({
         email: authEmail.trim(),
         options: {
-          shouldCreateUser: true,
+          shouldCreateUser: authMode === "signup",
           data: authMode === "signup" ? { display_name: profileDraft.trim() } : undefined,
         },
       });
