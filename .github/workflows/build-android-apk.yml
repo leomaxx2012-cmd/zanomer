@@ -44,12 +44,14 @@ jobs:
 
       - name: Собрать APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        # A release build packages the JavaScript bundle into the APK.  A debug
+        # build instead expects Metro to be running on a development computer.
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Загрузить APK
         uses: actions/upload-artifact@v4
         with:
           name: zanomer-android-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
