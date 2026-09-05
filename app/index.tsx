@@ -1113,11 +1113,11 @@ export default function HomeScreen() {
       if (error) return setAuthMessage(error.message);
       setAuthCode("");
       setAuthStep(3);
-      setAuthMessage("Мы отправили шестизначный код. Введи его ниже.");
+      setAuthMessage("Мы отправили код на почту. Введи его ниже.");
       return;
     }
     if (authStep === 3) {
-      if (!/^\d{6}$/.test(authCode)) return setAuthMessage("Введи все 6 цифр из письма.");
+      if (!/^\d{6,8}$/.test(authCode)) return setAuthMessage("Введи код из письма полностью.");
       const { error } = await supabase.auth.verifyOtp({ email: authEmail.trim(), token: authCode, type: "email" });
       if (error) return setAuthMessage("Код не подошёл или срок его действия истёк. Запроси новый код.");
       setAuthCode("");
@@ -1244,7 +1244,7 @@ export default function HomeScreen() {
               <Text style={styles.authHint}>{supabase ? authMode === "signup" ? `Шаг ${authStep} из 3` : authStep === 3 ? "Введи код из письма" : "Введи email — отправим код для входа" : "Укажи имя — оно будет видно в твоих объявлениях."}</Text>
               {authMode === "signup" && authStep === 1 && <TextInput value={profileDraft} onChangeText={setProfileDraft} placeholder="Имя для объявлений" placeholderTextColor="#98A2B3" style={styles.authInput} />}
               {supabase && authStep === 2 && <TextInput value={authEmail} onChangeText={setAuthEmail} placeholder="Email" placeholderTextColor="#98A2B3" style={styles.authInput} autoCapitalize="none" keyboardType="email-address" />}
-              {supabase && authStep === 3 && <TextInput value={authCode} onChangeText={(value) => setAuthCode(value.replace(/\D/g, "").slice(0, 6))} placeholder="Шестизначный код" placeholderTextColor="#98A2B3" style={styles.authInput} keyboardType="number-pad" maxLength={6} />}
+              {supabase && authStep === 3 && <TextInput value={authCode} onChangeText={(value) => setAuthCode(value.replace(/\D/g, "").slice(0, 8))} placeholder="Код из письма" placeholderTextColor="#98A2B3" style={styles.authInput} keyboardType="number-pad" maxLength={8} />}
               {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
               <View style={styles.authRow}>
                 {supabase && authStep !== 3 && <Pressable onPress={() => { setAuthMode((value) => value === "signup" ? "signin" : "signup"); setAuthStep(authMode === "signup" ? 2 : 1); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>{authMode === "signup" ? "Уже есть аккаунт" : "Зарегистрироваться"}</Text></Pressable>}
