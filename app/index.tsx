@@ -1642,43 +1642,37 @@ export default function HomeScreen() {
           const isLiked = likedListingIds.includes(item.id);
           return (
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
-              <View style={[styles.cardPlate, windowWidth >= 700 && styles.cardPlateDesktop]}>
-                <View style={styles.cardPlateMain}>
-                  <Text adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.cardPlateLetter, windowWidth >= 700 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
-                  <Text adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.cardPlateDigits, windowWidth >= 700 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
-                  <Text adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.cardPlateLetters, windowWidth >= 700 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
+              <View style={styles.cardMainRow}>
+                <View style={[styles.cardPlate, windowWidth >= 700 && styles.cardPlateDesktop]}>
+                  <View style={styles.cardPlateMain}>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetter, windowWidth >= 700 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateDigits, windowWidth >= 700 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetters, windowWidth >= 700 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
+                  </View>
+                  <View style={[styles.cardPlateRegion, windowWidth >= 700 && styles.cardPlateRegionDesktop]}>
+                    <Text style={[styles.cardPlateRegionValue, windowWidth >= 700 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
+                    <Text style={styles.cardPlateRus}>RUS</Text>
+                    <View style={styles.cardFlag} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View>
+                  </View>
                 </View>
-                <View style={[styles.cardPlateRegion, windowWidth >= 700 && styles.cardPlateRegionDesktop]}><Text style={[styles.cardPlateRegionValue, windowWidth >= 700 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text><Text style={styles.cardPlateRus}>RUS</Text></View>
-              </View>
-              <View style={styles.cardInfo}>
-                <View style={styles.cardTopRow}>
-                  <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
-                  {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
-                  <Pressable onPress={(event) => { event.stopPropagation(); toggleSaved(item.id); }} hitSlop={10} style={styles.heart}>
-                    <Text style={isSaved ? styles.heartActive : styles.heartText}>{isSaved ? "♥" : "♡"}</Text>
-                  </Pressable>
-                </View>
-                <Text numberOfLines={1} style={styles.region}>{item.region}</Text>
-                {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
-                <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
-                <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
-                {!!item.sourceUrl && <View style={styles.trustBadge}><Text style={styles.trustBadgeText}>✓ Проверенный источник</Text></View>}
-                {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Проверенный продавец" : `★ ${item.sellerRating.toFixed(1)} · есть отзывы`}</Text></View>}
-                <View style={styles.cardBottomRow}>
+                <View style={styles.cardInfo}>
+                  <View style={styles.cardTopRow}>
+                    <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
+                    <Pressable onPress={(event) => { event.stopPropagation(); toggleSaved(item.id); }} hitSlop={10} style={styles.heart}>
+                      <Text style={isSaved ? styles.heartActive : styles.heartText}>{isSaved ? "♥" : "♡"}</Text>
+                    </Pressable>
+                  </View>
                   <Text style={styles.price}>{item.price}</Text>
-                  <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
+                  <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
+                  {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
+                  {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия</Text></View>}
+                  {!!item.sourceUrl && <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Источник</Text></View>}
+                  {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Продавец" : `★ ${item.sellerRating.toFixed(1)}`}</Text></View>}
                 </View>
-                {!!item.sourceUrl && <Pressable onPress={() => Linking.openURL(item.sourceUrl!)} style={styles.sourceButton}>
-                  <Text numberOfLines={1} style={styles.sourceButtonText}>Открыть объявление ↗</Text>
-                </Pressable>}
-                {activeTab === "buy" && <Pressable onPress={() => setSimilarToId(item.id)} style={styles.similarButton}>
-                  <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
-                </Pressable>}
-                <View style={styles.cardActions}>
-                  {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
-                  {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
-                  <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
-                </View>
+              </View>
+              <View style={styles.cardFooter}>
+                <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }} style={styles.cardFooterSeller}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
+                <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
               </View>
             </Pressable>
           );
@@ -2209,34 +2203,41 @@ const styles = StyleSheet.create({
   showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F3F0FF", borderColor: "#7A5AF8", borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
   card: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", padding: 14, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
-  cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 13, borderWidth: 3, flexDirection: "row", height: 104, overflow: "hidden", width: "100%" },
-  cardPlateDesktop: { height: 138 },
+  cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
+  cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 9, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
+  cardPlateDesktop: { flexGrow: 0, height: 124, width: 620 },
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
-  cardPlateLetter: { color: "#111827", flex: 0.78, fontSize: 52, fontWeight: "900", textAlign: "center" },
+  cardPlateLetter: { color: "#111827", flex: 0.78, fontSize: 40, fontWeight: "900", textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 76 },
-  cardPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 2, borderRightColor: "#1D2939", borderRightWidth: 2, color: "#111827", flex: 1.46, fontSize: 52, fontWeight: "900", paddingHorizontal: 5, textAlign: "center" },
+  cardPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 1.5, borderRightColor: "#1D2939", borderRightWidth: 1.5, color: "#111827", flex: 1.46, fontSize: 40, fontWeight: "900", paddingHorizontal: 3, textAlign: "center" },
   cardPlateDigitsDesktop: { fontSize: 76 },
-  cardPlateLetters: { color: "#111827", flex: 1.08, fontSize: 52, fontWeight: "900", paddingHorizontal: 5, textAlign: "center" },
+  cardPlateLetters: { color: "#111827", flex: 1.08, fontSize: 40, fontWeight: "900", paddingHorizontal: 3, textAlign: "center" },
   cardPlateLettersDesktop: { fontSize: 76 },
-  cardPlateRegion: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 11, width: 82 },
+  cardPlateRegion: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 1.5, justifyContent: "center", paddingHorizontal: 4, width: 52 },
   cardPlateRegionDesktop: { width: 112 },
-  cardPlateRegionValue: { color: "#111827", fontSize: 26, fontWeight: "900", lineHeight: 28 },
+  cardPlateRegionValue: { color: "#111827", fontSize: 19, fontWeight: "900", lineHeight: 21 },
   cardPlateRegionValueDesktop: { fontSize: 36, lineHeight: 39 },
-  cardPlateRus: { color: "#344054", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginTop: 2 },
-  cardInfo: { minWidth: 0, paddingTop: 13 },
+  cardPlateRus: { color: "#344054", fontSize: 7, fontWeight: "900", letterSpacing: 0.2, marginTop: 1 },
+  cardFlag: { borderColor: "#98A2B3", borderRadius: 1, borderWidth: 0.5, height: 10, marginTop: 3, overflow: "hidden", width: 17 },
+  cardFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
+  cardFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
+  cardFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
+  cardInfo: { flex: 0.48, minWidth: 0 },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
   availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 7, paddingVertical: 3 },
   availableBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
-  region: { color: "#68627D", fontSize: 13, marginTop: 5 },
-  seriesBadge: { alignSelf: "flex-start", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 8, paddingVertical: 4 },
+  region: { color: "#68627D", fontSize: 12, lineHeight: 16, marginTop: 4 },
+  seriesBadge: { alignSelf: "flex-start", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 8, borderWidth: 1, marginTop: 5, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   seriesBadgeText: { color: "#175CD3", fontSize: 10, fontWeight: "900" },
-  seller: { color: "#827B96", fontSize: 12, marginTop: 4 },
+  seller: { color: "#827B96", fontSize: 12, marginTop: 0 },
   sellerLink: { color: "#5143C2", textDecorationLine: "underline" },
   catalogRating: { alignSelf: "flex-start", backgroundColor: "#FFF7E8", borderColor: "#FDE2A7", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   catalogRatingText: { color: "#9A5B00", fontSize: 10, fontWeight: "900" },
   trustBadge: { alignSelf: "flex-start", backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   trustBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
+  cardFooter: { borderTopColor: "#EEEAF8", borderTopWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", marginTop: 12, paddingTop: 10 },
+  cardFooterSeller: { flex: 1, minWidth: 0 },
   cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
   price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
   catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, flexShrink: 1, maxWidth: 126, paddingHorizontal: 7, paddingVertical: 4 },
