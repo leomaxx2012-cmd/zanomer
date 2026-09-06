@@ -70,6 +70,7 @@ type SavedSearch = {
 
 type SpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror" | "series";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
+type SimilarityFilter = "digits" | "letters" | "region";
 
 const specialFilterLabels: Record<SpecialFilter, string> = {
   sameDigits: "Одинаковые цифры",
@@ -77,7 +78,7 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
   firstTen: "Первая десятка",
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
-  series: "Похожие номера продавца",
+  series: "Похожие номера",
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -188,6 +189,9 @@ export default function HomeScreen() {
   const [activeTab, setActiveTab] = useState<"buy" | "sell" | "favorites" | "subscriptions">("buy");
   const [subscribedNumbers, setSubscribedNumbers] = useState<string[]>([]);
   const [similarToId, setSimilarToId] = useState<string | null>(null);
+  const [similarityFilter, setSimilarityFilter] = useState<SimilarityFilter>("digits");
+  const [similarityPickerPlate, setSimilarityPickerPlate] = useState<Plate | null>(null);
+  const [hiddenSeriesGroupKeys, setHiddenSeriesGroupKeys] = useState<string[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [freshOnly, setFreshOnly] = useState(false);
@@ -915,11 +919,17 @@ export default function HomeScreen() {
         return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
-      const withSimilar = !source ? filtered : filtered.filter((plate) => plate.id !== source.id && (plate.digits === source.digits || plate.rightLetters === source.rightLetters));
+      const sameRegionCode = (first: Plate, second: Plate) => first.region.split(" · ")[1]?.trim() === second.region.split(" · ")[1]?.trim();
+      const withSimilar = !source ? filtered : filtered.filter((plate) => {
+        if (plate.id === source.id) return false;
+        if (similarityFilter === "digits") return plate.digits === source.digits;
+        if (similarityFilter === "letters") return plate.leftLetter === source.leftLetter && plate.rightLetters === source.rightLetters;
+        return sameRegionCode(plate, source);
+      });
       const sorted = [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
       // Карточки одной серии всегда идут рядом, даже когда список отсортирован.
       const grouped = new Map<string, Plate[]>();
-      sorted.forEach((plate) => {
+      sorted.filter((plate) => !hiddenSeriesGroupKeys.includes(seriesGroupByListingId.get(plate.id)?.key ?? "")).forEach((plate) => {
         const groupKey = seriesGroupByListingId.get(plate.id)?.key ?? `single-${plate.id}`;
         const current = grouped.get(groupKey) ?? [];
         current.push(plate);
@@ -927,7 +937,7 @@ export default function HomeScreen() {
       });
       return [...grouped.values()].flat();
     },
-    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, seriesListingIds, seriesGroupByListingId],
+    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, similarityFilter, sort, freshOnly, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
@@ -1638,7 +1648,7 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
-        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие на ${similarTo.value}`}</Text>}
+        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo.value}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
       {!!catalogLoadError && activeTab === "buy" && !catalogOnly && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
@@ -1674,6 +1684,9 @@ export default function HomeScreen() {
       </View>}
 
       <View style={styles.listContainer}>
+      {hiddenSeriesGroupKeys.length > 0 && <Pressable onPress={() => setHiddenSeriesGroupKeys([])} style={styles.restoreSeriesButton}>
+        <Text style={styles.restoreSeriesButtonText}>♡ Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
+      </Pressable>}
       <View style={styles.list}>
         {renderedPlates.map((item, index) => {
           const isSaved = saved.includes(item.id);
@@ -1683,7 +1696,12 @@ export default function HomeScreen() {
           const isSeriesStart = !!seriesGroup && seriesGroup.key !== previousGroup?.key;
           return (
             <View key={item.id} style={styles.listingItem}>
-              {isSeriesStart && <View style={styles.seriesHeader}><Text style={styles.seriesHeaderText}>Серия продавца · {seriesGroup.size} похожих объявлений</Text></View>}
+              {isSeriesStart && <View style={styles.seriesHeader}>
+                <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
+                <Pressable accessibilityLabel="Скрыть группу похожих номеров" hitSlop={10} onPress={() => setHiddenSeriesGroupKeys((current) => current.includes(seriesGroup.key) ? current : [...current, seriesGroup.key])} style={styles.seriesHideButton}>
+                  <Text style={styles.seriesHideButtonText}>♥</Text>
+                </Pressable>
+              </View>}
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
               <View style={styles.cardMainRow}>
                 <View style={[styles.cardPlate, windowWidth >= 700 && styles.cardPlateDesktop]}>
@@ -1718,7 +1736,7 @@ export default function HomeScreen() {
                     {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={styles.sourceButton}>
                       <Text numberOfLines={1} style={styles.sourceButtonText}>Открыть объявление ↗</Text>
                     </Pressable>}
-                    {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarToId(item.id); }} style={styles.similarButton}>
+                    {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarityPickerPlate(item); }} style={styles.similarButton}>
                       <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                     </Pressable>}
                     {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
@@ -1744,6 +1762,25 @@ export default function HomeScreen() {
       </>}
 
       </ScrollView>
+
+      <Modal visible={!!similarityPickerPlate} transparent animationType="fade" onRequestClose={() => setSimilarityPickerPlate(null)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setSimilarityPickerPlate(null)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.similarityPanel}>
+            <View style={styles.detailsHeader}>
+              <Text style={styles.detailsTitle}>Похожие номера</Text>
+              <Pressable onPress={() => setSimilarityPickerPlate(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable>
+            </View>
+            <Text style={styles.similarityHint}>Выбери, что должно совпадать с номером {similarityPickerPlate?.value}.</Text>
+            {([
+              ["digits", "Похожие цифры", `Такие же цифры: ${similarityPickerPlate?.digits ?? ""}`],
+              ["letters", "Похожие буквы", `Такие же буквы: ${similarityPickerPlate?.leftLetter ?? ""}${similarityPickerPlate?.rightLetters ?? ""}`],
+              ["region", "Похожий регион", `Такой же код региона: ${similarityPickerPlate?.region.split(" · ")[1] ?? ""}`],
+            ] as [SimilarityFilter, string, string][]).map(([kind, title, hint]) => <Pressable key={kind} onPress={() => { setSimilarityFilter(kind); setSimilarToId(similarityPickerPlate.id); setSimilarityPickerPlate(null); }} style={styles.similarityOption}>
+              <Text style={styles.similarityOptionTitle}>{title}</Text><Text style={styles.similarityOptionHint}>{hint}</Text>
+            </Pressable>)}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal visible={!!sellerProfile} transparent animationType="slide" onRequestClose={() => setSellerProfile(null)}>
         <Pressable style={styles.detailsOverlay} onPress={() => setSellerProfile(null)}>
@@ -2266,8 +2303,12 @@ const styles = StyleSheet.create({
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   listingItem: { gap: 6 },
-  seriesHeader: { alignSelf: "flex-start", backgroundColor: "#EEECFF", borderColor: "#C9C3FF", borderRadius: 10, borderWidth: 1, marginLeft: 4, paddingHorizontal: 10, paddingVertical: 6 },
+  seriesHeader: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#EEECFF", borderColor: "#C9C3FF", borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 7, marginLeft: 4, paddingLeft: 10, paddingRight: 5, paddingVertical: 5 },
   seriesHeaderText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
+  seriesHideButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D8D1FF", borderRadius: 9, borderWidth: 1, height: 28, justifyContent: "center", width: 30 },
+  seriesHideButtonText: { color: "#C4327B", fontSize: 17, lineHeight: 19 },
+  restoreSeriesButton: { alignSelf: "flex-start", backgroundColor: "#FFFFFF", borderColor: "#C9C3FF", borderRadius: 11, borderWidth: 1, marginTop: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  restoreSeriesButtonText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
   catalogError: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
   showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F3F0FF", borderColor: "#7A5AF8", borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
@@ -2371,6 +2412,11 @@ const styles = StyleSheet.create({
   detailsOverlay: { backgroundColor: "rgba(16,24,40,0.5)", flex: 1 },
   detailsScroll: { flexGrow: 1, justifyContent: "flex-end", padding: 14 },
   detailsPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 660, padding: 22, width: "100%" },
+  similarityPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 480, padding: 20, width: "92%" },
+  similarityHint: { color: "#667085", fontSize: 14, lineHeight: 20, marginTop: 8 },
+  similarityOption: { backgroundColor: "#F7F6FF", borderColor: "#D8D1FF", borderRadius: 14, borderWidth: 1, marginTop: 12, padding: 14 },
+  similarityOptionTitle: { color: "#352F67", fontSize: 16, fontWeight: "900" },
+  similarityOptionHint: { color: "#667085", fontSize: 12, marginTop: 4 },
   detailsHeader: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
