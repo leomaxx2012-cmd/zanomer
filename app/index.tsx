@@ -843,18 +843,34 @@ export default function HomeScreen() {
     return () => { void supabase.removeChannel(channel); };
   }, [currentUserId, catalog]);
 
-  const seriesListingIds = useMemo(() => {
-    const series = new Set<string>();
-    catalog.forEach((plate, index) => {
-      catalog.slice(index + 1).forEach((other) => {
-        if (belongsToSameSeries(plate, other)) {
-          series.add(plate.id);
-          series.add(other.id);
+  const seriesGroupByListingId = useMemo(() => {
+    const groups = new Map<string, { key: string; size: number }>();
+    const remaining = new Set(catalog.map((plate) => plate.id));
+
+    for (const first of catalog) {
+      if (!remaining.has(first.id)) continue;
+      const component = new Set<string>([first.id]);
+      const queue = [first];
+      remaining.delete(first.id);
+
+      while (queue.length) {
+        const current = queue.shift()!;
+        for (const candidate of catalog) {
+          if (!remaining.has(candidate.id) || !belongsToSameSeries(current, candidate)) continue;
+          component.add(candidate.id);
+          remaining.delete(candidate.id);
+          queue.push(candidate);
         }
-      });
-    });
-    return series;
+      }
+
+      if (component.size < 2) continue;
+      const key = [...component].sort()[0];
+      component.forEach((id) => groups.set(id, { key, size: component.size }));
+    }
+    return groups;
   }, [catalog]);
+
+  const seriesListingIds = useMemo(() => new Set(seriesGroupByListingId.keys()), [seriesGroupByListingId]);
 
   const plates = useMemo(
     () => {
@@ -889,9 +905,18 @@ export default function HomeScreen() {
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const withSimilar = !source ? filtered : filtered.filter((plate) => plate.id !== source.id && (plate.digits === source.digits || plate.rightLetters === source.rightLetters));
-      return [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
+      const sorted = [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
+      // Карточки одной серии всегда идут рядом, даже когда список отсортирован.
+      const grouped = new Map<string, Plate[]>();
+      sorted.forEach((plate) => {
+        const groupKey = seriesGroupByListingId.get(plate.id)?.key ?? `single-${plate.id}`;
+        const current = grouped.get(groupKey) ?? [];
+        current.push(plate);
+        grouped.set(groupKey, current);
+      });
+      return [...grouped.values()].flat();
     },
-    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, seriesListingIds],
+    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, seriesListingIds, seriesGroupByListingId],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
@@ -1639,10 +1664,14 @@ export default function HomeScreen() {
 
       <View style={styles.listContainer}>
       <View style={styles.list}>
-        {renderedPlates.map((item) => {
+        {renderedPlates.map((item, index) => {
           const isSaved = saved.includes(item.id);
-          const isLiked = likedListingIds.includes(item.id);
+          const seriesGroup = seriesGroupByListingId.get(item.id);
+          const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
+          const isSeriesStart = !!seriesGroup && seriesGroup.key !== previousGroup?.key;
           return (
+            <View key={item.id} style={styles.listingItem}>
+              {isSeriesStart && <View style={styles.seriesHeader}><Text style={styles.seriesHeaderText}>Серия продавца · {seriesGroup.size} похожих объявлений</Text></View>}
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
               <View style={styles.cardMainRow}>
                 <View style={[styles.cardPlate, windowWidth >= 700 && styles.cardPlateDesktop]}>
@@ -1677,6 +1706,7 @@ export default function HomeScreen() {
                 <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
               </View>
             </Pressable>
+            </View>
           );
         })}
         {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
@@ -2201,6 +2231,9 @@ const styles = StyleSheet.create({
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
+  listingItem: { gap: 6 },
+  seriesHeader: { alignSelf: "flex-start", backgroundColor: "#EEECFF", borderColor: "#C9C3FF", borderRadius: 10, borderWidth: 1, marginLeft: 4, paddingHorizontal: 10, paddingVertical: 6 },
+  seriesHeaderText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
   catalogError: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
   showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F3F0FF", borderColor: "#7A5AF8", borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
