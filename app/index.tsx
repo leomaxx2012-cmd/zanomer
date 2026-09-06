@@ -842,7 +842,9 @@ export default function HomeScreen() {
         const rightLettersMatch = matchesPattern(plate.rightLetters, rightLetters);
         const digitsMatch = matchesPattern(plate.digits, digits);
         const regionMatches = region === "Все" || plate.region.startsWith(region);
-        const regionCodeMatches = !regionCode.trim() || plate.region.endsWith(regionCode.trim());
+        // Можно отметить несколько кодов одного региона: например 77, 97 и 177.
+        const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
+        const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plate.region.endsWith(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
         const specialMatches = specialFilters.every((filter) => {
           if (filter === "sameDigits") return plate.digits[0] === plate.digits[1] && plate.digits[1] === plate.digits[2];
@@ -936,8 +938,9 @@ export default function HomeScreen() {
     };
   }, [catalog, archivedPartnerSources]);
   const selectedRegionOption = regionGroups.find((item) => item.title === region);
-  const selectedRegionLabel = regionCode || "77";
-  const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${regionCode ? ` · ${regionCode}` : ""}`;
+  const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
+  const selectedRegionLabel = selectedRegionCodes.length === 0 ? "77" : selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : `${selectedRegionCodes[0]}+${selectedRegionCodes.length - 1}`;
+  const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${selectedRegionCodes.length ? ` · ${selectedRegionCodes.join(", ")}` : ""}`;
   const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || specialFilters.length);
 
   function toggleSaved(id: string) {
@@ -1430,15 +1433,24 @@ export default function HomeScreen() {
           <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
         </View>
         {platePicker === "region" ? <View style={styles.regionPickerContent}>
-          <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Коды региона «${regionPickerGroup}».` : "Сначала выбери название региона, затем его код."}</Text>
+          <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Сначала выбери название региона, затем отметь один или несколько кодов."}</Text>
           <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
           {!regionPickerGroup ? <>
             <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{catalog.length}</Text></Pressable>
             {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, region === item.title && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === item.title && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, region === item.title && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
           </> : <>
             <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
-            <Pressable onPress={() => { setRegion(regionPickerGroup); setRegionCode(""); setPlatePicker(null); setRegionPickerGroup(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === regionPickerGroup && !regionCode && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === regionPickerGroup && !regionCode && styles.pickerOptionTextActive]}>Все номера региона</Text></Pressable>
-            {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => <Pressable key={item.value} onPress={() => { setRegion(regionPickerGroup); setRegionCode(item.value); setPlatePicker(null); setRegionPickerGroup(null); }} style={[styles.pickerOption, styles.regionPickerOption, regionCode === item.value && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, regionCode === item.value && styles.pickerOptionTextActive]}>Регион {item.value}</Text><Text style={[styles.regionPickerCount, regionCode === item.value && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
+            <Pressable onPress={() => { setRegion(regionPickerGroup); setRegionCode(""); }} style={[styles.pickerOption, styles.regionPickerOption, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{region === regionPickerGroup && selectedRegionCodes.length === 0 ? "✓" : "□"}</Text></Pressable>
+            {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
+              const selected = selectedRegionCodes.includes(item.value);
+              return <Pressable key={item.value} onPress={() => {
+                setRegion(regionPickerGroup);
+                setRegionCode((current) => {
+                  const codes = current.split(",").map((code) => code.trim()).filter(Boolean);
+                  return (codes.includes(item.value) ? codes.filter((code) => code !== item.value) : [...codes, item.value]).join(",");
+                });
+              }} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Регион {item.value}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
+            })}
           </>}
           </ScrollView>
         </View> : <View style={styles.pickerGrid}>
@@ -1601,15 +1613,22 @@ export default function HomeScreen() {
           const isSaved = saved.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
           return (
-            <Pressable onPress={() => setSelectedPlate(item)} style={[styles.card, compactLayout && styles.cardCompact]}>
-              <View style={[styles.plate, compactLayout && styles.plateCompact]}>
-                <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.72} style={styles.plateValue}>{item.value}</Text>
-                <Text numberOfLines={1} style={styles.plateRegion}>{item.region.split(" · ")[1]}</Text>
+            <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
+              <View style={[styles.cardPlate, windowWidth >= 700 && styles.cardPlateDesktop]}>
+                <View style={styles.cardPlateMain}>
+                  <Text adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.cardPlateLetter, windowWidth >= 700 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
+                  <Text adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.cardPlateDigits, windowWidth >= 700 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
+                  <Text adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.cardPlateLetters, windowWidth >= 700 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
+                </View>
+                <View style={[styles.cardPlateRegion, windowWidth >= 700 && styles.cardPlateRegionDesktop]}><Text style={[styles.cardPlateRegionValue, windowWidth >= 700 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text><Text style={styles.cardPlateRus}>RUS</Text></View>
               </View>
-              <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
+              <View style={styles.cardInfo}>
                 <View style={styles.cardTopRow}>
                   <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
+                  <Pressable onPress={(event) => { event.stopPropagation(); toggleSaved(item.id); }} hitSlop={10} style={styles.heart}>
+                    <Text style={isSaved ? styles.heartActive : styles.heartText}>{isSaved ? "♥" : "♡"}</Text>
+                  </Pressable>
                 </View>
                 <Text numberOfLines={1} style={styles.region}>{item.region}</Text>
                 <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
@@ -1632,9 +1651,6 @@ export default function HomeScreen() {
                   <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
                 </View>
               </View>
-              <Pressable onPress={() => toggleSaved(item.id)} hitSlop={10} style={styles.heart}>
-                <Text style={isSaved ? styles.heartActive : styles.heartText}>{isSaved ? "♥" : "♡"}</Text>
-              </Pressable>
             </Pressable>
           );
         })}
@@ -2103,7 +2119,7 @@ const styles = StyleSheet.create({
   filterText: { color: "#475467", fontSize: 13, fontWeight: "650" },
   filterTextActive: { color: "#FFFFFF" },
   platePickerPanel: { backgroundColor: "#FFFFFF", borderColor: "#B2CCFF", borderRadius: 16, borderWidth: 1, marginTop: 10, padding: 12, shadowColor: "#155EEF", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 12 },
-  regionPickerPanel: { alignSelf: "flex-end", borderColor: "#D8D1FF", maxWidth: "100%", shadowColor: "#5143C2", width: 320, zIndex: 20 },
+  regionPickerPanel: { alignSelf: "flex-end", borderColor: "#D8D1FF", maxWidth: "100%", shadowColor: "#5143C2", width: 380, zIndex: 20 },
   regionPickerPanelDesktop: { left: "100%", marginLeft: 185, marginTop: 0, position: "absolute", top: 122, zIndex: 50 },
   platePickerTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
   platePickerTitle: { color: "#101828", fontSize: 14, fontWeight: "900" },
@@ -2114,7 +2130,10 @@ const styles = StyleSheet.create({
   regionPickerList: { gap: 7, paddingRight: 3 },
   pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pickerOption: { alignItems: "center", backgroundColor: "#F2F6FF", borderColor: "#D5E2FF", borderRadius: 10, borderWidth: 1, justifyContent: "center", minWidth: 42, paddingHorizontal: 11, paddingVertical: 9 },
-  regionPickerOption: { alignSelf: "stretch", flexDirection: "row", gap: 7, justifyContent: "space-between", paddingHorizontal: 13 },
+  regionPickerOption: { alignItems: "center", alignSelf: "stretch", flexDirection: "row", gap: 9, justifyContent: "space-between", minHeight: 50, paddingHorizontal: 15, paddingVertical: 11 },
+  regionPickerOptionRight: { alignItems: "center", flexDirection: "row", gap: 10 },
+  regionPickerCheck: { color: "#667085", fontSize: 21, fontWeight: "900", lineHeight: 22, minWidth: 22, textAlign: "center" },
+  regionPickerCheckActive: { color: "#FFFFFF" },
   pickerOptionActive: { backgroundColor: "#155EEF", borderColor: "#155EEF" },
   pickerOptionText: { color: "#175CD3", fontSize: 14, fontWeight: "900" },
   pickerOptionTextActive: { color: "#FFFFFF" },
@@ -2160,14 +2179,22 @@ const styles = StyleSheet.create({
   catalogError: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
   showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F3F0FF", borderColor: "#7A5AF8", borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
-  card: { alignItems: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, flexDirection: "row", minHeight: 146, overflow: "hidden", paddingBottom: 16, paddingLeft: 14, paddingRight: 48, paddingTop: 16, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
-  cardCompact: { alignItems: "stretch", flexDirection: "column", minHeight: 0, paddingRight: 14 },
-  plate: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#3E395D", borderRadius: 14, borderWidth: 2, flexShrink: 0, justifyContent: "center", minHeight: 76, paddingHorizontal: 7, width: 112 },
-  plateCompact: { alignSelf: "stretch", minHeight: 68, width: "100%" },
-  plateValue: { color: "#24213E", fontSize: 19, fontWeight: "900", maxWidth: "100%" },
-  plateRegion: { color: "#605A78", fontSize: 11, fontWeight: "900", marginTop: 3, maxWidth: "100%" },
-  cardInfo: { flex: 1, marginLeft: 12, minWidth: 0, overflow: "hidden" },
-  cardInfoCompact: { marginLeft: 0, marginTop: 12 },
+  card: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", padding: 14, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
+  cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 13, borderWidth: 3, flexDirection: "row", height: 104, overflow: "hidden", width: "100%" },
+  cardPlateDesktop: { height: 138 },
+  cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
+  cardPlateLetter: { color: "#111827", flex: 0.78, fontSize: 52, fontWeight: "900", textAlign: "center" },
+  cardPlateLetterDesktop: { fontSize: 76 },
+  cardPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 2, borderRightColor: "#1D2939", borderRightWidth: 2, color: "#111827", flex: 1.46, fontSize: 52, fontWeight: "900", paddingHorizontal: 5, textAlign: "center" },
+  cardPlateDigitsDesktop: { fontSize: 76 },
+  cardPlateLetters: { color: "#111827", flex: 1.08, fontSize: 52, fontWeight: "900", paddingHorizontal: 5, textAlign: "center" },
+  cardPlateLettersDesktop: { fontSize: 76 },
+  cardPlateRegion: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 11, width: 82 },
+  cardPlateRegionDesktop: { width: 112 },
+  cardPlateRegionValue: { color: "#111827", fontSize: 26, fontWeight: "900", lineHeight: 28 },
+  cardPlateRegionValueDesktop: { fontSize: 36, lineHeight: 39 },
+  cardPlateRus: { color: "#344054", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginTop: 2 },
+  cardInfo: { minWidth: 0, paddingTop: 13 },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
   availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 7, paddingVertical: 3 },
@@ -2192,9 +2219,9 @@ const styles = StyleSheet.create({
   cardActionText: { color: "#5143C2", fontSize: 10, fontWeight: "900" },
   cardActionLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
   cardActionLikedText: { color: "#C01048" },
-  heart: { padding: 7, position: "absolute", right: 8, top: 8 },
-  heartText: { color: "#98A2B3", fontSize: 27 },
-  heartActive: { color: "#E31B54", fontSize: 27 },
+  heart: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#DDD8FF", borderRadius: 12, borderWidth: 1, height: 34, justifyContent: "center", marginLeft: 2, width: 38 },
+  heartText: { color: "#98A2B3", fontSize: 25, lineHeight: 27 },
+  heartActive: { color: "#E31B54", fontSize: 25, lineHeight: 27 },
   empty: { alignSelf: "center", color: "#667085", fontSize: 15, paddingTop: 24, textAlign: "center", width: "100%" },
   tabScroll: { width: "100%" },
   tabScrollContent: { paddingBottom: 102 },
