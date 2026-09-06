@@ -1666,6 +1666,7 @@ export default function HomeScreen() {
       <View style={styles.list}>
         {renderedPlates.map((item, index) => {
           const isSaved = saved.includes(item.id);
+          const isLiked = likedListingIds.includes(item.id);
           const seriesGroup = seriesGroupByListingId.get(item.id);
           const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
           const isSeriesStart = !!seriesGroup && seriesGroup.key !== previousGroup?.key;
@@ -1689,16 +1690,30 @@ export default function HomeScreen() {
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
+                    {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
                     <Pressable onPress={(event) => { event.stopPropagation(); toggleSaved(item.id); }} hitSlop={10} style={styles.heart}>
                       <Text style={isSaved ? styles.heartActive : styles.heartText}>{isSaved ? "♥" : "♡"}</Text>
                     </Pressable>
                   </View>
-                  <Text style={styles.price}>{item.price}</Text>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
-                  {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
-                  {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия продавца</Text></View>}
-                  {!!item.sourceUrl && <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Источник</Text></View>}
-                  {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Продавец" : `★ ${item.sellerRating.toFixed(1)}`}</Text></View>}
+                  {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
+                  {!!item.sourceUrl && <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View>}
+                  {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Проверенный продавец" : `★ ${item.sellerRating.toFixed(1)} · есть отзывы`}</Text></View>}
+                  <View style={styles.cardBottomRow}>
+                    <Text style={styles.price}>{item.price}</Text>
+                    <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
+                  </View>
+                  {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={styles.sourceButton}>
+                    <Text numberOfLines={1} style={styles.sourceButtonText}>Открыть объявление ↗</Text>
+                  </Pressable>}
+                  {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarToId(item.id); }} style={styles.similarButton}>
+                    <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
+                  </Pressable>}
+                  <View style={styles.cardActions}>
+                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
+                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
+                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
+                  </View>
                 </View>
               </View>
               <View style={styles.cardFooter}>
