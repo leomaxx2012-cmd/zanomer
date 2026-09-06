@@ -952,7 +952,7 @@ export default function HomeScreen() {
     });
     const vehicles = (["car", "motorcycle", "truck"] as const).map((vehicle) => ({
       vehicle,
-      label: vehicle === "car" ? "Авто" : vehicle === "motorcycle" ? "Мото" : "Грузовые",
+      label: vehicle === "car" ? "Авто" : vehicle === "motorcycle" ? "Мото" : "Прицеп",
       icon: vehicle === "car" ? "🚗" : vehicle === "motorcycle" ? "🏍️" : "🚚",
       count: active.filter((plate) => plate.vehicle === vehicle).length,
     }));
@@ -1434,7 +1434,7 @@ export default function HomeScreen() {
         {([
           ["car", "🚗", "Авто"],
           ["motorcycle", "🏍️", "Мото"],
-          ["truck", "🚚", "Грузовые"],
+          ["truck", "🚛", "Прицеп"],
         ] as const).map(([type, icon, label]) => (
           <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
             <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
