@@ -2205,7 +2205,9 @@ const styles = StyleSheet.create({
   card: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", padding: 14, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
   cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 9, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
-  cardPlateDesktop: { flexGrow: 0, height: 124, width: 620 },
+  // На широком экране номер занимает стабильную левую часть карточки.
+  // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
+  cardPlateDesktop: { flex: 0, flexShrink: 0, height: 124, width: "58%" },
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
   cardPlateLetter: { color: "#111827", flex: 0.78, fontSize: 40, fontWeight: "900", textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 76 },
@@ -2222,7 +2224,7 @@ const styles = StyleSheet.create({
   cardFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
   cardFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
   cardFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
-  cardInfo: { flex: 0.48, minWidth: 0 },
+  cardInfo: { flex: 1, minWidth: 0 },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
   availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 7, paddingVertical: 3 },
