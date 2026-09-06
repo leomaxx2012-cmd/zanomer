@@ -1699,7 +1699,7 @@ export default function HomeScreen() {
               {isSeriesStart && <View style={styles.seriesHeader}>
                 <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
                 <Pressable accessibilityLabel="Скрыть группу похожих номеров" hitSlop={10} onPress={() => setHiddenSeriesGroupKeys((current) => current.includes(seriesGroup.key) ? current : [...current, seriesGroup.key])} style={styles.seriesHideButton}>
-                  <Text style={styles.seriesHideButtonText}>♥</Text>
+                  <Text style={styles.seriesHideButtonText}>⌃</Text>
                 </Pressable>
               </View>}
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
@@ -2306,7 +2306,7 @@ const styles = StyleSheet.create({
   seriesHeader: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#EEECFF", borderColor: "#C9C3FF", borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 7, marginLeft: 4, paddingLeft: 10, paddingRight: 5, paddingVertical: 5 },
   seriesHeaderText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
   seriesHideButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D8D1FF", borderRadius: 9, borderWidth: 1, height: 28, justifyContent: "center", width: 30 },
-  seriesHideButtonText: { color: "#C4327B", fontSize: 17, lineHeight: 19 },
+  seriesHideButtonText: { color: "#4B35B4", fontSize: 21, lineHeight: 23 },
   restoreSeriesButton: { alignSelf: "flex-start", backgroundColor: "#FFFFFF", borderColor: "#C9C3FF", borderRadius: 11, borderWidth: 1, marginTop: 10, paddingHorizontal: 12, paddingVertical: 8 },
   restoreSeriesButtonText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
   catalogError: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
