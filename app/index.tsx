@@ -68,7 +68,7 @@ type SavedSearch = {
   priceLimit: number | null;
 };
 
-type SpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror";
+type SpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror" | "series";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 
 const specialFilterLabels: Record<SpecialFilter, string> = {
@@ -77,6 +77,7 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
   firstTen: "Первая десятка",
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
+  series: "Серии номеров",
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -120,6 +121,19 @@ function normalizePlateLetters(value: string, maxLength: number, allowWildcard =
 }
 function normalizePlateDigits(value: string, maxLength: number, allowWildcard = true) {
   return value.replace(allowWildcard ? /[^0-9*]/g : /\D/g, "").slice(0, maxLength);
+}
+
+function belongsToSameSeries(first: Plate, second: Plate) {
+  if (first.id === second.id || first.seller !== second.seller || first.vehicle !== second.vehicle) return false;
+  const firstCore = `${first.leftLetter}${first.digits}${first.rightLetters}`;
+  const secondCore = `${second.leftLetter}${second.digits}${second.rightLetters}`;
+  const firstRegion = first.region.split(" · ")[1]?.trim() ?? "";
+  const secondRegion = second.region.split(" · ")[1]?.trim() ?? "";
+
+  // Серия — тот же номер в другом регионе или ровно одно изменение в номере.
+  if (firstCore === secondCore) return Boolean(firstRegion && secondRegion && firstRegion !== secondRegion);
+  if (firstRegion !== secondRegion || firstCore.length !== secondCore.length) return false;
+  return firstCore.split("").filter((symbol, index) => symbol !== secondCore[index]).length === 1;
 }
 // Дублирует серверную проверку из supabase/chat.sql, чтобы посетитель видел
 // причину до отправки сообщения. Серверный фильтр остаётся главным.
@@ -827,6 +841,19 @@ export default function HomeScreen() {
     return () => { void supabase.removeChannel(channel); };
   }, [currentUserId, catalog]);
 
+  const seriesListingIds = useMemo(() => {
+    const series = new Set<string>();
+    catalog.forEach((plate, index) => {
+      catalog.slice(index + 1).forEach((other) => {
+        if (belongsToSameSeries(plate, other)) {
+          series.add(plate.id);
+          series.add(other.id);
+        }
+      });
+    });
+    return series;
+  }, [catalog]);
+
   const plates = useMemo(
     () => {
       const filtered = catalog.filter((plate) => {
@@ -851,7 +878,8 @@ export default function HomeScreen() {
           if (filter === "sameLetters") return plate.leftLetter === plate.rightLetters[0] && plate.rightLetters[0] === plate.rightLetters[1];
           if (filter === "firstTen") return Number(plate.digits) >= 1 && Number(plate.digits) <= 10;
           if (filter === "roundHundred") return plate.digits.endsWith("00");
-          return plate.digits === plate.digits.split("").reverse().join("");
+          if (filter === "mirror") return plate.digits === plate.digits.split("").reverse().join("");
+          return seriesListingIds.has(plate.id);
         });
         const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
@@ -861,7 +889,7 @@ export default function HomeScreen() {
       const withSimilar = !source ? filtered : filtered.filter((plate) => plate.id !== source.id && (plate.digits === source.digits || plate.rightLetters === source.rightLetters));
       return [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
     },
-    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly],
+    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, seriesListingIds],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
@@ -1631,6 +1659,7 @@ export default function HomeScreen() {
                   </Pressable>
                 </View>
                 <Text numberOfLines={1} style={styles.region}>{item.region}</Text>
+                {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
                 <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
                 <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
                 {!!item.sourceUrl && <View style={styles.trustBadge}><Text style={styles.trustBadgeText}>✓ Проверенный источник</Text></View>}
@@ -2200,6 +2229,8 @@ const styles = StyleSheet.create({
   availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 7, paddingVertical: 3 },
   availableBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
   region: { color: "#68627D", fontSize: 13, marginTop: 5 },
+  seriesBadge: { alignSelf: "flex-start", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 8, paddingVertical: 4 },
+  seriesBadgeText: { color: "#175CD3", fontSize: 10, fontWeight: "900" },
   seller: { color: "#827B96", fontSize: 12, marginTop: 4 },
   sellerLink: { color: "#5143C2", textDecorationLine: "underline" },
   catalogRating: { alignSelf: "flex-start", backgroundColor: "#FFF7E8", borderColor: "#FDE2A7", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
