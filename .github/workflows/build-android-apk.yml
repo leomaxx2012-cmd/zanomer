@@ -46,7 +46,9 @@ jobs:
         working-directory: android
         # A release build packages the JavaScript bundle into the APK.  A debug
         # build instead expects Metro to be running on a development computer.
-        run: ./gradlew assembleRelease --no-daemon
+        # Expo's Kotlin symbol processor can exceed Gradle's default memory.
+        # Reserve enough heap and metaspace on the GitHub runner for a release build.
+        run: ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
 
       - name: Загрузить APK
         uses: actions/upload-artifact@v4
