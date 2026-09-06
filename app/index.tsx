@@ -77,7 +77,7 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
   firstTen: "Первая десятка",
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
-  series: "Серии номеров",
+  series: "Похожие номера продавца",
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -124,15 +124,17 @@ function normalizePlateDigits(value: string, maxLength: number, allowWildcard = 
 }
 
 function belongsToSameSeries(first: Plate, second: Plate) {
-  if (first.id === second.id || first.seller !== second.seller || first.vehicle !== second.vehicle) return false;
+  const sameSeller = first.seller.trim().toLocaleLowerCase("ru-RU") === second.seller.trim().toLocaleLowerCase("ru-RU");
+  if (first.id === second.id || !sameSeller || first.vehicle !== second.vehicle) return false;
   const firstCore = `${first.leftLetter}${first.digits}${first.rightLetters}`;
   const secondCore = `${second.leftLetter}${second.digits}${second.rightLetters}`;
   const firstRegion = first.region.split(" · ")[1]?.trim() ?? "";
   const secondRegion = second.region.split(" · ")[1]?.trim() ?? "";
 
-  // Серия — тот же номер в другом регионе или ровно одно изменение в номере.
+  // Серия одного продавца: тот же номер в другом регионе либо ровно одно
+  // изменение в номере. Регион при таком изменении может быть любым.
   if (firstCore === secondCore) return Boolean(firstRegion && secondRegion && firstRegion !== secondRegion);
-  if (firstRegion !== secondRegion || firstCore.length !== secondCore.length) return false;
+  if (firstCore.length !== secondCore.length) return false;
   return firstCore.split("").filter((symbol, index) => symbol !== secondCore[index]).length === 1;
 }
 // Дублирует серверную проверку из supabase/chat.sql, чтобы посетитель видел
@@ -1665,7 +1667,7 @@ export default function HomeScreen() {
                   <Text style={styles.price}>{item.price}</Text>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
                   {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
-                  {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия</Text></View>}
+                  {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия продавца</Text></View>}
                   {!!item.sourceUrl && <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Источник</Text></View>}
                   {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Продавец" : `★ ${item.sellerRating.toFixed(1)}`}</Text></View>}
                 </View>
