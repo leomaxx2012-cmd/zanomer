@@ -760,9 +760,20 @@ export default function HomeScreen() {
       }));
 
       const loaded = [...fromDatabase, ...partners];
+      // Один и тот же номер с тем же кодом региона показываем только один раз.
+      // Если запись пришла повторно, оставляем самую свежую.
+      const uniqueListings = new Map<string, Plate>();
+      loaded.forEach((plate) => {
+        const key = `${plate.vehicle}|${plate.leftLetter}${plate.digits}${plate.rightLetters}|${plate.region.trim().toLocaleUpperCase("ru-RU")}`;
+        const previous = uniqueListings.get(key);
+        const currentDate = new Date(plate.publishedAt ?? plate.createdAt).getTime();
+        const previousDate = previous ? new Date(previous.publishedAt ?? previous.createdAt).getTime() : Number.NEGATIVE_INFINITY;
+        if (!previous || currentDate >= previousDate) uniqueListings.set(key, plate);
+      });
+      const uniqueLoaded = [...uniqueListings.values()].sort((first, second) => (second.publishedAt ?? second.createdAt).localeCompare(first.publishedAt ?? first.createdAt));
       // Demo cards are useful only before the first database data arrives.
       // Mixing them into a real catalogue inflated the public count.
-      setCatalog(loaded.length > 0 ? loaded : initialPlates);
+      setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : initialPlates);
       if (partnerResult.error) setCatalogLoadError("Каталог загружен не полностью. Проверь интернет и обнови страницу позже.");
       } catch {
         setCatalogLoadError("Не удалось обновить каталог. Проверь интернет или VPN и перезапусти приложение.");
@@ -2277,8 +2288,8 @@ const styles = StyleSheet.create({
   cardPlateRegionDesktop: { width: 112 },
   cardPlateRegionValue: { color: "#111827", fontSize: 19, fontWeight: "900", lineHeight: 21 },
   cardPlateRegionValueDesktop: { fontSize: 36, lineHeight: 39 },
-  cardPlateRus: { color: "#344054", fontSize: 7, fontWeight: "900", letterSpacing: 0.2, marginTop: 1 },
-  cardFlag: { borderColor: "#98A2B3", borderRadius: 1, borderWidth: 0.5, height: 10, marginTop: 3, overflow: "hidden", width: 17 },
+  cardPlateRus: { color: "#344054", fontSize: 8, fontWeight: "900", letterSpacing: 0.3, marginTop: 2 },
+  cardFlag: { borderColor: "#667085", borderRadius: 2, borderWidth: 0.7, height: 16, marginTop: 4, overflow: "hidden", width: 28 },
   cardFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
   cardFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
   cardFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
