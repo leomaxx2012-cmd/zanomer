@@ -538,7 +538,7 @@ export default function HomeScreen() {
   }
 
   async function shareListing(listing: Plate) {
-    const url = listing.sourceUrl ?? `https://zanomer.vercel.app/?listing=${encodeURIComponent(listing.id)}`;
+    const url = listing.sourceUrl ?? `https://zanomerom.ru/?listing=${encodeURIComponent(listing.id)}`;
     try {
       await Share.share({ message: `${listing.value} · ${listing.price}\n${url}`, url });
     } catch {
