@@ -2242,7 +2242,7 @@ const styles = StyleSheet.create({
   cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 9, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
-  cardPlateDesktop: { flex: 0, flexShrink: 0, height: 124, width: "58%" },
+  cardPlateDesktop: { flexBasis: "58%", flexGrow: 0, flexShrink: 0, height: 124, width: "58%" },
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
   cardPlateLetter: { color: "#111827", flex: 0.78, fontSize: 40, fontWeight: "900", textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 76 },
