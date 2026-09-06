@@ -60,3 +60,11 @@ export async function showChatNotification(plate: string) {
     trigger: null,
   });
 }
+
+/** Отправляет push через защищённую Supabase Edge Function.
+ * Функция сама проверяет права по записи в базе, поэтому токены телефонов
+ * и служебные ключи никогда не попадают в приложение. */
+export async function sendServerPush(kind: "message" | "comment" | "report" | "comment-report", id: string) {
+  if (!supabase || !id) return;
+  await supabase.functions.invoke("notify", { body: { kind, id } });
+}

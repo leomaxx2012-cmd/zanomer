@@ -21,6 +21,14 @@ where l.id = m.listing_id and m.recipient_id is null;
 create index if not exists listing_messages_listing_created_idx
   on public.listing_messages (listing_id, created_at asc);
 
+create table if not exists public.auto_banned_users (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  banned_by uuid not null references auth.users(id) on delete cascade,
+  reason text,
+  created_at timestamptz not null default now()
+);
+alter table public.auto_banned_users enable row level security;
+
 alter table public.listing_messages enable row level security;
 
 create or replace function public.reject_prohibited_chat_message()
@@ -45,6 +53,7 @@ create policy "Users see their own listing chats"
   on public.listing_messages for select to authenticated
   using (
     sender_id = auth.uid()
+    and not exists (select 1 from public.auto_banned_users b where b.user_id = auth.uid())
     or recipient_id = auth.uid()
   );
 
@@ -69,6 +78,15 @@ create policy "Users send messages to active listings"
           select 1 from public.listing_messages earlier
           where earlier.listing_id = listing_id
             and (earlier.sender_id = recipient_id or earlier.recipient_id = recipient_id)
+        )
+      )
+      or (
+        -- Любой участник обсуждения может написать автору комментария к
+        -- активному объявлению. Чат всё равно доступен только этим двоим.
+        exists (select 1 from public.auto_listings l where l.id = listing_id and l.status = 'active')
+        and exists (
+          select 1 from public.listing_public_comments c
+          where c.listing_id = listing_id::text and c.author_id = recipient_id
         )
       )
     )
@@ -163,6 +181,22 @@ $$;
 
 revoke all on function public.review_listing_message_report(uuid, text) from public;
 grant execute on function public.review_listing_message_report(uuid, text) to authenticated;
+
+create or replace function public.ban_user_from_message_report(report uuid)
+returns void language plpgsql security definer set search_path = public as $$
+declare target uuid;
+begin
+  if not exists (select 1 from public.auto_moderators where user_id = auth.uid()) then raise exception 'Недостаточно прав модератора'; end if;
+  select reported_user_id into target from public.listing_message_reports where id = report;
+  if target is null then raise exception 'Жалоба не найдена'; end if;
+  if target = auth.uid() then raise exception 'Нельзя заблокировать себя'; end if;
+  insert into public.auto_banned_users (user_id, banned_by, reason) values (target, auth.uid(), 'Жалоба на сообщение')
+  on conflict (user_id) do update set banned_by = excluded.banned_by, reason = excluded.reason, created_at = now();
+  update public.listing_message_reports set status = 'approved', reviewed_by = auth.uid(), reviewed_at = now() where id = report;
+end;
+$$;
+revoke all on function public.ban_user_from_message_report(uuid) from public;
+grant execute on function public.ban_user_from_message_report(uuid) to authenticated;
 
 -- Модератор может открыть чат только из карточки жалобы. Обычные пользователи
 -- по-прежнему видят только свои сообщения благодаря RLS-политике выше.

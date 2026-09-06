@@ -17,7 +17,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../lib/supabase";
-import { registerForPushNotifications, showChatNotification } from "../lib/push-notifications";
+import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
   id: string;
@@ -51,9 +51,9 @@ type PricePoint = {
 };
 
 type ChatMessage = { id: string; listing_id?: string; sender_id: string; recipient_id: string; body: string; created_at: string };
-type PublicComment = { id: string; listing_id: string; author_name: string; body: string; created_at: string };
+type PublicComment = { id: string; listing_id: string; author_id: string; author_name: string; body: string; created_at: string };
 type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessage };
-type MessageReport = { id: string; reason: string; created_at: string; message?: { body?: string; sender_id?: string; listing_id?: string } | null };
+type MessageReport = { id: string; reason: string; created_at: string; reported_user_id?: string; message?: { body?: string; sender_id?: string; listing_id?: string } | null };
 type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
 
 type SavedSearch = {
@@ -228,6 +228,8 @@ export default function HomeScreen() {
   const [publicComments, setPublicComments] = useState<PublicComment[]>([]);
   const [publicCommentDraft, setPublicCommentDraft] = useState("");
   const [publicCommentMessage, setPublicCommentMessage] = useState("");
+  const [commentAction, setCommentAction] = useState<PublicComment | null>(null);
+  const [reportingPublicComment, setReportingPublicComment] = useState<PublicComment | null>(null);
   const [regionPickerGroup, setRegionPickerGroup] = useState<string | null>(null);
   const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
   const [testPaymentDone, setTestPaymentDone] = useState(false);
@@ -301,7 +303,7 @@ export default function HomeScreen() {
     setPublicCommentMessage("");
     void supabase
       .from("listing_public_comments")
-      .select("id, listing_id, author_name, body, created_at")
+      .select("id, listing_id, author_id, author_name, body, created_at")
       .eq("listing_id", selectedPlate.id)
       .order("created_at", { ascending: true })
       .then(({ data, error }) => {
@@ -366,7 +368,7 @@ export default function HomeScreen() {
     setModerationListings((pending ?? []).map((item) => mapManagedListing(item, "Пользователь ЗаНомером")));
     const { data: reports } = await client
       .from("listing_message_reports")
-      .select("id, reason, created_at, listing_messages(body, sender_id, listing_id)")
+      .select("id, reason, created_at, reported_user_id, listing_messages(body, sender_id, listing_id)")
       .eq("status", "pending")
       .order("created_at", { ascending: true });
     setModerationReports((reports ?? []).map((report: any) => ({
@@ -404,6 +406,15 @@ export default function HomeScreen() {
     if (!supabase) return;
     const { error } = await supabase.rpc("review_listing_message_report", { report: report.id, new_status: status });
     if (error) return setAuthMessage("Не удалось обработать жалобу. Проверь права модератора.");
+    const { data } = await supabase.auth.getUser();
+    await loadManagement(data.user?.id, profileName);
+  }
+
+  async function banReportedUser(report: MessageReport) {
+    if (!supabase) return;
+    const { error } = await supabase.rpc("ban_user_from_message_report", { report: report.id });
+    if (error) return setModerationChatMessage("Не удалось заблокировать пользователя. Проверь права модератора.");
+    setModerationChatMessage("Пользователь заблокирован: он больше не сможет писать в чатах и комментариях.");
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
   }
@@ -470,10 +481,20 @@ export default function HomeScreen() {
 
   async function sendReport() {
     if (!supabase || !reportingMessage || !reportReason.trim()) return setReportMessage("Кратко укажи причину жалобы.");
-    const { error } = await supabase.from("listing_message_reports").insert({ message_id: reportingMessage.id, reason: reportReason.trim() });
+    const { data, error } = await supabase.from("listing_message_reports").insert({ message_id: reportingMessage.id, reason: reportReason.trim() }).select("id").single();
     if (error) return setReportMessage("Не удалось отправить жалобу. Проверь, что в базе выполнен chat.sql.");
     setReportReason("");
     setReportMessage("Жалоба отправлена на проверку.");
+    if (data?.id) void sendServerPush("report", data.id);
+  }
+
+  async function sendPublicCommentReport() {
+    if (!supabase || !reportingPublicComment || !reportReason.trim()) return setReportMessage("Кратко укажи причину жалобы.");
+    const { data, error } = await supabase.from("listing_public_comment_reports").insert({ comment_id: reportingPublicComment.id, reason: reportReason.trim() }).select("id").single();
+    if (error) return setReportMessage("Не удалось отправить жалобу. Проверь обновление базы комментариев.");
+    setReportReason("");
+    setReportMessage("Жалоба отправлена администратору на проверку.");
+    if (data?.id) void sendServerPush("comment-report", data.id);
   }
 
   async function rateSeller(score: number) {
@@ -491,7 +512,7 @@ export default function HomeScreen() {
     }
     const recipientId = chatRecipientId || selectedPlate.ownerId;
     if (!recipientId) return setChatMessage("Не удалось определить получателя сообщения.");
-    const { error } = await supabase.from("listing_messages").insert({ listing_id: selectedPlate.id, recipient_id: recipientId, body: chatDraft.trim() });
+    const { data: sentMessage, error } = await supabase.from("listing_messages").insert({ listing_id: selectedPlate.id, recipient_id: recipientId, body: chatDraft.trim() }).select("id").single();
     if (error) {
       if (error.message.includes("запрещ")) return setChatMessage("Сообщение содержит запрещённые слова. Измени текст.");
       if (error.code === "42501") return setChatMessage("Чат не может отправить сообщение: в базе ещё не включены права для гостевого чата.");
@@ -499,6 +520,7 @@ export default function HomeScreen() {
       return setChatMessage(`Не удалось отправить: ${error.message}`);
     }
     setChatDraft("");
+    if (sentMessage?.id) void sendServerPush("message", sentMessage.id);
     await openChat(selectedPlate);
   }
 
@@ -561,7 +583,7 @@ export default function HomeScreen() {
     const { data, error } = await supabase
       .from("listing_public_comments")
       .insert({ listing_id: selectedPlate.id, author_name: authorName, body: publicCommentDraft.trim() })
-      .select("id, listing_id, author_name, body, created_at")
+      .select("id, listing_id, author_id, author_name, body, created_at")
       .single();
     if (error) {
       setPublicCommentMessage("Комментарии подключатся после запуска listing-social.sql в Supabase.");
@@ -570,6 +592,21 @@ export default function HomeScreen() {
     setPublicComments((items) => [...items, data as PublicComment]);
     setPublicCommentDraft("");
     setPublicCommentMessage("Комментарий опубликован — его видят все пользователи и продавец.");
+    if (data?.id) void sendServerPush("comment", data.id);
+  }
+
+  async function writeCommentAuthor(comment: PublicComment) {
+    if (!selectedPlate || !supabase || !currentUserId) {
+      setAuthMode("signup"); setAuthStep(1); setAuthMessage("Чтобы написать лично, зарегистрируйся или войди."); setAuthOpen(true);
+      return;
+    }
+    if (comment.author_id === currentUserId) return;
+    setCommentAction(null);
+    setChatRecipientId(comment.author_id);
+    setChatMessages([]);
+    setChatDraft("");
+    setChatMessage(`Личный ответ пользователю «${comment.author_name}» по этому объявлению.`);
+    setChatOpen(true);
   }
 
   const priceChart = useMemo(() => {
@@ -1696,7 +1733,7 @@ export default function HomeScreen() {
                     <Pressable onPress={() => { if (selectedPlate) void toggleListingLike(selectedPlate); }} style={[styles.detailsActionButton, likedListingIds.includes(selectedPlate?.id ?? "") && styles.detailsActionButtonLiked]}><Text style={[styles.detailsActionText, likedListingIds.includes(selectedPlate?.id ?? "") && styles.detailsActionTextLiked]}>{likedListingIds.includes(selectedPlate?.id ?? "") ? "♥ Лайк" : "♡ Лайк"}</Text></Pressable>
                   </View>
                 </View>
-                {publicComments.length === 0 ? <Text style={styles.publicCommentsEmpty}>Пока нет комментариев. Можно задать продавцу общий вопрос здесь.</Text> : <View style={styles.publicCommentList}>{publicComments.map((comment) => <View key={comment.id} style={styles.publicComment}><View style={styles.publicCommentMeta}><Text style={styles.publicCommentAuthor}>{comment.author_name}</Text><Text style={styles.publicCommentDate}>{formatListingDate(comment.created_at)}</Text></View><Text style={styles.publicCommentText}>{comment.body}</Text></View>)}</View>}
+                {publicComments.length === 0 ? <Text style={styles.publicCommentsEmpty}>Пока нет комментариев. Можно задать продавцу общий вопрос здесь.</Text> : <View style={styles.publicCommentList}>{publicComments.map((comment) => <Pressable key={comment.id} onPress={() => { if (comment.author_id !== currentUserId) setCommentAction(comment); }} style={styles.publicComment}><View style={styles.publicCommentMeta}><Text style={styles.publicCommentAuthor}>{comment.author_name}</Text><Text style={styles.publicCommentDate}>{formatListingDate(comment.created_at)}</Text></View><Text style={styles.publicCommentText}>{comment.body}</Text>{comment.author_id !== currentUserId && <Text style={styles.publicCommentActions}>Нажми: написать лично · пожаловаться</Text>}</Pressable>)}</View>}
                 <View style={styles.publicCommentInputRow}><TextInput value={publicCommentDraft} onChangeText={setPublicCommentDraft} placeholder="Написать публичный комментарий…" placeholderTextColor="#98A2B3" style={styles.publicCommentInput} multiline maxLength={600} /><Pressable onPress={() => { void sendPublicComment(); }} style={styles.publicCommentSend}><Text style={styles.publicCommentSendText}>Отправить</Text></Pressable></View>
                 {!!publicCommentMessage && <Text style={styles.publicCommentMessage}>{publicCommentMessage}</Text>}
               </View>}
@@ -1793,7 +1830,31 @@ export default function HomeScreen() {
             <View style={styles.reviewActions}>
               <Pressable onPress={async () => { if (!moderationReport) return; await reviewMessageReport(moderationReport, "approved"); setModerationReport(null); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять жалобу</Text></Pressable>
               <Pressable onPress={async () => { if (!moderationReport) return; await reviewMessageReport(moderationReport, "rejected"); setModerationReport(null); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
+              <Pressable onPress={() => { if (moderationReport) void banReportedUser(moderationReport); }} style={styles.banButton}><Text style={styles.banButtonText}>Забанить пользователя</Text></Pressable>
             </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!commentAction} transparent animationType="fade" onRequestClose={() => setCommentAction(null)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setCommentAction(null)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportPanel}>
+            <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>{commentAction?.author_name}</Text><Pressable onPress={() => setCommentAction(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
+            <Text style={styles.dialogsHint}>Выбери действие для этого комментария.</Text>
+            <Pressable onPress={() => { if (commentAction) void writeCommentAuthor(commentAction); }} style={styles.commentActionPrimary}><Text style={styles.commentActionPrimaryText}>✉ Написать лично</Text></Pressable>
+            <Pressable onPress={() => { setReportingPublicComment(commentAction); setCommentAction(null); setReportReason(""); setReportMessage(""); }} style={styles.commentActionDanger}><Text style={styles.commentActionDangerText}>⚑ Пожаловаться</Text></Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal visible={!!reportingPublicComment} transparent animationType="fade" onRequestClose={() => setReportingPublicComment(null)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setReportingPublicComment(null)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportPanel}>
+            <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Жалоба на комментарий</Text><Pressable onPress={() => setReportingPublicComment(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
+            <Text style={styles.dialogsHint}>Администратор увидит жалобу и решит, ограничивать ли пользователя.</Text>
+            <TextInput value={reportReason} onChangeText={setReportReason} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline />
+            {!!reportMessage && <Text style={styles.authMessage}>{reportMessage}</Text>}
+            <Pressable onPress={() => { void sendPublicCommentReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>Отправить жалобу</Text></Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -1924,6 +1985,8 @@ const styles = StyleSheet.create({
   approveButtonText: { color: "#18794E", fontSize: 11, fontWeight: "900" },
   rejectButton: { backgroundColor: "#FFF1F3", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 7 },
   rejectButtonText: { color: "#C01048", fontSize: 11, fontWeight: "900" },
+  banButton: { alignItems: "center", backgroundColor: "#7A271A", borderRadius: 10, marginTop: 8, paddingHorizontal: 10, paddingVertical: 9 },
+  banButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   logoutText: { color: "#D92D20", fontSize: 13, fontWeight: "750", marginTop: 9 },
   searchArea: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E2DEF7", borderRadius: 28, borderWidth: 1, maxWidth: 760, marginTop: 20, padding: 19, position: "relative", shadowColor: "#5A4FB2", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.12, shadowRadius: 24, width: "100%" },
   searchHeading: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: 14, minWidth: 0 },
@@ -2225,6 +2288,7 @@ const styles = StyleSheet.create({
   publicCommentAuthor: { color: "#352F67", flex: 1, fontSize: 12, fontWeight: "900" },
   publicCommentDate: { color: "#98A2B3", fontSize: 10 },
   publicCommentText: { color: "#344054", fontSize: 13, lineHeight: 18, marginTop: 5 },
+  publicCommentActions: { color: "#716A88", fontSize: 10, fontWeight: "800", marginTop: 8 },
   publicCommentInputRow: { alignItems: "flex-end", flexDirection: "row", gap: 8, marginTop: 13 },
   publicCommentInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 12, borderWidth: 1, color: "#101828", flex: 1, fontSize: 13, maxHeight: 100, minHeight: 44, paddingHorizontal: 11, paddingVertical: 9 },
   publicCommentSend: { backgroundColor: "#5143C2", borderRadius: 11, paddingHorizontal: 11, paddingVertical: 12 },
@@ -2309,6 +2373,10 @@ const styles = StyleSheet.create({
   reportInput: { borderColor: "#D0D5DD", borderRadius: 13, borderWidth: 1, color: "#101828", fontSize: 14, marginTop: 15, minHeight: 92, padding: 11, textAlignVertical: "top" },
   reportSubmit: { alignItems: "center", backgroundColor: "#D92D20", borderRadius: 13, marginTop: 12, paddingVertical: 13 },
   reportSubmitText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+  commentActionPrimary: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, marginTop: 15, paddingVertical: 13 },
+  commentActionPrimaryText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+  commentActionDanger: { alignItems: "center", borderColor: "#FDA29B", borderRadius: 13, borderWidth: 1, marginTop: 9, paddingVertical: 12 },
+  commentActionDangerText: { color: "#B42318", fontSize: 14, fontWeight: "900" },
   legalNotice: { backgroundColor: "#FFFAEB", borderColor: "#FEDF89", borderRadius: 12, borderWidth: 1, marginTop: 18, padding: 12 },
   legalNoticeTitle: { color: "#B54708", fontSize: 13, fontWeight: "800" },
   legalNoticeText: { color: "#7A2E0E", fontSize: 12, lineHeight: 18, marginTop: 4 },

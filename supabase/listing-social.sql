@@ -38,7 +38,41 @@ create policy "Public comments are visible to everyone"
 drop policy if exists "Authenticated users add their comments" on public.listing_public_comments;
 create policy "Authenticated users add their comments"
   on public.listing_public_comments for insert to authenticated
-  with check (author_id = auth.uid());
+  with check (author_id = auth.uid() and not exists (select 1 from public.auto_banned_users b where b.user_id = auth.uid()));
+
+-- Жалобы на публичные комментарии. Связанный пользователь определяется на
+-- сервере, чтобы клиент не мог подменить цель жалобы.
+create table if not exists public.listing_public_comment_reports (
+  id uuid primary key default gen_random_uuid(),
+  comment_id uuid not null references public.listing_public_comments(id) on delete cascade,
+  reporter_id uuid not null default auth.uid() references auth.users(id) on delete cascade,
+  reason text not null check (char_length(trim(reason)) between 3 and 500),
+  reported_user_id uuid references auth.users(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  created_at timestamptz not null default now(),
+  unique (comment_id, reporter_id)
+);
+
+create or replace function public.fill_public_comment_report_details()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  select author_id into new.reported_user_id from public.listing_public_comments where id = new.comment_id;
+  if new.reported_user_id is null then raise exception 'Комментарий не найден'; end if;
+  if new.reported_user_id = auth.uid() then raise exception 'Нельзя пожаловаться на себя'; end if;
+  return new;
+end;
+$$;
+drop trigger if exists listing_public_comment_reports_details on public.listing_public_comment_reports;
+create trigger listing_public_comment_reports_details before insert on public.listing_public_comment_reports
+  for each row execute function public.fill_public_comment_report_details();
+
+alter table public.listing_public_comment_reports enable row level security;
+drop policy if exists "Users submit public comment reports" on public.listing_public_comment_reports;
+create policy "Users submit public comment reports" on public.listing_public_comment_reports for insert to authenticated with check (reporter_id = auth.uid());
+drop policy if exists "Users see own public comment reports" on public.listing_public_comment_reports;
+create policy "Users see own public comment reports" on public.listing_public_comment_reports for select to authenticated using (reporter_id = auth.uid());
+drop policy if exists "Moderators view public comment reports" on public.listing_public_comment_reports;
+create policy "Moderators view public comment reports" on public.listing_public_comment_reports for select to authenticated using (exists (select 1 from public.auto_moderators m where m.user_id = auth.uid()));
 
 create table if not exists public.listing_likes (
   listing_id text not null,
