@@ -1707,24 +1707,26 @@ export default function HomeScreen() {
                     </Pressable>
                   </View>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
+                </View>
+              </View>
+              <View style={styles.cardDetailsSpread}>
+                <View style={styles.cardBadgesSpread}>
+                  <Text style={styles.price}>{item.price}</Text>
+                  <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
                   {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
                   {!!item.sourceUrl && <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View>}
                   {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Проверенный продавец" : `★ ${item.sellerRating.toFixed(1)} · есть отзывы`}</Text></View>}
-                  <View style={styles.cardBottomRow}>
-                    <Text style={styles.price}>{item.price}</Text>
-                    <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
-                  </View>
+                </View>
+                <View style={styles.cardButtonsSpread}>
                   {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={styles.sourceButton}>
                     <Text numberOfLines={1} style={styles.sourceButtonText}>Открыть объявление ↗</Text>
                   </Pressable>}
                   {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarToId(item.id); }} style={styles.similarButton}>
                     <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                   </Pressable>}
-                  <View style={styles.cardActions}>
-                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
-                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
-                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
-                  </View>
+                  {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
+                  {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
+                  <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
                 </View>
               </View>
               <View style={styles.cardFooter}>
@@ -2307,15 +2309,18 @@ const styles = StyleSheet.create({
   catalogRatingText: { color: "#9A5B00", fontSize: 10, fontWeight: "900" },
   trustBadge: { alignSelf: "flex-start", backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   trustBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
+  cardDetailsSpread: { borderTopColor: "#EEEAF8", borderTopWidth: 1, marginTop: 12, paddingTop: 10 },
+  cardBadgesSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  cardButtonsSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   cardFooter: { borderTopColor: "#EEEAF8", borderTopWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", marginTop: 12, paddingTop: 10 },
   cardFooterSeller: { flex: 1, minWidth: 0 },
   cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
   price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
   catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, flexShrink: 1, maxWidth: 126, paddingHorizontal: 7, paddingVertical: 4 },
   catalogSourceText: { color: "#5B4CC4", fontSize: 10, fontWeight: "900" },
-  sourceButton: { alignSelf: "flex-start", backgroundColor: "#C4327B", borderRadius: 9, marginTop: 8, maxWidth: "100%", paddingHorizontal: 10, paddingVertical: 7 },
+  sourceButton: { alignSelf: "flex-start", backgroundColor: "#C4327B", borderRadius: 9, maxWidth: "100%", paddingHorizontal: 10, paddingVertical: 7 },
   sourceButtonText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
-  similarButton: { alignSelf: "flex-start", backgroundColor: "#155EEF", borderRadius: 9, marginTop: 8, maxWidth: "100%", paddingHorizontal: 10, paddingVertical: 7 },
+  similarButton: { alignSelf: "flex-start", backgroundColor: "#155EEF", borderRadius: 9, maxWidth: "100%", paddingHorizontal: 10, paddingVertical: 7 },
   similarButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   cardActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
   cardAction: { backgroundColor: "#5143C2", borderColor: "#4338A8", borderRadius: 9, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
