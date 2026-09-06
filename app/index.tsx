@@ -1762,14 +1762,22 @@ export default function HomeScreen() {
             <Pressable onPress={(event) => event.stopPropagation()} style={styles.detailsPanel}>
               <View style={styles.detailsHeader}>
                 <View>
-                  <Text style={styles.detailsTitle}>{selectedPlate?.value}</Text>
+                  <Text style={styles.detailsTitle}>Объявление</Text>
                   <Text style={styles.detailsPrice}>{selectedPlate?.price}</Text>
                 </View>
                 <Pressable onPress={() => setSelectedPlate(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
               </View>
               <View style={styles.detailsPlatePreview}>
-                <Text style={styles.detailsPlateValue}>{selectedPlate?.value}</Text>
-                <Text style={styles.detailsPlateRegion}>{selectedPlate?.region}</Text>
+                <View style={styles.detailsPlateMain}>
+                  <Text adjustsFontSizeToFit minimumFontScale={0.6} style={styles.detailsPlateLetter}>{selectedPlate?.leftLetter}</Text>
+                  <Text adjustsFontSizeToFit minimumFontScale={0.6} style={styles.detailsPlateDigits}>{selectedPlate?.digits}</Text>
+                  <Text adjustsFontSizeToFit minimumFontScale={0.6} style={styles.detailsPlateLetters}>{selectedPlate?.rightLetters}</Text>
+                </View>
+                <View style={styles.detailsPlateRegionBox}>
+                  <Text style={styles.detailsPlateRegionValue}>{selectedPlate?.region.split(" · ")[1] ?? ""}</Text>
+                  <Text style={styles.detailsPlateRus}>RUS</Text>
+                  <View style={styles.detailsPlateFlag} accessibilityLabel="Флаг России"><View style={styles.detailsPlateFlagWhite} /><View style={styles.detailsPlateFlagBlue} /><View style={styles.detailsPlateFlagRed} /></View>
+                </View>
               </View>
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
               <View style={styles.detailsBlock}>
@@ -2353,10 +2361,19 @@ const styles = StyleSheet.create({
   detailsHeader: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
-  detailsPlatePreview: { alignItems: "center", backgroundColor: "#F8FAFC", borderColor: "#344054", borderRadius: 14, borderWidth: 2, marginTop: 20, paddingHorizontal: 14, paddingVertical: 20 },
+  detailsPlatePreview: { backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 13, borderWidth: 3, flexDirection: "row", height: 148, marginTop: 20, overflow: "hidden" },
+  detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
+  detailsPlateLetter: { color: "#111827", flex: 0.78, fontSize: 82, fontWeight: "900", textAlign: "center" },
+  detailsPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 2, borderRightColor: "#1D2939", borderRightWidth: 2, color: "#111827", flex: 1.46, fontSize: 82, fontWeight: "900", paddingHorizontal: 4, textAlign: "center" },
+  detailsPlateLetters: { color: "#111827", flex: 1.08, fontSize: 82, fontWeight: "900", paddingHorizontal: 4, textAlign: "center" },
+  detailsPlateRegionBox: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 8, width: 124 },
+  detailsPlateRegionValue: { color: "#111827", fontSize: 41, fontWeight: "900", lineHeight: 45 },
+  detailsPlateRus: { color: "#344054", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginTop: 2 },
+  detailsPlateFlag: { borderColor: "#98A2B3", borderRadius: 2, borderWidth: 0.7, height: 16, marginTop: 5, overflow: "hidden", width: 28 },
+  detailsPlateFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
+  detailsPlateFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
+  detailsPlateFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
   detailsPhoto: { borderRadius: 14, height: 230, marginTop: 14, width: "100%" },
-  detailsPlateValue: { color: "#101828", fontSize: 34, fontWeight: "900", letterSpacing: 1 },
-  detailsPlateRegion: { color: "#475467", fontSize: 14, fontWeight: "800", marginTop: 5 },
   detailsClose: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
   detailsCloseText: { color: "#475467", fontSize: 25, lineHeight: 29 },
   detailsBlock: { borderTopColor: "#EAECF0", borderTopWidth: 1, marginTop: 18, paddingTop: 15 },
