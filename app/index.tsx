@@ -108,6 +108,11 @@ function formatListingDate(value?: string) {
     hour: "2-digit", minute: "2-digit",
   });
 }
+
+function isRequisitesPage() {
+  if (typeof window === "undefined" || !window.location) return false;
+  return new URLSearchParams(window.location.search).get("page") === "requisites";
+}
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
 const latinPlateLetters: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
@@ -253,6 +258,7 @@ export default function HomeScreen() {
   const [regionPickerGroup, setRegionPickerGroup] = useState<string | null>(null);
   const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
   const [testPaymentDone, setTestPaymentDone] = useState(false);
+  const [requisitesOpen, setRequisitesOpen] = useState(isRequisitesPage);
 
   function openTestPayment(title: string, amount: string) {
     setTestPayment({ title, amount });
@@ -1277,6 +1283,9 @@ export default function HomeScreen() {
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
+          <Pressable onPress={() => setRequisitesOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Реквизиты ИП">
+            <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
+          </Pressable>
           <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
             <Text style={styles.chatsButtonText}>💬</Text>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
@@ -2018,6 +2027,25 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
+      <Modal visible={requisitesOpen} transparent animationType="fade" onRequestClose={() => setRequisitesOpen(false)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setRequisitesOpen(false)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.requisitesPanel}>
+            <View style={styles.detailsHeader}>
+              <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Реквизиты</Text></View>
+              <Pressable onPress={() => setRequisitesOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
+            </View>
+            <Text style={styles.requisitesHint}>Продавец услуг на площадке</Text>
+            <View style={styles.requisitesCard}>
+              <Text style={styles.requisitesName}>Индивидуальный предприниматель Леонович Александр Леонидович</Text>
+              <Text style={styles.requisitesRow}>ИНН: 504406730552</Text>
+              <Text style={styles.requisitesRow}>ОГРНИП: 319508100089501</Text>
+              <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
+            </View>
+            <Text style={styles.requisitesHint}>Оплата подписки и продвижения объявлений осуществляется через ЮKassa. ЗаНомером — площадка объявлений и не является стороной сделки купли-продажи номера.</Text>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <View style={styles.bottomNav}>
         {([
           ["buy", "⌕", "Купить", "#155EEF"],
@@ -2057,6 +2085,8 @@ const styles = StyleSheet.create({
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
   subtitleCompact: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },
+  requisitesHeaderButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 42, justifyContent: "center", width: 42 },
+  requisitesHeaderButtonText: { color: "#5143C2", fontSize: 20, fontWeight: "900" },
   chatsButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 42, justifyContent: "center", position: "relative", width: 42 },
   chatsButtonText: { fontSize: 18 },
   chatBadge: { alignItems: "center", backgroundColor: "#F04438", borderColor: "#FFFFFF", borderRadius: 10, borderWidth: 2, justifyContent: "center", minHeight: 18, minWidth: 18, paddingHorizontal: 3, position: "absolute", right: -4, top: -4 },
@@ -2399,6 +2429,13 @@ const styles = StyleSheet.create({
   paymentPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 470, padding: 22, width: "92%" },
   paymentKicker: { color: "#7F56D9", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   paymentTitle: { color: "#101828", fontSize: 23, fontWeight: "900", marginTop: 3 },
+  requisitesPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 540, padding: 22, width: "92%" },
+  requisitesTitle: { color: "#101828", fontSize: 23, fontWeight: "900", marginTop: 3 },
+  requisitesHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 13 },
+  requisitesCard: { backgroundColor: "#F8F7FF", borderColor: "#E2DEF7", borderRadius: 16, borderWidth: 1, marginTop: 13, padding: 14 },
+  requisitesName: { color: "#24213E", fontSize: 15, fontWeight: "900", lineHeight: 21 },
+  requisitesRow: { color: "#475467", fontSize: 14, fontWeight: "700", marginTop: 9 },
+  requisitesPhone: { color: "#155EEF", fontSize: 15, fontWeight: "900", marginTop: 13, textDecorationLine: "underline" },
   paymentItem: { color: "#344054", fontSize: 15, fontWeight: "750", marginTop: 22 },
   paymentAmount: { color: "#155EEF", fontSize: 29, fontWeight: "900", marginTop: 7 },
   paymentHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 15 },
