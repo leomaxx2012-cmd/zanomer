@@ -262,6 +262,7 @@ export default function HomeScreen() {
   const [regionPickerGroup, setRegionPickerGroup] = useState<string | null>(null);
   const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
   const [testPaymentDone, setTestPaymentDone] = useState(false);
+  const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
   const [requisitesOpen, setRequisitesOpen] = useState(isRequisitesPage);
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(isPaymentInfoPage);
 
@@ -1032,6 +1033,11 @@ export default function HomeScreen() {
 
   function toggleSaved(id: string) {
     setSaved((current) => {
+      const limit = hasPlusSubscription ? 30 : 15;
+      if (!current.includes(id) && current.length >= limit) {
+        setSubscriptionToast(true);
+        return current;
+      }
       const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id];
       setSubscribedNumbers(next);
       const plate = catalog.find((item) => item.id === id);
@@ -1074,7 +1080,7 @@ export default function HomeScreen() {
       vehicle,
       priceLimit,
     };
-    setSavedSearches((searches) => [current, ...searches.filter((item) => item.title !== current.title)].slice(0, 8));
+    setSavedSearches((searches) => [current, ...searches.filter((item) => item.title !== current.title)].slice(0, hasPlusSubscription ? 30 : 15));
     setSubscriptionToast(true);
   }
 
@@ -1634,15 +1640,15 @@ export default function HomeScreen() {
             </Pressable>
           </View>
           <Text style={styles.priceDiscount}>В пакете экономия 146 ₽</Text>
-          <Text style={styles.permanentLabel}>Закрепление вверху навсегда</Text>
+          <Text style={styles.permanentLabel}>Горячие предложения навсегда</Text>
           <View style={styles.priceRow}>
-            <Pressable onPress={() => openTestPayment("Закрепление объявления", "399 ₽")} style={styles.priceOption}>
-              <Text style={styles.priceTitle}>1 закрепление</Text>
+            <Pressable onPress={() => openTestPayment("Горячее предложение навсегда", "399 ₽")} style={styles.priceOption}>
+              <Text style={styles.priceTitle}>1 размещение</Text>
               <Text style={styles.priceValue}>399 ₽</Text>
               <Text style={styles.priceTerm}>пока объявление активно</Text>
             </Pressable>
-            <Pressable onPress={() => openTestPayment("Пакет из 5 закреплений", "1 599 ₽")} style={styles.priceOption}>
-              <Text style={styles.priceTitle}>5 закреплений</Text>
+            <Pressable onPress={() => openTestPayment("Пакет из 5 горячих размещений", "1 599 ₽")} style={styles.priceOption}>
+              <Text style={styles.priceTitle}>5 размещений</Text>
               <Text style={styles.priceValue}>1 599 ₽</Text>
               <Text style={styles.priceTerm}>319,80 ₽ за одно</Text>
             </Pressable>
@@ -1657,8 +1663,8 @@ export default function HomeScreen() {
         <View style={styles.premiumCard}>
           <Text style={styles.premiumTitle}>Подписка Плюс · 199 ₽ / месяц</Text>
           <Text style={styles.premiumItem}>◉ Ранний доступ к объявлениям — на 15 минут раньше</Text>
-          <Text style={styles.premiumItem}>◉ История изменения цены номера</Text>
-          <Text style={styles.premiumItem}>◉ До 30 сохранённых поисков и отслеживаний</Text>
+          <Text style={styles.premiumItem}>◉ График изменения цены номера</Text>
+          <Text style={styles.premiumItem}>◉ До 30 сохранённых поисков и избранных номеров</Text>
           <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Попробовать оплату в тестовом режиме</Text></Pressable>
         </View>
       </View>}
@@ -1850,7 +1856,7 @@ export default function HomeScreen() {
                 <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
                 <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate?.seller}</Text>
               </View>
-              <View style={styles.priceHistoryBlock}>
+              {hasPlusSubscription ? <View style={styles.priceHistoryBlock}>
                 <View style={styles.priceHistoryHeader}>
                   <Text style={styles.priceHistoryTitle}>Изменение цены</Text>
                   <Text style={styles.priceHistoryCaption}>{priceChart.points.length > 1 ? `${priceChart.points.length} знач.` : "Без изменений"}</Text>
@@ -1873,7 +1879,11 @@ export default function HomeScreen() {
                   <Text style={styles.priceHistoryEmptyDate}>Цена на {priceChart.points[0]?.date.split("-").reverse().join(".")}</Text>
                 </View>}
                 {priceChart.points.length === 1 && <Text style={styles.priceHistoryHint}>Цена пока не менялась. График появится после первого подтверждённого изменения.</Text>}
-              </View>
+              </View> : <View style={styles.priceHistoryLocked}>
+                <Text style={styles.priceHistoryTitle}>График изменения цены</Text>
+                <Text style={styles.priceHistoryHint}>Доступен с подпиской ЗаНомером Плюс. Она также увеличивает лимит сохранённых поисков и избранных номеров с 15 до 30.</Text>
+                <Pressable onPress={() => { setSelectedPlate(null); setActiveTab("subscriptions"); }} style={styles.priceHistoryUnlockButton}><Text style={styles.priceHistoryUnlockText}>Открыть Плюс</Text></Pressable>
+              </View>}
               {!!priceComparison && <View style={styles.priceComparisonCard}>
                 <View style={styles.priceComparisonHeader}>
                   <Text style={styles.priceComparisonTitle}>Сравнение цены</Text>
@@ -2029,7 +2039,7 @@ export default function HomeScreen() {
               <Text style={styles.paymentItem}>{testPayment?.title}</Text>
               <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
               <Text style={styles.paymentHint}>Это имитация платежа: карту вводить не нужно, деньги не списываются и услуга пока не активируется.</Text>
-              <Pressable onPress={() => setTestPaymentDone(true)} style={styles.paymentButton}><Text style={styles.paymentButtonText}>Подтвердить тест</Text></Pressable>
+              <Pressable onPress={() => { if (testPayment?.title.includes("Подписка")) setHasPlusSubscription(true); setTestPaymentDone(true); }} style={styles.paymentButton}><Text style={styles.paymentButtonText}>Подтвердить тест</Text></Pressable>
             </>}
           </Pressable>
         </Pressable>
@@ -2054,11 +2064,11 @@ export default function HomeScreen() {
                 <Text style={styles.legalText}>Объявление отображается в блоке «Горячие предложения» и получает визуальное выделение на 48 часов.</Text>
               </View>
               <View style={styles.legalCard}>
-                <Text style={styles.legalCardTitle}>Закрепление объявления — 399 ₽</Text>
-                <Text style={styles.legalText}>Объявление закрепляется выше в каталоге на срок, указанный при оформлении услуги.</Text>
+                <Text style={styles.legalCardTitle}>Горячее предложение навсегда — 399 ₽</Text>
+                <Text style={styles.legalText}>Объявление постоянно отображается в блоке «Горячие предложения», пока активно на площадке.</Text>
               </View>
               <Text style={styles.legalHeading}>Как получается услуга</Text>
-              <Text style={styles.legalText}>После успешной оплаты через ЮKassa услуга активируется автоматически в личном кабинете. Подписка и продвижение относятся только к работе сервиса и не являются оплатой самого номера.</Text>
+              <Text style={styles.legalText}>После успешной оплаты через ЮKassa услуга активируется автоматически в личном кабинете. Подписка открывает график изменения цены и увеличивает лимит сохранённых поисков и избранных номеров с 15 до 30. Подписка и продвижение относятся только к работе сервиса и не являются оплатой самого номера.</Text>
               <Text style={styles.legalHeading}>Условия использования и возврат</Text>
               <Text style={styles.legalText}>Перед оплатой пользователь видит название услуги, её стоимость и срок. Отменить подписку можно до следующего списания. Если платная услуга не была активирована по технической ошибке, обратитесь по телефону, указанному в реквизитах, в течение 14 дней — мы проверим обращение и при подтверждении ошибки вернём деньги тем же способом оплаты.</Text>
               <Text style={styles.legalText}>Оплата производится через ЮKassa. ЗаНомером не продаёт государственные номера и не является стороной сделки между продавцом и покупателем объявления.</Text>
@@ -2104,7 +2114,7 @@ export default function HomeScreen() {
         </View>)}
       </View>
       {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={styles.toast}>
-        <Text style={styles.toastText}>✓ Уведомления включены</Text>
+        <Text style={styles.toastText}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено"}</Text>
       </Pressable>}
     </SafeAreaView>
   );
@@ -2525,6 +2535,9 @@ const styles = StyleSheet.create({
   detailsCloseText: { color: "#475467", fontSize: 25, lineHeight: 29 },
   detailsBlock: { borderTopColor: "#EAECF0", borderTopWidth: 1, marginTop: 18, paddingTop: 15 },
   priceHistoryBlock: { backgroundColor: "#F7F6FF", borderColor: "#DDD8FF", borderRadius: 16, borderWidth: 1, marginTop: 18, padding: 14 },
+  priceHistoryLocked: { backgroundColor: "#F8F7FF", borderColor: "#DDD8FF", borderRadius: 16, borderStyle: "dashed", borderWidth: 1, marginTop: 18, padding: 14 },
+  priceHistoryUnlockButton: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#5143C2", borderRadius: 10, marginTop: 12, paddingHorizontal: 12, paddingVertical: 9 },
+  priceHistoryUnlockText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   priceHistoryHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   priceHistoryTitle: { color: "#352F67", fontSize: 15, fontWeight: "900" },
   priceHistoryCaption: { color: "#6B5ED5", fontSize: 11, fontWeight: "800" },
