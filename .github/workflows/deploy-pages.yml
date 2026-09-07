@@ -27,7 +27,9 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
-      - run: npx expo export --platform web
+      - run: |
+          rm -rf dist
+          npx expo export --platform web --clear
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
