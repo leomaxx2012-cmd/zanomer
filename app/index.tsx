@@ -113,6 +113,10 @@ function isRequisitesPage() {
   if (typeof window === "undefined" || !window.location) return false;
   return new URLSearchParams(window.location.search).get("page") === "requisites";
 }
+function isPaymentInfoPage() {
+  if (typeof window === "undefined" || !window.location) return false;
+  return new URLSearchParams(window.location.search).get("page") === "payment-info";
+}
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
 const latinPlateLetters: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
@@ -259,6 +263,7 @@ export default function HomeScreen() {
   const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
   const [testPaymentDone, setTestPaymentDone] = useState(false);
   const [requisitesOpen, setRequisitesOpen] = useState(isRequisitesPage);
+  const [paymentInfoOpen, setPaymentInfoOpen] = useState(isPaymentInfoPage);
 
   function openTestPayment(title: string, amount: string) {
     setTestPayment({ title, amount });
@@ -1283,6 +1288,9 @@ export default function HomeScreen() {
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
+          <Pressable onPress={() => setPaymentInfoOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Услуги и условия оплаты">
+            <Text style={styles.requisitesHeaderButtonText}>₽</Text>
+          </Pressable>
           <Pressable onPress={() => setRequisitesOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Реквизиты ИП">
             <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
           </Pressable>
@@ -2027,6 +2035,41 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
+      <Modal visible={paymentInfoOpen} transparent animationType="slide" onRequestClose={() => setPaymentInfoOpen(false)}>
+        <Pressable style={styles.detailsOverlay} onPress={() => setPaymentInfoOpen(false)}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={styles.legalPanel}>
+            <View style={styles.detailsHeader}>
+              <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Услуги и оплата</Text></View>
+              <Pressable onPress={() => setPaymentInfoOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
+            </View>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках.</Text>
+              <Text style={styles.legalHeading}>Платные услуги</Text>
+              <View style={styles.legalCard}>
+                <Text style={styles.legalCardTitle}>Подписка ЗаНомером Плюс — 199 ₽ в месяц</Text>
+                <Text style={styles.legalText}>Даёт расширенные возможности сервиса и уведомления о сохранённых поисках. Подписка действует 30 календарных дней с момента оплаты.</Text>
+              </View>
+              <View style={styles.legalCard}>
+                <Text style={styles.legalCardTitle}>Выделение объявления — 129 ₽</Text>
+                <Text style={styles.legalText}>Объявление отображается в блоке «Горячие предложения» и получает визуальное выделение на 48 часов.</Text>
+              </View>
+              <View style={styles.legalCard}>
+                <Text style={styles.legalCardTitle}>Закрепление объявления — 399 ₽</Text>
+                <Text style={styles.legalText}>Объявление закрепляется выше в каталоге на срок, указанный при оформлении услуги.</Text>
+              </View>
+              <Text style={styles.legalHeading}>Как получается услуга</Text>
+              <Text style={styles.legalText}>После успешной оплаты через ЮKassa услуга активируется автоматически в личном кабинете. Подписка и продвижение относятся только к работе сервиса и не являются оплатой самого номера.</Text>
+              <Text style={styles.legalHeading}>Условия использования и возврат</Text>
+              <Text style={styles.legalText}>Перед оплатой пользователь видит название услуги, её стоимость и срок. Отменить подписку можно до следующего списания. Если платная услуга не была активирована по технической ошибке, обратитесь по телефону, указанному в реквизитах, в течение 14 дней — мы проверим обращение и при подтверждении ошибки вернём деньги тем же способом оплаты.</Text>
+              <Text style={styles.legalText}>Оплата производится через ЮKassa. ЗаНомером не продаёт государственные номера и не является стороной сделки между продавцом и покупателем объявления.</Text>
+              <Pressable onPress={() => { setPaymentInfoOpen(false); setRequisitesOpen(true); }} style={styles.legalRequisitesButton}>
+                <Text style={styles.legalRequisitesButtonText}>Контакты и реквизиты ИП</Text>
+              </Pressable>
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <Modal visible={requisitesOpen} transparent animationType="fade" onRequestClose={() => setRequisitesOpen(false)}>
         <Pressable style={styles.detailsOverlay} onPress={() => setRequisitesOpen(false)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.requisitesPanel}>
@@ -2427,6 +2470,7 @@ const styles = StyleSheet.create({
   comingSoonButton: { alignItems: "center", backgroundColor: "#344054", borderRadius: 11, marginTop: 17, paddingVertical: 12 },
   comingSoonButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   paymentPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 470, padding: 22, width: "92%" },
+  legalPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "88%", maxWidth: 620, padding: 22, width: "92%" },
   paymentKicker: { color: "#7F56D9", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   paymentTitle: { color: "#101828", fontSize: 23, fontWeight: "900", marginTop: 3 },
   requisitesPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 540, padding: 22, width: "92%" },
@@ -2436,6 +2480,13 @@ const styles = StyleSheet.create({
   requisitesName: { color: "#24213E", fontSize: 15, fontWeight: "900", lineHeight: 21 },
   requisitesRow: { color: "#475467", fontSize: 14, fontWeight: "700", marginTop: 9 },
   requisitesPhone: { color: "#155EEF", fontSize: 15, fontWeight: "900", marginTop: 13, textDecorationLine: "underline" },
+  legalLead: { color: "#475467", fontSize: 14, lineHeight: 20, marginTop: 16 },
+  legalHeading: { color: "#24213E", fontSize: 17, fontWeight: "900", marginTop: 20 },
+  legalCard: { backgroundColor: "#F8F7FF", borderColor: "#E2DEF7", borderRadius: 14, borderWidth: 1, marginTop: 10, padding: 13 },
+  legalCardTitle: { color: "#352F67", fontSize: 14, fontWeight: "900", lineHeight: 20 },
+  legalText: { color: "#475467", fontSize: 13, lineHeight: 19, marginTop: 8 },
+  legalRequisitesButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 12, marginBottom: 3, marginTop: 20, paddingVertical: 12 },
+  legalRequisitesButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   paymentItem: { color: "#344054", fontSize: 15, fontWeight: "750", marginTop: 22 },
   paymentAmount: { color: "#155EEF", fontSize: 29, fontWeight: "900", marginTop: 7 },
   paymentHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 15 },
