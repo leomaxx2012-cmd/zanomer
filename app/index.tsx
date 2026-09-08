@@ -2398,7 +2398,9 @@ const styles = StyleSheet.create({
   cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
-  cardPlateDesktop: { flexBasis: "58%", flexGrow: 0, flexShrink: 0, height: 124, width: "58%" },
+  // ГОСТовый формат основного регистрационного знака: 520 × 112 мм (4,64:1).
+  // При ширине 58% в карточке высота 134 px сохраняет эту пропорцию.
+  cardPlateDesktop: { flexBasis: "58%", flexGrow: 0, flexShrink: 0, height: 134, width: "58%" },
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0, paddingHorizontal: 5 },
   cardPlateLetter: { color: "#111827", flex: 0.68, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 76 },
@@ -2517,7 +2519,8 @@ const styles = StyleSheet.create({
   detailsHeader: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
-  detailsPlatePreview: { backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 148, marginTop: 20, overflow: "hidden" },
+  // Ширина панели около 616 px: 133 px даёт ту же пропорцию 4,64:1.
+  detailsPlatePreview: { backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 133, marginTop: 20, overflow: "hidden" },
   detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0, paddingHorizontal: 8 },
   detailsPlateLetter: { color: "#111827", flex: 0.68, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, textAlign: "center" },
   detailsPlateDigits: { color: "#111827", flex: 1.55, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
