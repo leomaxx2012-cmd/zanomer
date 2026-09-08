@@ -1514,13 +1514,15 @@ export default function HomeScreen() {
         ))}
       </View>
       <View style={styles.plateSearch}>
-        <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.plateInputLeft]} autoCapitalize="characters" maxLength={1} />
-        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.plateInputDigits]} keyboardType="default" maxLength={3} />
-        <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.plateInputRight]} autoCapitalize="characters" maxLength={2} />
+        <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={1} />
+        <View style={styles.plateDivider} />
+        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={3} />
+        <View style={styles.plateDivider} />
+        <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
         <View style={styles.plateDivider} />
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text numberOfLines={1} style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder]}>{selectedRegionLabel}</Text>
-          <View style={styles.searchRegionMeta}><Text style={styles.rusLabel}>RUS</Text><View style={styles.searchPlateFlag} accessibilityLabel="Флаг России"><View style={styles.searchPlateFlagWhite} /><View style={styles.searchPlateFlagBlue} /><View style={styles.searchPlateFlagRed} /></View></View>
+          <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
       </View>
 
@@ -2228,11 +2230,8 @@ const styles = StyleSheet.create({
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
-  plateSearch: { alignItems: "center", aspectRatio: 4.55, backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 8, borderWidth: 3, flexDirection: "row", maxHeight: 96, minHeight: 74, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
-  plateInput: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 37, fontWeight: "700", height: "100%", letterSpacing: -1.2, minWidth: 0, textAlign: "center" },
-  plateInputLeft: { flex: 0.76 },
-  plateInputDigits: { flex: 1.42 },
-  plateInputRight: { flex: 1.04 },
+  plateSearch: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
+  plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", height: "100%", letterSpacing: 1, minWidth: 0, textAlign: "center" },
   plateDivider: { backgroundColor: "#252525", height: "100%", width: 2 },
   quickFiltersTitle: { color: "#344054", fontSize: 14, fontWeight: "900", marginTop: 16 },
   quickFilters: { flexDirection: "row", flexWrap: "wrap", gap: 9, paddingBottom: 3, paddingTop: 9, width: "100%" },
@@ -2243,15 +2242,10 @@ const styles = StyleSheet.create({
   quickFilterActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   quickFilterText: { color: "#5143C2", fontSize: 13, fontWeight: "800" },
   quickFilterTextActive: { color: "#FFFFFF" },
-  regionCodeBox: { alignItems: "center", flex: 0.72, height: "100%", justifyContent: "center", minWidth: 0 },
-  regionCodeInput: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 22, fontWeight: "700", letterSpacing: -0.6, maxWidth: "100%", textAlign: "center" },
+  regionCodeBox: { alignItems: "center", flex: 1, height: "100%", justifyContent: "center", minWidth: 0 },
+  regionCodeInput: { color: "#111827", fontSize: 18, fontWeight: "900", maxWidth: "100%", textAlign: "center" },
   regionCodePlaceholder: { color: "#667085" },
-  searchRegionMeta: { alignItems: "center", flexDirection: "row", gap: 3, marginTop: -3 },
-  rusLabel: { color: "#344054", fontSize: 8, fontWeight: "900", letterSpacing: 0.2 },
-  searchPlateFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.6, height: 8, overflow: "hidden", width: 14 },
-  searchPlateFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
-  searchPlateFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
-  searchPlateFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
+  rusLabel: { color: "#344054", fontSize: 10, fontWeight: "800", marginTop: -5 },
   advancedButton: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 13, paddingVertical: 5 },
   advancedButtonText: { color: "#155EEF", fontSize: 14, fontWeight: "700" },
   advancedChevron: { color: "#155EEF", fontSize: 22, fontWeight: "600" },
