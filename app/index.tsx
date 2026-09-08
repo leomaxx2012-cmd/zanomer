@@ -1729,9 +1729,9 @@ export default function HomeScreen() {
               <View style={styles.cardMainRow}>
                 <View style={[styles.cardPlate, windowWidth >= 1000 && styles.cardPlateDesktop]}>
                   <View style={[styles.cardPlateMain, windowWidth >= 1000 && styles.cardPlateMainDesktop]}>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetter, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateDigits, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetters, windowWidth >= 1000 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
+                    <Text style={[styles.cardPlateLetter, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
+                    <Text style={[styles.cardPlateDigits, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
+                    <Text style={[styles.cardPlateLetters, windowWidth >= 1000 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
                   </View>
                   <View style={[styles.cardPlateRegion, windowWidth >= 1000 && styles.cardPlateRegionDesktop]}>
                     <Text style={[styles.cardPlateRegionValue, windowWidth >= 1000 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
@@ -1839,9 +1839,9 @@ export default function HomeScreen() {
               </View>
               <View style={styles.detailsPlatePreview}>
                 <View style={styles.detailsPlateMain}>
-                  <Text adjustsFontSizeToFit minimumFontScale={0.6} style={styles.detailsPlateLetter}>{selectedPlate?.leftLetter}</Text>
-                  <Text adjustsFontSizeToFit minimumFontScale={0.6} style={styles.detailsPlateDigits}>{selectedPlate?.digits}</Text>
-                  <Text adjustsFontSizeToFit minimumFontScale={0.6} style={styles.detailsPlateLetters}>{selectedPlate?.rightLetters}</Text>
+                  <Text style={styles.detailsPlateLetter}>{selectedPlate?.leftLetter}</Text>
+                  <Text style={styles.detailsPlateDigits}>{selectedPlate?.digits}</Text>
+                  <Text style={styles.detailsPlateLetters}>{selectedPlate?.rightLetters}</Text>
                 </View>
                 <View style={styles.detailsPlateRegionBox}>
                   <Text style={styles.detailsPlateRegionValue}>{selectedPlate?.region.split(" · ")[1] ?? ""}</Text>
