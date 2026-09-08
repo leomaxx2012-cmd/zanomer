@@ -1735,8 +1735,7 @@ export default function HomeScreen() {
                   </View>
                   <View style={[styles.cardPlateRegion, windowWidth >= 700 && styles.cardPlateRegionDesktop]}>
                     <Text style={[styles.cardPlateRegionValue, windowWidth >= 700 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
-                    <Text style={styles.cardPlateRus}>RUS</Text>
-                    <View style={styles.cardFlag} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View>
+                    <View style={styles.cardPlateRegionMeta}><Text style={styles.cardPlateRus}>RUS</Text><View style={styles.cardFlag} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View></View>
                   </View>
                 </View>
                 <View style={styles.cardInfo}>
@@ -1846,8 +1845,7 @@ export default function HomeScreen() {
                 </View>
                 <View style={styles.detailsPlateRegionBox}>
                   <Text style={styles.detailsPlateRegionValue}>{selectedPlate?.region.split(" · ")[1] ?? ""}</Text>
-                  <Text style={styles.detailsPlateRus}>RUS</Text>
-                  <View style={styles.detailsPlateFlag} accessibilityLabel="Флаг России"><View style={styles.detailsPlateFlagWhite} /><View style={styles.detailsPlateFlagBlue} /><View style={styles.detailsPlateFlagRed} /></View>
+                  <View style={styles.detailsPlateRegionMeta}><Text style={styles.detailsPlateRus}>RUS</Text><View style={styles.detailsPlateFlag} accessibilityLabel="Флаг России"><View style={styles.detailsPlateFlagWhite} /><View style={styles.detailsPlateFlagBlue} /><View style={styles.detailsPlateFlagRed} /></View></View>
                 </View>
               </View>
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
@@ -2401,19 +2399,20 @@ const styles = StyleSheet.create({
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
   cardPlateDesktop: { flexBasis: "58%", flexGrow: 0, flexShrink: 0, height: 124, width: "58%" },
-  cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
-  cardPlateLetter: { color: "#111827", flex: 0.78, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
+  cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0, paddingHorizontal: 5 },
+  cardPlateLetter: { color: "#111827", flex: 0.68, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 76 },
-  cardPlateDigits: { color: "#111827", flex: 1.46, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 3, textAlign: "center" },
+  cardPlateDigits: { color: "#111827", flex: 1.55, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 3, textAlign: "center" },
   cardPlateDigitsDesktop: { fontSize: 76 },
-  cardPlateLetters: { color: "#111827", flex: 1.08, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 3, textAlign: "center" },
+  cardPlateLetters: { color: "#111827", flex: 1.05, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 3, textAlign: "center" },
   cardPlateLettersDesktop: { fontSize: 76 },
-  cardPlateRegion: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 1.5, justifyContent: "center", paddingHorizontal: 4, width: 52 },
-  cardPlateRegionDesktop: { width: 112 },
+  cardPlateRegion: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 1.5, justifyContent: "center", paddingHorizontal: 4, width: 56 },
+  cardPlateRegionDesktop: { width: 116 },
   cardPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 19, fontWeight: "700", letterSpacing: -0.6, lineHeight: 21 },
   cardPlateRegionValueDesktop: { fontSize: 36, lineHeight: 39 },
-  cardPlateRus: { color: "#344054", fontSize: 7, fontWeight: "900", letterSpacing: 0.2, marginTop: 2 },
-  cardFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 15, marginTop: 4, overflow: "hidden", width: 27 },
+  cardPlateRegionMeta: { alignItems: "center", flexDirection: "row", gap: 3, marginTop: 2 },
+  cardPlateRus: { color: "#111827", fontSize: 7, fontWeight: "900", letterSpacing: 0.1 },
+  cardFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 11, overflow: "hidden", width: 20 },
   cardFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
   cardFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
   cardFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
@@ -2519,14 +2518,15 @@ const styles = StyleSheet.create({
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
   detailsPlatePreview: { backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 148, marginTop: 20, overflow: "hidden" },
-  detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
-  detailsPlateLetter: { color: "#111827", flex: 0.78, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, textAlign: "center" },
-  detailsPlateDigits: { color: "#111827", flex: 1.46, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
-  detailsPlateLetters: { color: "#111827", flex: 1.08, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
-  detailsPlateRegionBox: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 8, width: 124 },
+  detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0, paddingHorizontal: 8 },
+  detailsPlateLetter: { color: "#111827", flex: 0.68, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, textAlign: "center" },
+  detailsPlateDigits: { color: "#111827", flex: 1.55, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
+  detailsPlateLetters: { color: "#111827", flex: 1.05, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
+  detailsPlateRegionBox: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 8, width: 128 },
   detailsPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 41, fontWeight: "700", letterSpacing: -1, lineHeight: 45 },
-  detailsPlateRus: { color: "#344054", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginTop: 2 },
-  detailsPlateFlag: { borderColor: "#98A2B3", borderRadius: 2, borderWidth: 0.7, height: 16, marginTop: 5, overflow: "hidden", width: 28 },
+  detailsPlateRegionMeta: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 2 },
+  detailsPlateRus: { color: "#111827", fontSize: 10, fontWeight: "900", letterSpacing: 0.3 },
+  detailsPlateFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 14, overflow: "hidden", width: 25 },
   detailsPlateFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
   detailsPlateFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
   detailsPlateFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
