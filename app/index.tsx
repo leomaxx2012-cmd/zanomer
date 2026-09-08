@@ -1727,14 +1727,14 @@ export default function HomeScreen() {
               </View>}
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
               <View style={styles.cardMainRow}>
-                <View style={[styles.cardPlate, windowWidth >= 700 && styles.cardPlateDesktop]}>
+                <View style={[styles.cardPlate, windowWidth >= 1000 && styles.cardPlateDesktop]}>
                   <View style={styles.cardPlateMain}>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetter, windowWidth >= 700 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateDigits, windowWidth >= 700 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
-                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetters, windowWidth >= 700 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetter, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateDigits, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
+                    <Text adjustsFontSizeToFit minimumFontScale={0.62} style={[styles.cardPlateLetters, windowWidth >= 1000 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
                   </View>
-                  <View style={[styles.cardPlateRegion, windowWidth >= 700 && styles.cardPlateRegionDesktop]}>
-                    <Text style={[styles.cardPlateRegionValue, windowWidth >= 700 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
+                  <View style={[styles.cardPlateRegion, windowWidth >= 1000 && styles.cardPlateRegionDesktop]}>
+                    <Text style={[styles.cardPlateRegionValue, windowWidth >= 1000 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
                     <View style={styles.cardPlateRegionMeta}><Text style={styles.cardPlateRus}>RUS</Text><View style={styles.cardFlag} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View></View>
                   </View>
                 </View>
@@ -2398,9 +2398,8 @@ const styles = StyleSheet.create({
   cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
-  // ГОСТовый формат основного регистрационного знака: 520 × 112 мм (4,64:1).
-  // При ширине 58% в карточке высота 134 px сохраняет эту пропорцию.
-  cardPlateDesktop: { flexBasis: "58%", flexGrow: 0, flexShrink: 0, height: 134, width: "58%" },
+  // На ПК показываем номер ровно в размере стандартной таблички: 520 × 112.
+  cardPlateDesktop: { flexBasis: 520, flexGrow: 0, flexShrink: 1, height: 112, maxWidth: "58%", width: 520 },
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0, paddingHorizontal: 5 },
   cardPlateLetter: { color: "#111827", flex: 0.68, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 76 },
@@ -2519,8 +2518,8 @@ const styles = StyleSheet.create({
   detailsHeader: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
-  // Ширина панели около 616 px: 133 px даёт ту же пропорцию 4,64:1.
-  detailsPlatePreview: { backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 133, marginTop: 20, overflow: "hidden" },
+  // В полном просмотре — тот же фактический размер 520 × 112.
+  detailsPlatePreview: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 112, marginTop: 20, maxWidth: "100%", overflow: "hidden", width: 520 },
   detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0, paddingHorizontal: 8 },
   detailsPlateLetter: { color: "#111827", flex: 0.68, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, textAlign: "center" },
   detailsPlateDigits: { color: "#111827", flex: 1.55, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
