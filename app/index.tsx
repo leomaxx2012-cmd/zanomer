@@ -1514,11 +1514,11 @@ export default function HomeScreen() {
         ))}
       </View>
       <View style={styles.plateSearch}>
-        <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={1} />
+        <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.plateInputLeft]} autoCapitalize="characters" maxLength={1} />
         <View style={styles.plateDivider} />
-        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={3} />
+        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.plateInputDigits]} keyboardType="default" maxLength={3} />
         <View style={styles.plateDivider} />
-        <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
+        <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.plateInputRight]} autoCapitalize="characters" maxLength={2} />
         <View style={styles.plateDivider} />
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text numberOfLines={1} style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder]}>{selectedRegionLabel}</Text>
@@ -2230,8 +2230,11 @@ const styles = StyleSheet.create({
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
-  plateSearch: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
-  plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", height: "100%", letterSpacing: 1, minWidth: 0, textAlign: "center" },
+  plateSearch: { alignItems: "center", aspectRatio: 4.55, backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 8, borderWidth: 3, flexDirection: "row", maxHeight: 96, minHeight: 74, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
+  plateInput: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 37, fontWeight: "700", height: "100%", letterSpacing: -1.2, minWidth: 0, textAlign: "center" },
+  plateInputLeft: { flex: 0.76 },
+  plateInputDigits: { flex: 1.42 },
+  plateInputRight: { flex: 1.04 },
   plateDivider: { backgroundColor: "#252525", height: "100%", width: 2 },
   quickFiltersTitle: { color: "#344054", fontSize: 14, fontWeight: "900", marginTop: 16 },
   quickFilters: { flexDirection: "row", flexWrap: "wrap", gap: 9, paddingBottom: 3, paddingTop: 9, width: "100%" },
@@ -2242,10 +2245,10 @@ const styles = StyleSheet.create({
   quickFilterActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   quickFilterText: { color: "#5143C2", fontSize: 13, fontWeight: "800" },
   quickFilterTextActive: { color: "#FFFFFF" },
-  regionCodeBox: { alignItems: "center", flex: 1, height: "100%", justifyContent: "center", minWidth: 0 },
-  regionCodeInput: { color: "#111827", fontSize: 18, fontWeight: "900", maxWidth: "100%", textAlign: "center" },
+  regionCodeBox: { alignItems: "center", flex: 0.72, height: "100%", justifyContent: "center", minWidth: 0 },
+  regionCodeInput: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 22, fontWeight: "700", letterSpacing: -0.6, maxWidth: "100%", textAlign: "center" },
   regionCodePlaceholder: { color: "#667085" },
-  rusLabel: { color: "#344054", fontSize: 10, fontWeight: "800", marginTop: -5 },
+  rusLabel: { color: "#344054", fontSize: 8, fontWeight: "900", letterSpacing: 0.2, marginTop: -4 },
   advancedButton: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 13, paddingVertical: 5 },
   advancedButtonText: { color: "#155EEF", fontSize: 14, fontWeight: "700" },
   advancedChevron: { color: "#155EEF", fontSize: 22, fontWeight: "600" },
@@ -2397,23 +2400,23 @@ const styles = StyleSheet.create({
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
   card: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", padding: 14, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
-  cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 9, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
+  cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
   cardPlateDesktop: { flexBasis: "58%", flexGrow: 0, flexShrink: 0, height: 124, width: "58%" },
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
-  cardPlateLetter: { color: "#111827", flex: 0.78, fontSize: 40, fontWeight: "900", textAlign: "center" },
+  cardPlateLetter: { color: "#111827", flex: 0.78, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 76 },
-  cardPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 1.5, borderRightColor: "#1D2939", borderRightWidth: 1.5, color: "#111827", flex: 1.46, fontSize: 40, fontWeight: "900", paddingHorizontal: 3, textAlign: "center" },
+  cardPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 1.5, borderRightColor: "#1D2939", borderRightWidth: 1.5, color: "#111827", flex: 1.46, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 3, textAlign: "center" },
   cardPlateDigitsDesktop: { fontSize: 76 },
-  cardPlateLetters: { color: "#111827", flex: 1.08, fontSize: 40, fontWeight: "900", paddingHorizontal: 3, textAlign: "center" },
+  cardPlateLetters: { color: "#111827", flex: 1.08, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 3, textAlign: "center" },
   cardPlateLettersDesktop: { fontSize: 76 },
   cardPlateRegion: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 1.5, justifyContent: "center", paddingHorizontal: 4, width: 52 },
   cardPlateRegionDesktop: { width: 112 },
-  cardPlateRegionValue: { color: "#111827", fontSize: 19, fontWeight: "900", lineHeight: 21 },
+  cardPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 19, fontWeight: "700", letterSpacing: -0.6, lineHeight: 21 },
   cardPlateRegionValueDesktop: { fontSize: 36, lineHeight: 39 },
-  cardPlateRus: { color: "#344054", fontSize: 8, fontWeight: "900", letterSpacing: 0.3, marginTop: 2 },
-  cardFlag: { borderColor: "#667085", borderRadius: 2, borderWidth: 0.7, height: 16, marginTop: 4, overflow: "hidden", width: 28 },
+  cardPlateRus: { color: "#344054", fontSize: 7, fontWeight: "900", letterSpacing: 0.2, marginTop: 2 },
+  cardFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 15, marginTop: 4, overflow: "hidden", width: 27 },
   cardFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
   cardFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
   cardFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
@@ -2518,13 +2521,13 @@ const styles = StyleSheet.create({
   detailsHeader: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
-  detailsPlatePreview: { backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 13, borderWidth: 3, flexDirection: "row", height: 148, marginTop: 20, overflow: "hidden" },
+  detailsPlatePreview: { backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 148, marginTop: 20, overflow: "hidden" },
   detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", minWidth: 0 },
-  detailsPlateLetter: { color: "#111827", flex: 0.78, fontSize: 82, fontWeight: "900", textAlign: "center" },
-  detailsPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 2, borderRightColor: "#1D2939", borderRightWidth: 2, color: "#111827", flex: 1.46, fontSize: 82, fontWeight: "900", paddingHorizontal: 4, textAlign: "center" },
-  detailsPlateLetters: { color: "#111827", flex: 1.08, fontSize: 82, fontWeight: "900", paddingHorizontal: 4, textAlign: "center" },
+  detailsPlateLetter: { color: "#111827", flex: 0.78, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, textAlign: "center" },
+  detailsPlateDigits: { borderLeftColor: "#1D2939", borderLeftWidth: 2, borderRightColor: "#1D2939", borderRightWidth: 2, color: "#111827", flex: 1.46, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
+  detailsPlateLetters: { color: "#111827", flex: 1.08, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 82, fontWeight: "700", letterSpacing: -2.2, paddingHorizontal: 4, textAlign: "center" },
   detailsPlateRegionBox: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 8, width: 124 },
-  detailsPlateRegionValue: { color: "#111827", fontSize: 41, fontWeight: "900", lineHeight: 45 },
+  detailsPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 41, fontWeight: "700", letterSpacing: -1, lineHeight: 45 },
   detailsPlateRus: { color: "#344054", fontSize: 10, fontWeight: "900", letterSpacing: 0.5, marginTop: 2 },
   detailsPlateFlag: { borderColor: "#98A2B3", borderRadius: 2, borderWidth: 0.7, height: 16, marginTop: 5, overflow: "hidden", width: 28 },
   detailsPlateFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
