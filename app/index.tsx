@@ -213,6 +213,7 @@ export default function HomeScreen() {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [freshOnly, setFreshOnly] = useState(false);
+  const [photosOnly, setPhotosOnly] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
@@ -248,6 +249,8 @@ export default function HomeScreen() {
   const [isModerator, setIsModerator] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
+  const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
+  const [editingPrice, setEditingPrice] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatDraft, setChatDraft] = useState("");
@@ -381,6 +384,7 @@ export default function HomeScreen() {
       createdAt: String(item.created_at).slice(0, 10),
       tag: item.status === "moderation" ? "На проверке" : item.status === "archived" ? "Снято с продажи" : "Активно",
       isSiteListing: true,
+      ownerId: item.owner_id,
       listingStatus: item.status,
     };
   }
@@ -390,7 +394,7 @@ export default function HomeScreen() {
     const client = supabase;
     const { data: own } = await client
       .from("auto_listings")
-      .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status")
       .eq("owner_id", userId)
       .order("created_at", { ascending: false });
     setMyListings((own ?? []).map((item) => mapManagedListing(item, ownerName)));
@@ -432,6 +436,30 @@ export default function HomeScreen() {
     setAuthMessage("Объявление отмечено проданным и скрыто из каталога.");
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
+  }
+
+  async function updateMyListingPrice(listing: Plate) {
+    if (!supabase || !currentUserId || listing.ownerId !== currentUserId) return;
+    const nextPrice = Number(editingPrice.replace(/[^0-9]/g, ""));
+    if (!Number.isInteger(nextPrice) || nextPrice < 1_000 || nextPrice > 50_000_000) {
+      setAuthMessage("Укажи цену от 1 000 до 50 000 000 ₽.");
+      return;
+    }
+    const { error } = await supabase
+      .from("auto_listings")
+      .update({ price_rub: nextPrice })
+      .eq("id", listing.id)
+      .eq("owner_id", currentUserId);
+    if (error) {
+      setAuthMessage("Не удалось изменить цену. Попробуй ещё раз.");
+      return;
+    }
+    setCatalog((items) => items.map((item) => item.id === listing.id ? { ...item, priceValue: nextPrice, price: `${nextPrice.toLocaleString("ru-RU")} ₽` } : item));
+    setSelectedPlate((item) => item?.id === listing.id ? { ...item, priceValue: nextPrice, price: `${nextPrice.toLocaleString("ru-RU")} ₽` } : item);
+    setEditingPriceId(null);
+    setEditingPrice("");
+    setAuthMessage("Цена объявления обновлена.");
+    await loadManagement(currentUserId, profileName);
   }
 
   async function reviewListing(listing: Plate, status: "active" | "archived") {
@@ -927,6 +955,7 @@ export default function HomeScreen() {
         const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
         const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plate.region.endsWith(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
+        const photoMatches = !photosOnly || Boolean(plate.photoUrl);
         const specialMatches = specialFilters.every((filter) => {
           if (filter === "sameDigits") return plate.digits[0] === plate.digits[1] && plate.digits[1] === plate.digits[2];
           if (filter === "sameLetters") return plate.leftLetter === plate.rightLetters[0] && plate.rightLetters[0] === plate.rightLetters[1];
@@ -937,7 +966,7 @@ export default function HomeScreen() {
         });
         const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
-        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && plate.vehicle === vehicle;
+        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && photoMatches && specialMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const sameRegionCode = (first: Plate, second: Plate) => first.region.split(" · ")[1]?.trim() === second.region.split(" · ")[1]?.trim();
@@ -1038,7 +1067,7 @@ export default function HomeScreen() {
   const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
   const selectedRegionLabel = selectedRegionCodes.length === 0 ? "77" : selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : `${selectedRegionCodes[0]}+${selectedRegionCodes.length - 1}`;
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${selectedRegionCodes.length ? ` · ${selectedRegionCodes.join(", ")}` : ""}`;
-  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || specialFilters.length);
+  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || photosOnly || specialFilters.length);
 
   function toggleSaved(id: string) {
     setSaved((current) => {
@@ -1361,8 +1390,17 @@ export default function HomeScreen() {
                 <Text style={styles.managementTitle}>Мои объявления</Text>
                 <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>0</Text><Text style={styles.statLabel}>сообщений</Text></View></View>
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
-                  <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text></View>
-                  {listing.listingStatus !== "archived" && <Pressable onPress={() => archiveMyListing(listing)} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>}
+                  <View style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text></View>
+                  {listing.listingStatus !== "archived" && <View style={styles.managementActions}>
+                    {editingPriceId === listing.id ? <>
+                      <TextInput value={editingPrice} onChangeText={setEditingPrice} keyboardType="numeric" placeholder="Цена, ₽" placeholderTextColor="#98A2B3" style={styles.managementPriceInput} />
+                      <Pressable onPress={() => { void updateMyListingPrice(listing); }} style={styles.savePriceButton}><Text style={styles.savePriceButtonText}>Сохранить</Text></Pressable>
+                      <Pressable onPress={() => { setEditingPriceId(null); setEditingPrice(""); }} style={styles.cancelPriceButton}><Text style={styles.cancelPriceButtonText}>Отмена</Text></Pressable>
+                    </> : <>
+                      <Pressable onPress={() => { setEditingPriceId(listing.id); setEditingPrice(String(listing.priceValue)); }} style={styles.editPriceButton}><Text style={styles.editPriceButtonText}>Изменить цену</Text></Pressable>
+                      <Pressable onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
+                    </>}
+                  </View>}
                 </View>)}
                 {isModerator && <>
                   <View style={styles.analyticsPanel}>
@@ -1498,6 +1536,7 @@ export default function HomeScreen() {
           <Text style={styles.filterControlTitle}>Время и порядок</Text>
           <View style={styles.listFilters}>
             <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
+            <Pressable onPress={() => setPhotosOnly((value) => !value)} style={[styles.listFilterButton, photosOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, photosOnly && styles.listFilterButtonTextActive]}>▣ С фото</Text></Pressable>
             {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort((current) => current === value ? "date" : value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
           </View>
         </View>
@@ -2189,6 +2228,8 @@ const styles = StyleSheet.create({
   reportReviewText: { flex: 1, paddingRight: 8 },
   managementHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 6 },
   managementCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#E4E0F3", borderRadius: 11, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 8, padding: 10 },
+  managementListingInfo: { flex: 1, paddingRight: 8 },
+  managementActions: { alignItems: "flex-end", gap: 5 },
   managementPlate: { color: "#24213E", fontSize: 14, fontWeight: "900" },
   managementMeta: { color: "#716A88", fontSize: 11, marginTop: 2 },
   statsRow: { flexDirection: "row", gap: 7, marginVertical: 10 },
@@ -2212,6 +2253,13 @@ const styles = StyleSheet.create({
   analyticsVehiclePill: { backgroundColor: "#FFFFFF", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6 },
   analyticsVehicleText: { color: "#475467", fontSize: 10, fontWeight: "800" },
   managementStatus: { color: "#5143C2", fontSize: 11, fontWeight: "800", marginTop: 4 },
+  managementPriceInput: { backgroundColor: "#FFFFFF", borderColor: "#C9C2EE", borderRadius: 8, borderWidth: 1, color: "#24213E", fontSize: 12, fontWeight: "800", minWidth: 112, paddingHorizontal: 8, paddingVertical: 7, textAlign: "right" },
+  editPriceButton: { backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
+  editPriceButtonText: { color: "#175CD3", fontSize: 11, fontWeight: "900" },
+  savePriceButton: { backgroundColor: "#E8F8F0", borderColor: "#A9E7C6", borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
+  savePriceButtonText: { color: "#18794E", fontSize: 11, fontWeight: "900" },
+  cancelPriceButton: { paddingHorizontal: 8, paddingVertical: 4 },
+  cancelPriceButtonText: { color: "#716A88", fontSize: 10, fontWeight: "800" },
   archiveButton: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6", borderRadius: 8, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 7 },
   archiveButtonText: { color: "#C01048", fontSize: 11, fontWeight: "900" },
   reviewActions: { flexDirection: "row", flexWrap: "wrap", gap: 5 },
