@@ -83,6 +83,15 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
+function TrailerIcon({ active = false }: { active?: boolean }) {
+  return <View accessibilityLabel="Прицеп" style={[styles.trailerIcon, active && styles.trailerIconActive]}>
+    <View style={styles.trailerBody} />
+    <View style={styles.trailerHitch} />
+    <View style={[styles.trailerWheel, styles.trailerWheelLeft]} />
+    <View style={[styles.trailerWheel, styles.trailerWheelRight]} />
+  </View>;
+}
+
 function getSiteVisitorKey() {
   // React Native тоже может объявлять window, но localStorage там нет.
   // В приложении используем временный ключ, а постоянный — только на сайте.
@@ -1505,10 +1514,10 @@ export default function HomeScreen() {
         {([
           ["car", "🚗", "Авто"],
           ["motorcycle", "🏍️", "Мото"],
-          ["truck", "🚛", "Прицеп"],
+          ["truck", "", "Прицеп"],
         ] as const).map(([type, icon, label]) => (
           <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
-            <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
+            {type === "truck" ? <TrailerIcon active={vehicle === "truck"} /> : <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>}
             <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
@@ -2229,6 +2238,13 @@ const styles = StyleSheet.create({
   vehicleTabActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   vehicleIcon: { fontSize: 18 },
   vehicleIconCompact: { fontSize: 16 },
+  trailerIcon: { height: 18, marginRight: 2, position: "relative", width: 27 },
+  trailerIconActive: { opacity: 1 },
+  trailerBody: { backgroundColor: "#667085", borderRadius: 2, height: 10, left: 4, position: "absolute", top: 1, width: 19 },
+  trailerHitch: { backgroundColor: "#667085", height: 2, left: 0, position: "absolute", top: 7, width: 5 },
+  trailerWheel: { backgroundColor: "#344054", borderRadius: 99, bottom: 1, height: 5, position: "absolute", width: 5 },
+  trailerWheelLeft: { left: 7 },
+  trailerWheelRight: { right: 3 },
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
