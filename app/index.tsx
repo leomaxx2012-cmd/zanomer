@@ -213,7 +213,6 @@ export default function HomeScreen() {
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [freshOnly, setFreshOnly] = useState(false);
-  const [photosOnly, setPhotosOnly] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
@@ -955,7 +954,6 @@ export default function HomeScreen() {
         const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
         const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plate.region.endsWith(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
-        const photoMatches = !photosOnly || Boolean(plate.photoUrl);
         const specialMatches = specialFilters.every((filter) => {
           if (filter === "sameDigits") return plate.digits[0] === plate.digits[1] && plate.digits[1] === plate.digits[2];
           if (filter === "sameLetters") return plate.leftLetter === plate.rightLetters[0] && plate.rightLetters[0] === plate.rightLetters[1];
@@ -966,7 +964,7 @@ export default function HomeScreen() {
         });
         const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
-        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && photoMatches && specialMatches && plate.vehicle === vehicle;
+        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const sameRegionCode = (first: Plate, second: Plate) => first.region.split(" · ")[1]?.trim() === second.region.split(" · ")[1]?.trim();
@@ -1067,7 +1065,7 @@ export default function HomeScreen() {
   const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
   const selectedRegionLabel = selectedRegionCodes.length === 0 ? "77" : selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : `${selectedRegionCodes[0]}+${selectedRegionCodes.length - 1}`;
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${selectedRegionCodes.length ? ` · ${selectedRegionCodes.join(", ")}` : ""}`;
-  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || photosOnly || specialFilters.length);
+  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || specialFilters.length);
 
   function toggleSaved(id: string) {
     setSaved((current) => {
@@ -1536,7 +1534,6 @@ export default function HomeScreen() {
           <Text style={styles.filterControlTitle}>Время и порядок</Text>
           <View style={styles.listFilters}>
             <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
-            <Pressable onPress={() => setPhotosOnly((value) => !value)} style={[styles.listFilterButton, photosOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, photosOnly && styles.listFilterButtonTextActive]}>▣ С фото</Text></Pressable>
             {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort((current) => current === value ? "date" : value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
           </View>
         </View>
