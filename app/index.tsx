@@ -1737,6 +1737,8 @@ export default function HomeScreen() {
                     <Text style={[styles.cardPlateRegionValue, windowWidth >= 1000 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
                     <View style={[styles.cardPlateRegionMeta, windowWidth >= 1000 && styles.cardPlateRegionMetaDesktop]}><Text style={[styles.cardPlateRus, windowWidth >= 1000 && styles.cardPlateRusDesktop]}>RUS</Text><View style={[styles.cardFlag, windowWidth >= 1000 && styles.cardFlagDesktop]} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View></View>
                   </View>
+                  <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltLeft]} />
+                  <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltRight]} />
                 </View>
                 <View style={styles.cardInfo}>
                   <View style={styles.cardTopRow}>
@@ -1847,6 +1849,8 @@ export default function HomeScreen() {
                   <Text style={styles.detailsPlateRegionValue}>{selectedPlate?.region.split(" · ")[1] ?? ""}</Text>
                   <View style={styles.detailsPlateRegionMeta}><Text style={styles.detailsPlateRus}>RUS</Text><View style={styles.detailsPlateFlag} accessibilityLabel="Флаг России"><View style={styles.detailsPlateFlagWhite} /><View style={styles.detailsPlateFlagBlue} /><View style={styles.detailsPlateFlagRed} /></View></View>
                 </View>
+                <View pointerEvents="none" style={[styles.detailsPlateBolt, styles.detailsPlateBoltLeft]} />
+                <View pointerEvents="none" style={[styles.detailsPlateBolt, styles.detailsPlateBoltRight]} />
               </View>
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
               <View style={styles.detailsBlock}>
@@ -2395,7 +2399,7 @@ const styles = StyleSheet.create({
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
   card: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", padding: 14, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
-  cardPlate: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden" },
+  cardPlate: { alignItems: "stretch", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden", position: "relative" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
   // Стандартный российский знак: 520 × 112 мм, пропорция 4,64:1.
@@ -2403,13 +2407,13 @@ const styles = StyleSheet.create({
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", gap: 8, justifyContent: "center", minWidth: 0, paddingHorizontal: 5 },
   // На десктопе позиции повторяют разметку реального знака: 15%, 45% и 82% ширины основной зоны.
   cardPlateMainDesktop: { gap: 0, justifyContent: "flex-start", paddingHorizontal: 0, position: "relative" },
-  cardPlateLetter: { color: "#111827", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
+  cardPlateLetter: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
   cardPlateLetterDesktop: { fontSize: 71, left: "4%", position: "absolute", top: 11, width: "18%" },
-  cardPlateDigits: { color: "#111827", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 44, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 0, textAlign: "center" },
+  cardPlateDigits: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 44, fontWeight: "700", letterSpacing: -1.8, paddingHorizontal: 0, textAlign: "center" },
   cardPlateDigitsDesktop: { fontSize: 99, left: "18%", position: "absolute", top: -3, width: "42%" },
-  cardPlateLetters: { color: "#111827", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, paddingHorizontal: 0, textAlign: "center" },
+  cardPlateLetters: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.8, paddingHorizontal: 0, textAlign: "center" },
   cardPlateLettersDesktop: { fontSize: 71, left: "52%", position: "absolute", top: 11, width: "35%" },
-  cardPlateRegion: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 1.5, justifyContent: "center", paddingHorizontal: 4, width: 56 },
+  cardPlateRegion: { alignItems: "center", borderLeftColor: "#131B2A", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 4, width: 56 },
   cardPlateRegionDesktop: { width: 120 },
   cardPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 19, fontWeight: "700", letterSpacing: -0.6, lineHeight: 21 },
   cardPlateRegionValueDesktop: { fontSize: 54, lineHeight: 57 },
@@ -2422,6 +2426,9 @@ const styles = StyleSheet.create({
   cardFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
   cardFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
   cardFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
+  cardPlateBolt: { backgroundColor: "#1B2430", borderColor: "#86909C", borderRadius: 99, borderWidth: 0.5, height: 5, position: "absolute", top: "50%", width: 5, zIndex: 3 },
+  cardPlateBoltLeft: { left: 8, marginTop: -2.5 },
+  cardPlateBoltRight: { marginTop: -2.5, right: 8 },
   cardInfo: { flex: 1, minWidth: 0 },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
@@ -2524,12 +2531,12 @@ const styles = StyleSheet.create({
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
   // В полном просмотре — тот же размер стандартного знака 520 × 112.
-  detailsPlatePreview: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#1D2939", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 112, marginTop: 20, maxWidth: "100%", overflow: "hidden", width: 520 },
+  detailsPlatePreview: { alignSelf: "center", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 112, marginTop: 20, maxWidth: "100%", overflow: "hidden", position: "relative", width: 520 },
   detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", justifyContent: "flex-start", minWidth: 0, paddingHorizontal: 0, position: "relative" },
-  detailsPlateLetter: { color: "#111827", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 71, fontWeight: "700", left: "4%", letterSpacing: -2.2, position: "absolute", textAlign: "center", top: 10, width: "18%" },
-  detailsPlateDigits: { color: "#111827", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 101, fontWeight: "700", left: "18%", letterSpacing: -2.2, paddingHorizontal: 0, position: "absolute", textAlign: "center", top: -5, width: "42%" },
-  detailsPlateLetters: { color: "#111827", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 71, fontWeight: "700", left: "52%", letterSpacing: -2.2, paddingHorizontal: 0, position: "absolute", textAlign: "center", top: 10, width: "35%" },
-  detailsPlateRegionBox: { alignItems: "center", borderLeftColor: "#1D2939", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 8, width: 120 },
+  detailsPlateLetter: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 71, fontWeight: "700", left: "4%", letterSpacing: -2.2, position: "absolute", textAlign: "center", top: 10, width: "18%" },
+  detailsPlateDigits: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 101, fontWeight: "700", left: "18%", letterSpacing: -2.8, paddingHorizontal: 0, position: "absolute", textAlign: "center", top: -5, width: "42%" },
+  detailsPlateLetters: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 71, fontWeight: "700", left: "52%", letterSpacing: -2.8, paddingHorizontal: 0, position: "absolute", textAlign: "center", top: 10, width: "35%" },
+  detailsPlateRegionBox: { alignItems: "center", borderLeftColor: "#131B2A", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 8, width: 120 },
   detailsPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 54, fontWeight: "700", letterSpacing: -1, lineHeight: 57 },
   detailsPlateRegionMeta: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 2 },
   detailsPlateRus: { color: "#111827", fontSize: 12, fontWeight: "900", letterSpacing: 0.3 },
@@ -2537,6 +2544,9 @@ const styles = StyleSheet.create({
   detailsPlateFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
   detailsPlateFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
   detailsPlateFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
+  detailsPlateBolt: { backgroundColor: "#1B2430", borderColor: "#86909C", borderRadius: 99, borderWidth: 0.5, height: 6, position: "absolute", top: "50%", width: 6, zIndex: 3 },
+  detailsPlateBoltLeft: { left: 9, marginTop: -3 },
+  detailsPlateBoltRight: { marginTop: -3, right: 9 },
   detailsPhoto: { borderRadius: 14, height: 230, marginTop: 14, width: "100%" },
   detailsClose: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
   detailsCloseText: { color: "#475467", fontSize: 25, lineHeight: 29 },
