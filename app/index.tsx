@@ -68,7 +68,7 @@ type SavedSearch = {
   priceLimit: number | null;
 };
 
-type SpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror" | "series";
+type SpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror" | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
 
@@ -78,7 +78,9 @@ const specialFilterLabels: Record<SpecialFilter, string> = {
   firstTen: "Первая десятка",
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
-  series: "Похожие номера",
+  similarDigits: "Похожие цифры",
+  similarLetters: "Похожие буквы",
+  similarRegion: "Похожий регион",
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -297,6 +299,16 @@ export default function HomeScreen() {
     setPlatePicker(null);
     setRegionPickerGroup(null);
     setCatalogDisplayLimit(40);
+  }
+
+  function toggleSpecialFilter(filter: SpecialFilter) {
+    const similarFilters: SpecialFilter[] = ["similarDigits", "similarLetters", "similarRegion"];
+    setSpecialFilters((current) => {
+      if (!similarFilters.includes(filter)) return current.includes(filter) ? current.filter((item) => item !== filter) : [...current, filter];
+      return current.includes(filter)
+        ? current.filter((item) => item !== filter)
+        : [...current.filter((item) => !similarFilters.includes(item)), filter];
+    });
   }
 
   useEffect(() => {
@@ -960,7 +972,10 @@ export default function HomeScreen() {
           if (filter === "firstTen") return Number(plate.digits) >= 1 && Number(plate.digits) <= 10;
           if (filter === "roundHundred") return plate.digits.endsWith("00");
           if (filter === "mirror") return plate.digits === plate.digits.split("").reverse().join("");
-          return seriesListingIds.has(plate.id);
+          const sameRegionCode = (candidate: Plate) => candidate.region.split(" · ")[1]?.trim() === plate.region.split(" · ")[1]?.trim();
+          if (filter === "similarDigits") return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && candidate.digits === plate.digits);
+          if (filter === "similarLetters") return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && candidate.leftLetter === plate.leftLetter && candidate.rightLetters === plate.rightLetters);
+          return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && sameRegionCode(candidate));
         });
         const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
@@ -1518,7 +1533,7 @@ export default function HomeScreen() {
             </Pressable>
             {(Object.keys(specialFilterLabels) as SpecialFilter[]).map((filter) => {
               const active = specialFilters.includes(filter);
-              return <Pressable key={filter} onPress={() => setSpecialFilters((current) => active ? current.filter((item) => item !== filter) : [...current, filter])} style={[styles.quickFilter, active && styles.quickFilterActive]}>
+              return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}>
                 <Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text>
               </Pressable>;
             })}
@@ -1734,7 +1749,7 @@ export default function HomeScreen() {
           </Pressable>
           {(Object.keys(specialFilterLabels) as SpecialFilter[]).map((filter) => {
             const active = specialFilters.includes(filter);
-            return <Pressable key={filter} onPress={() => setSpecialFilters((current) => active ? current.filter((item) => item !== filter) : [...current, filter])} style={[styles.quickFilter, active && styles.quickFilterActive]}><Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text></Pressable>;
+            return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}><Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text></Pressable>;
           })}
           {[[100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit((current) => current === limit ? null : limit as number)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}
         </View>
