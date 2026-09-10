@@ -1339,7 +1339,7 @@ export default function HomeScreen() {
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={styles.headerBrand}>
           <View style={styles.headerBrandRow}>
-            <Image source={require("../assets/zanomer-plate-avatar.png")} style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
+            <Image source={require("../assets/zanomer-plate-avatar-readable.png")} style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
             <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.brand, compactLayout && styles.brandCompact]}>ЗаНомером</Text>
           </View>
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
