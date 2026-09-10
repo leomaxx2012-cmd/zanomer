@@ -68,19 +68,17 @@ type SavedSearch = {
   priceLimit: number | null;
 };
 
-type SpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror" | "similarDigits" | "similarLetters" | "similarRegion";
+type GeneralSpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror";
+type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
 
-const specialFilterLabels: Record<SpecialFilter, string> = {
+const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
   sameDigits: "Одинаковые цифры",
   sameLetters: "Одинаковые буквы",
   firstTen: "Первая десятка",
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
-  similarDigits: "Похожие цифры",
-  similarLetters: "Похожие буквы",
-  similarRegion: "Похожий регион",
 };
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
@@ -216,6 +214,7 @@ export default function HomeScreen() {
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [freshOnly, setFreshOnly] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [similarFiltersOpen, setSimilarFiltersOpen] = useState(false);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -296,6 +295,7 @@ export default function HomeScreen() {
     setFreshOnly(false);
     setSort("date");
     setSimilarToId(null);
+    setSimilarFiltersOpen(false);
     setPlatePicker(null);
     setRegionPickerGroup(null);
     setCatalogDisplayLimit(40);
@@ -1531,10 +1531,23 @@ export default function HomeScreen() {
               <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}{region !== "Все" || regionCode ? "  ×" : ""}</Text>
               {region === "Все" && !regionCode && <Text style={styles.quickSelectChevron}>⌄</Text>}
             </Pressable>
-            {(Object.keys(specialFilterLabels) as SpecialFilter[]).map((filter) => {
+            {(Object.keys(specialFilterLabels) as GeneralSpecialFilter[]).map((filter) => {
               const active = specialFilters.includes(filter);
               return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}>
                 <Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text>
+              </Pressable>;
+            })}
+            <Pressable onPress={() => setSimilarFiltersOpen((value) => !value)} style={[styles.quickFilter, similarFiltersOpen && styles.quickFilterActive]}>
+              <Text style={[styles.quickFilterText, similarFiltersOpen && styles.quickFilterTextActive]}>{similarFiltersOpen ? "✓ " : ""}Похожие номера</Text>
+            </Pressable>
+            {similarFiltersOpen && ([
+              ["similarDigits", "Одинаковые цифры"],
+              ["similarLetters", "Одинаковые буквы"],
+              ["similarRegion", "Одинаковый регион"],
+            ] as [SpecialFilter, string][]).map(([filter, label]) => {
+              const active = specialFilters.includes(filter);
+              return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}>
+                <Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{label}</Text>
               </Pressable>;
             })}
           </View>
@@ -1747,9 +1760,20 @@ export default function HomeScreen() {
           <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.quickSelect}>
             <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}</Text><Text style={styles.quickSelectChevron}>⌄</Text>
           </Pressable>
-          {(Object.keys(specialFilterLabels) as SpecialFilter[]).map((filter) => {
+          {(Object.keys(specialFilterLabels) as GeneralSpecialFilter[]).map((filter) => {
             const active = specialFilters.includes(filter);
             return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}><Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text></Pressable>;
+          })}
+          <Pressable onPress={() => setSimilarFiltersOpen((value) => !value)} style={[styles.quickFilter, similarFiltersOpen && styles.quickFilterActive]}>
+            <Text style={[styles.quickFilterText, similarFiltersOpen && styles.quickFilterTextActive]}>{similarFiltersOpen ? "✓ " : ""}Похожие номера</Text>
+          </Pressable>
+          {similarFiltersOpen && ([
+            ["similarDigits", "Одинаковые цифры"],
+            ["similarLetters", "Одинаковые буквы"],
+            ["similarRegion", "Одинаковый регион"],
+          ] as [SpecialFilter, string][]).map(([filter, label]) => {
+            const active = specialFilters.includes(filter);
+            return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}><Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{label}</Text></Pressable>;
           })}
           {[[100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit((current) => current === limit ? null : limit as number)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}
         </View>
@@ -1864,9 +1888,9 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.similarityHint}>Выбери, что должно совпадать с номером {similarityPickerPlate?.value}.</Text>
             {([
-              ["digits", "Похожие цифры", `Такие же цифры: ${similarityPickerPlate?.digits ?? ""}`],
-              ["letters", "Похожие буквы", `Такие же буквы: ${similarityPickerPlate?.leftLetter ?? ""}${similarityPickerPlate?.rightLetters ?? ""}`],
-              ["region", "Похожий регион", `Такой же код региона: ${similarityPickerPlate?.region.split(" · ")[1] ?? ""}`],
+              ["digits", "Одинаковые цифры", `Такие же цифры: ${similarityPickerPlate?.digits ?? ""}`],
+              ["letters", "Одинаковые буквы", `Такие же буквы: ${similarityPickerPlate?.leftLetter ?? ""}${similarityPickerPlate?.rightLetters ?? ""}`],
+              ["region", "Одинаковый регион", `Такой же код региона: ${similarityPickerPlate?.region.split(" · ")[1] ?? ""}`],
             ] as [SimilarityFilter, string, string][]).map(([kind, title, hint]) => <Pressable key={kind} onPress={() => { setSimilarityFilter(kind); setSimilarToId(similarityPickerPlate.id); setSimilarityPickerPlate(null); }} style={styles.similarityOption}>
               <Text style={styles.similarityOptionTitle}>{title}</Text><Text style={styles.similarityOptionHint}>{hint}</Text>
             </Pressable>)}
