@@ -184,6 +184,7 @@ const initialPlates: Plate[] = [
 export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const compactLayout = windowWidth < 430;
+  const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -1479,7 +1480,7 @@ export default function HomeScreen() {
       )}
 
       {activeTab === "buy" && catalogOnly && <View style={styles.catalogOnlyToolbar}>
-        <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(40); catalogScrollRef.current?.scrollTo({ y: 0, animated: true }); }} style={styles.catalogOnlyBack}>
+        <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(40); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); }} style={styles.catalogOnlyBack}>
           <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
         </Pressable>
         <Text style={styles.catalogOnlyTitle}>Все объявления</Text>
@@ -2181,7 +2182,7 @@ export default function HomeScreen() {
           ["favorites", "♡", "Избранное, сохранённое и лайки", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
-          <Pressable onPress={() => { setActiveTab(tab); if (tab === "buy") setCatalogOnly(false); }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
+          <Pressable onPress={() => { setActiveTab(tab); if (tab === "buy") { setCatalogOnly(false); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); } }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
             <Text style={[styles.navIcon, { color }]}>{icon}</Text>
             <Text numberOfLines={2} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout && tab === "favorites" ? "Сохранённое и лайки" : label}</Text>
           </Pressable>
