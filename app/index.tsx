@@ -1587,6 +1587,9 @@ export default function HomeScreen() {
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
       </View>
+      <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
+        <Text style={styles.searchResetButtonText}>↺ Сбросить поиск и фильтры</Text>
+      </Pressable>
 
       {platePicker && <View style={[styles.platePickerPanel, platePicker === "region" && styles.regionPickerPanel, platePicker === "region" && windowWidth >= 1600 && styles.regionPickerPanelDesktop]}>
         <View style={styles.platePickerTopRow}>
@@ -2338,6 +2341,8 @@ const styles = StyleSheet.create({
   advancedButtonText: { color: "#155EEF", fontSize: 14, fontWeight: "700" },
   advancedChevron: { color: "#155EEF", fontSize: 22, fontWeight: "600" },
   searchActions: { flexDirection: "row", gap: 9, marginTop: 12 },
+  searchResetButton: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#5143C2", borderRadius: 14, borderWidth: 2, justifyContent: "center", marginTop: 12, minHeight: 48, paddingHorizontal: 18, paddingVertical: 12 },
+  searchResetButtonText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
   saveSearchButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, flex: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: 12, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.26, shadowRadius: 9 },
   saveSearchText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   savedSearchesButton: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 11, justifyContent: "center", minHeight: 42, paddingHorizontal: 11 },
