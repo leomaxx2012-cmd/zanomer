@@ -2479,7 +2479,7 @@ const styles = StyleSheet.create({
   cardPlateRegionDesktop: { justifyContent: "flex-start", paddingTop: 0, position: "relative", width: 120 },
   cardPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 19, fontWeight: "700", letterSpacing: -0.6, lineHeight: 21 },
   // Код региона равен по кеглю буквам и начинается на высоте верхнего края цифр.
-  cardPlateRegionValueDesktop: { fontSize: 71, lineHeight: 74, position: "absolute", top: -3 },
+  cardPlateRegionValueDesktop: { fontSize: 71, lineHeight: 74, position: "absolute", top: -11 },
   cardPlateRegionMeta: { alignItems: "center", flexDirection: "row", gap: 3, marginTop: 2 },
   cardPlateRus: { color: "#111827", fontSize: 7, fontWeight: "900", letterSpacing: 0.1 },
   cardFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 11, overflow: "hidden", width: 20 },
