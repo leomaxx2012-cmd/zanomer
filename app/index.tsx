@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   Image,
   Linking,
   Modal,
@@ -727,8 +728,13 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
+    let loadingCatalog = false;
 
     async function loadCatalog() {
+      // Не создаём параллельные запросы при возврате приложения на экран
+      // и при плановом обновлении в ту же секунду.
+      if (loadingCatalog) return;
+      loadingCatalog = true;
       setCatalogLoading(true);
       setCatalogLoadError("");
       // Supabase возвращает не более 1 000 строк за запрос. Две соседние
@@ -850,10 +856,21 @@ export default function HomeScreen() {
         setCatalogLoadError("Не удалось обновить каталог. Проверь интернет или VPN и перезапусти приложение.");
       } finally {
         setCatalogLoading(false);
+        loadingCatalog = false;
       }
     }
 
     void loadCatalog();
+    // После сворачивания приложение могло пропустить новые объявления.
+    // При возврате на экран и во время работы обновляем каталог автоматически.
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void loadCatalog();
+    });
+    const refreshTimer = setInterval(() => void loadCatalog(), 60_000);
+    return () => {
+      appStateSubscription.remove();
+      clearInterval(refreshTimer);
+    };
   }, []);
 
   useEffect(() => {
