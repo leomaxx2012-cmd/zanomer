@@ -300,13 +300,7 @@ export default function HomeScreen() {
   }
 
   function toggleSpecialFilter(filter: SpecialFilter) {
-    const similarFilters: SpecialFilter[] = ["similarDigits", "similarLetters", "similarRegion"];
-    setSpecialFilters((current) => {
-      if (!similarFilters.includes(filter)) return current.includes(filter) ? current.filter((item) => item !== filter) : [...current, filter];
-      return current.includes(filter)
-        ? current.filter((item) => item !== filter)
-        : [...current.filter((item) => !similarFilters.includes(item)), filter];
-    });
+    setSpecialFilters((current) => current.includes(filter) ? current.filter((item) => item !== filter) : [...current, filter]);
   }
 
   function toggleSimilarFiltersPanel() {
@@ -1085,7 +1079,7 @@ export default function HomeScreen() {
   const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
   const selectedRegionLabel = selectedRegionCodes.length === 0 ? "77" : selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : `${selectedRegionCodes[0]}+${selectedRegionCodes.length - 1}`;
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${selectedRegionCodes.length ? ` · ${selectedRegionCodes.join(", ")}` : ""}`;
-  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все" || priceLimit !== null || specialFilters.length);
+  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode);
 
   function toggleSaved(id: string) {
     setSaved((current) => {
