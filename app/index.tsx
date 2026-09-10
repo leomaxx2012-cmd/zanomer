@@ -2449,9 +2449,11 @@ const styles = StyleSheet.create({
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   listingItem: { gap: 6 },
-  seriesHeader: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#EEECFF", borderColor: "#C9C3FF", borderRadius: 10, borderWidth: 1, flexDirection: "row", gap: 7, marginLeft: 4, paddingLeft: 10, paddingRight: 5, paddingVertical: 5 },
+  // Заголовок занимает всю ширину: он визуально отделяет серии и остаётся
+  // по центру независимо от кнопки сворачивания справа.
+  seriesHeader: { alignItems: "center", alignSelf: "stretch", backgroundColor: "#F5F3FF", borderColor: "#7A5AF8", borderRadius: 12, borderWidth: 2, flexDirection: "row", justifyContent: "center", marginHorizontal: 4, marginTop: 14, minHeight: 42, paddingHorizontal: 46, paddingVertical: 7, position: "relative" },
   seriesHeaderText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
-  seriesHideButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D8D1FF", borderRadius: 9, borderWidth: 1, height: 28, justifyContent: "center", width: 30 },
+  seriesHideButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D8D1FF", borderRadius: 9, borderWidth: 1, height: 28, justifyContent: "center", position: "absolute", right: 6, width: 30 },
   seriesHideButtonText: { color: "#4B35B4", fontSize: 21, lineHeight: 23 },
   restoreSeriesButton: { alignSelf: "flex-start", backgroundColor: "#FFFFFF", borderColor: "#C9C3FF", borderRadius: 11, borderWidth: 1, marginTop: 10, paddingHorizontal: 12, paddingVertical: 8 },
   restoreSeriesButtonText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
