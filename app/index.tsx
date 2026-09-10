@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as Updates from "expo-updates";
 import { supabase } from "../lib/supabase";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
@@ -316,6 +317,24 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!supabase) return;
     void supabase.rpc("record_site_visit", { new_visitor_key: getSiteVisitorKey() });
+  }, []);
+
+  // JavaScript-обновления публикуются через Expo: при следующем запуске
+  // приложение скачивает новую версию и перезапускается без переустановки APK.
+  useEffect(() => {
+    if (Platform.OS === "web" || !Updates.isEnabled) return;
+    let mounted = true;
+    void (async () => {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (!update.isAvailable || !mounted) return;
+        await Updates.fetchUpdateAsync();
+        if (mounted) await Updates.reloadAsync();
+      } catch {
+        // При отсутствии сети остаётся текущая проверенная версия приложения.
+      }
+    })();
+    return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
