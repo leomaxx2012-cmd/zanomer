@@ -1508,15 +1508,11 @@ export default function HomeScreen() {
         <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle}>
           <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть" : "☷ Фильтры"}</Text>
         </Pressable>
-        <Pressable onPress={resetSearchAndFilters} style={styles.resetFiltersButton}>
-          <Text style={styles.resetFiltersText}>↺ Сбросить</Text>
-        </Pressable>
       </View>}
       {(!compactLayout || filterPanelOpen) && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
           <View style={styles.filterControlTitleRow}>
             <Text style={styles.filterControlTitle}>Регион и особенности</Text>
-            {!compactLayout && <Pressable onPress={resetSearchAndFilters}><Text style={styles.resetFiltersText}>↺ Сбросить</Text></Pressable>}
           </View>
           <View style={styles.quickFilters}>
             <Pressable onPress={() => {
