@@ -972,6 +972,7 @@ export default function HomeScreen() {
         const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
         const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plate.region.endsWith(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
+        const groupMatches = !similarFiltersOpen || seriesListingIds.has(plate.id);
         const specialMatches = specialFilters.every((filter) => {
           if (filter === "firstTen") return Number(plate.digits) >= 1 && Number(plate.digits) <= 10;
           if (filter === "roundHundred") return plate.digits.endsWith("00");
@@ -983,7 +984,7 @@ export default function HomeScreen() {
         });
         const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
-        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && plate.vehicle === vehicle;
+        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && groupMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const sameRegionCode = (first: Plate, second: Plate) => first.region.split(" · ")[1]?.trim() === second.region.split(" · ")[1]?.trim();
@@ -1004,7 +1005,7 @@ export default function HomeScreen() {
       });
       return [...grouped.values()].flat();
     },
-    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, similarityFilter, sort, freshOnly, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
+    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, similarityFilter, sort, freshOnly, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
