@@ -731,21 +731,27 @@ export default function HomeScreen() {
     async function loadCatalog() {
       setCatalogLoading(true);
       setCatalogLoadError("");
-      // Supabase возвращает не более 1 000 строк за запрос. Каталог партнёров
-      // уже больше этого лимита, поэтому загружаем его страницами.
+      // Supabase возвращает не более 1 000 строк за запрос. Две соседние
+      // страницы запрашиваем параллельно: на мобильной сети это заметно
+      // сокращает ожидание, при этом весь каталог остаётся доступен.
       async function loadAllPartnerListings() {
         const rows: Record<string, any>[] = [];
-        for (let from = 0; ; from += 1000) {
-          const result = await client
+        for (let from = 0; ; from += 2000) {
+          const loadPage = (start: number) => client
             .from("partner_listings")
             .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
             .eq("status", "active")
             .order("created_at", { ascending: false })
-            .range(from, from + 999);
-          if (result.error) return { data: rows, error: result.error };
-          const page = result.data ?? [];
-          rows.push(...page);
-          if (page.length < 1000) return { data: rows, error: null };
+            .range(start, start + 999);
+          const [firstResult, secondResult] = await Promise.all([loadPage(from), loadPage(from + 1000)]);
+          if (firstResult.error) return { data: rows, error: firstResult.error };
+          const firstPage = firstResult.data ?? [];
+          rows.push(...firstPage);
+          if (firstPage.length < 1000) return { data: rows, error: null };
+          if (secondResult.error) return { data: rows, error: secondResult.error };
+          const secondPage = secondResult.data ?? [];
+          rows.push(...secondPage);
+          if (secondPage.length < 1000) return { data: rows, error: null };
         }
       }
 
