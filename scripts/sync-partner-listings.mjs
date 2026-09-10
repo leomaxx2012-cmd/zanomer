@@ -56,6 +56,11 @@ const decodeUrl = (value) => value.replace(/&amp;/gi, "&").replace(/&#39;/g, "'"
 let ocrWorkerPromise;
 async function recognisePhotos(photoUrls) {
   if (!photoUrls.length) return "";
+  // Telegram occasionally supplies a 1–2 px placeholder instead of a photo.
+  // Tesseract crashes its worker on such data and can otherwise abort the
+  // entire daily import. Keep OCR opt-in until each URL is validated; captions
+  // are still imported normally in the default, reliable mode.
+  if (process.env.ENABLE_PARTNER_PHOTO_OCR !== "true") return "";
   ocrWorkerPromise ??= createWorker("eng");
   const worker = await ocrWorkerPromise;
   const parts = [];
