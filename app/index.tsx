@@ -309,6 +309,14 @@ export default function HomeScreen() {
     });
   }
 
+  function toggleSimilarFiltersPanel() {
+    const similarFilters: SpecialFilter[] = ["similarDigits", "similarLetters", "similarRegion"];
+    setSimilarFiltersOpen((isOpen) => {
+      if (isOpen) setSpecialFilters((current) => current.filter((filter) => !similarFilters.includes(filter)));
+      return !isOpen;
+    });
+  }
+
   useEffect(() => {
     if (!supabase) return;
     void supabase.rpc("record_site_visit", { new_visitor_key: getSiteVisitorKey() });
@@ -1533,7 +1541,7 @@ export default function HomeScreen() {
                 <Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text>
               </Pressable>;
             })}
-            <Pressable onPress={() => setSimilarFiltersOpen((value) => !value)} style={[styles.quickFilter, similarFiltersOpen && styles.quickFilterActive]}>
+            <Pressable onPress={toggleSimilarFiltersPanel} style={[styles.quickFilter, similarFiltersOpen && styles.quickFilterActive]}>
               <Text style={[styles.quickFilterText, similarFiltersOpen && styles.quickFilterTextActive]}>{similarFiltersOpen ? "✓ " : ""}Похожие номера</Text>
             </Pressable>
           </View>
@@ -1740,9 +1748,9 @@ export default function HomeScreen() {
         </Pressable>
       )}
 
-      {activeTab === "buy" && !catalogOnly && <View style={styles.listFilterPlacement}>
+      {activeTab === "buy" && !catalogOnly && similarFiltersOpen && <View style={styles.listFilterPlacement}>
         <Text style={styles.listFilterPlacementTitle}>Фильтры</Text>
-        {similarFiltersOpen && <View style={styles.listFilterPlacementControls}>
+        <View style={styles.listFilterPlacementControls}>
           {([
             ["similarDigits", "Одинаковые цифры"],
             ["similarLetters", "Одинаковые буквы"],
@@ -1751,7 +1759,7 @@ export default function HomeScreen() {
             const active = specialFilters.includes(filter);
             return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}><Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{label}</Text></Pressable>;
           })}
-        </View>}
+        </View>
       </View>}
 
       {activeTab === "favorites" && <View style={styles.savedSearchesPanel}>
