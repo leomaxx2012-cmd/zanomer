@@ -68,14 +68,12 @@ type SavedSearch = {
   priceLimit: number | null;
 };
 
-type GeneralSpecialFilter = "sameDigits" | "sameLetters" | "firstTen" | "roundHundred" | "mirror";
+type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
 type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
 
 const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
-  sameDigits: "Одинаковые цифры",
-  sameLetters: "Одинаковые буквы",
   firstTen: "Первая десятка",
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
@@ -967,8 +965,6 @@ export default function HomeScreen() {
         const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plate.region.endsWith(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
         const specialMatches = specialFilters.every((filter) => {
-          if (filter === "sameDigits") return plate.digits[0] === plate.digits[1] && plate.digits[1] === plate.digits[2];
-          if (filter === "sameLetters") return plate.leftLetter === plate.rightLetters[0] && plate.rightLetters[0] === plate.rightLetters[1];
           if (filter === "firstTen") return Number(plate.digits) >= 1 && Number(plate.digits) <= 10;
           if (filter === "roundHundred") return plate.digits.endsWith("00");
           if (filter === "mirror") return plate.digits === plate.digits.split("").reverse().join("");
