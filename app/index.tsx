@@ -1726,6 +1726,20 @@ export default function HomeScreen() {
         </Pressable>
       )}
 
+      {activeTab === "buy" && !catalogOnly && <View style={styles.listFilterPlacement}>
+        <Text style={styles.listFilterPlacementTitle}>Фильтры</Text>
+        <View style={styles.listFilterPlacementControls}>
+          <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.quickSelect}>
+            <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}</Text><Text style={styles.quickSelectChevron}>⌄</Text>
+          </Pressable>
+          {(Object.keys(specialFilterLabels) as SpecialFilter[]).map((filter) => {
+            const active = specialFilters.includes(filter);
+            return <Pressable key={filter} onPress={() => setSpecialFilters((current) => active ? current.filter((item) => item !== filter) : [...current, filter])} style={[styles.quickFilter, active && styles.quickFilterActive]}><Text style={[styles.quickFilterText, active && styles.quickFilterTextActive]}>{active ? "✓ " : ""}{specialFilterLabels[filter]}</Text></Pressable>;
+          })}
+          {[[100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit((current) => current === limit ? null : limit as number)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}
+        </View>
+      </View>}
+
       {activeTab === "favorites" && <View style={styles.savedSearchesPanel}>
         <Text style={styles.savedSearchesTitle}>Уведомления о поисках</Text>
         {savedSearches.length === 0 ? (
@@ -1753,23 +1767,20 @@ export default function HomeScreen() {
 
       <View style={styles.listContainer}>
       {hiddenSeriesGroupKeys.length > 0 && <Pressable onPress={() => setHiddenSeriesGroupKeys([])} style={styles.restoreSeriesButton}>
-        <Text style={styles.restoreSeriesButtonText}>♡ Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
+        <Text style={styles.restoreSeriesButtonText}>Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
       </Pressable>}
       <View style={styles.list}>
         {renderedPlates.map((item, index) => {
-          const isSaved = saved.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
           const seriesGroup = seriesGroupByListingId.get(item.id);
           const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
           const isSeriesStart = !!seriesGroup && seriesGroup.key !== previousGroup?.key;
           return (
             <View key={item.id} style={styles.listingItem}>
-              {isSeriesStart && <View style={styles.seriesHeader}>
+              {isSeriesStart && <Pressable accessibilityLabel="Скрыть группу похожих номеров" onPress={() => setHiddenSeriesGroupKeys((current) => current.includes(seriesGroup.key) ? current : [...current, seriesGroup.key])} style={styles.seriesHeader}>
                 <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
-                <Pressable accessibilityLabel="Скрыть группу похожих номеров" hitSlop={10} onPress={() => setHiddenSeriesGroupKeys((current) => current.includes(seriesGroup.key) ? current : [...current, seriesGroup.key])} style={styles.seriesHideButton}>
-                  <Text style={styles.seriesHideButtonText}>⌃</Text>
-                </Pressable>
-              </View>}
+                <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
+              </Pressable>}
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
               <View style={styles.cardMainRow}>
                 <View style={[styles.cardPlate, windowWidth >= 1000 && styles.cardPlateDesktop]}>
@@ -1789,9 +1800,6 @@ export default function HomeScreen() {
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                     {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
-                    <Pressable onPress={(event) => { event.stopPropagation(); toggleSaved(item.id); }} hitSlop={10} style={styles.heart}>
-                      <Text style={isSaved ? styles.heartActive : styles.heartText}>{isSaved ? "♥" : "♡"}</Text>
-                    </Pressable>
                   </View>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
                   <View style={styles.cardBadgesSpread}>
@@ -2449,13 +2457,16 @@ const styles = StyleSheet.create({
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   listingItem: { gap: 6 },
+  listFilterPlacement: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#D9D3F5", borderRadius: 16, borderWidth: 1, marginBottom: 12, maxWidth: 1100, padding: 12, width: "100%" },
+  listFilterPlacementTitle: { color: "#344054", fontSize: 14, fontWeight: "900", marginBottom: 8, textAlign: "center" },
+  listFilterPlacementControls: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "center" },
   // Заголовок занимает всю ширину: он визуально отделяет серии и остаётся
   // по центру независимо от кнопки сворачивания справа.
   seriesHeader: { alignItems: "center", alignSelf: "stretch", backgroundColor: "#F5F3FF", borderColor: "#7A5AF8", borderRadius: 12, borderWidth: 2, flexDirection: "row", justifyContent: "center", marginHorizontal: 4, marginTop: 14, minHeight: 42, paddingHorizontal: 46, paddingVertical: 7, position: "relative" },
   seriesHeaderText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
   seriesHideButton: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D8D1FF", borderRadius: 9, borderWidth: 1, height: 28, justifyContent: "center", position: "absolute", right: 6, width: 30 },
   seriesHideButtonText: { color: "#4B35B4", fontSize: 21, lineHeight: 23 },
-  restoreSeriesButton: { alignSelf: "flex-start", backgroundColor: "#FFFFFF", borderColor: "#C9C3FF", borderRadius: 11, borderWidth: 1, marginTop: 10, paddingHorizontal: 12, paddingVertical: 8 },
+  restoreSeriesButton: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#C9C3FF", borderRadius: 11, borderWidth: 1, marginTop: 10, paddingHorizontal: 12, paddingVertical: 8 },
   restoreSeriesButtonText: { color: "#4B35B4", fontSize: 12, fontWeight: "900" },
   catalogError: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
   showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F3F0FF", borderColor: "#7A5AF8", borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
