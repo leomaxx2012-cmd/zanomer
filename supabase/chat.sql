@@ -58,6 +58,28 @@ create policy "Users see their own listing chats"
   );
 
 drop policy if exists "Users send messages to active listings" on public.listing_messages;
+
+-- Проверка предыдущего сообщения вынесена в security definer-функцию: если
+-- читать listing_messages прямо внутри INSERT-политики, PostgreSQL повторно
+-- применяет эту же политику и останавливает запрос с infinite recursion.
+create or replace function public.can_reply_to_listing_chat(target_listing_id uuid, target_user_id uuid)
+returns boolean
+language sql
+security definer
+set search_path = public
+stable
+as $$
+  select exists (
+    select 1
+    from public.listing_messages earlier
+    where earlier.listing_id = target_listing_id
+      and (earlier.sender_id = target_user_id or earlier.recipient_id = target_user_id)
+  );
+$$;
+
+revoke all on function public.can_reply_to_listing_chat(uuid, uuid) from public;
+grant execute on function public.can_reply_to_listing_chat(uuid, uuid) to authenticated;
+
 create policy "Users send messages to active listings"
   on public.listing_messages for insert to authenticated
   with check (
@@ -74,11 +96,7 @@ create policy "Users send messages to active listings"
           select 1 from public.auto_listings l
           where l.id = listing_id and l.status = 'active' and l.owner_id = auth.uid()
         )
-        and exists (
-          select 1 from public.listing_messages earlier
-          where earlier.listing_id = listing_id
-            and (earlier.sender_id = recipient_id or earlier.recipient_id = recipient_id)
-        )
+        and public.can_reply_to_listing_chat(listing_id, recipient_id)
       )
       or (
         -- Любой участник обсуждения может написать автору комментария к
