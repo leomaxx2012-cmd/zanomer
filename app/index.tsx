@@ -739,7 +739,7 @@ export default function HomeScreen() {
       setCatalogLoadError("");
       let requestTimeout: ReturnType<typeof setTimeout> | undefined;
       const stopSlowRequest = new Promise<never>((_, reject) => {
-        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 15_000);
+        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 45_000);
       });
       // Supabase возвращает не более 1 000 строк за запрос. Две соседние
       // страницы запрашиваем параллельно: на мобильной сети это заметно
@@ -762,6 +762,15 @@ export default function HomeScreen() {
           const secondPage = secondResult.data ?? [];
           rows.push(...secondPage);
           if (secondPage.length < 1000) return { data: rows, error: null };
+          // После двух полных страниц догружаем оставшиеся страницы по одной.
+          // Так не отправляем пустой запрос на следующую страницу каталога.
+          for (let start = from + 2000; ; start += 1000) {
+            const nextResult = await loadPage(start);
+            if (nextResult.error) return { data: rows, error: nextResult.error };
+            const nextPage = nextResult.data ?? [];
+            rows.push(...nextPage);
+            if (nextPage.length < 1000) return { data: rows, error: null };
+          }
         }
       }
 
