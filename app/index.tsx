@@ -1108,6 +1108,10 @@ export default function HomeScreen() {
     : showingWholeRegion
       ? selectedRegionOption?.title ?? region
       : selectedRegionCodes.join(", ");
+  const selectedRegionLineCount = showingWholeRegion || showingMultipleRegionCodes
+    ? Math.max(2, Math.ceil(selectedRegionLabel.length / 14))
+    : 1;
+  const plateSearchHeight = selectedRegionLineCount > 1 ? 42 + selectedRegionLineCount * 19 : 84;
   const selectedRegionFilterLabel = region === "Все"
     ? "Любой регион"
     : showingWholeRegion
@@ -1605,7 +1609,7 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
-      <View style={styles.plateSearch}>
+      <View style={[styles.plateSearch, selectedRegionLineCount > 1 && { height: plateSearchHeight }]}>
         <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={1} />
         <View style={styles.plateDivider} />
         <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={3} />
@@ -1616,7 +1620,7 @@ export default function HomeScreen() {
           <Text
             adjustsFontSizeToFit
             minimumFontScale={0.52}
-            numberOfLines={showingWholeRegion || showingMultipleRegionCodes ? 2 : 1}
+            numberOfLines={selectedRegionLineCount}
             style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
           >{selectedRegionLabel}</Text>
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
