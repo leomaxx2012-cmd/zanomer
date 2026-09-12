@@ -1102,13 +1102,12 @@ export default function HomeScreen() {
   const selectedRegionOption = regionGroups.find((item) => item.title === region);
   const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
   const showingWholeRegion = region !== "Все" && selectedRegionCodes.length === 0;
+  const showingMultipleRegionCodes = selectedRegionCodes.length > 1;
   const selectedRegionLabel = region === "Все"
     ? "77"
     : showingWholeRegion
       ? selectedRegionOption?.title ?? region
-      : selectedRegionCodes.length === 1
-        ? selectedRegionCodes[0]
-        : `${selectedRegionCodes[0]}+${selectedRegionCodes.length - 1}`;
+      : selectedRegionCodes.join(", ");
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${selectedRegionCodes.length ? ` · ${selectedRegionCodes.join(", ")}` : ""}`;
   const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode);
 
@@ -1612,9 +1611,9 @@ export default function HomeScreen() {
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text
             adjustsFontSizeToFit
-            minimumFontScale={0.62}
-            numberOfLines={showingWholeRegion ? 2 : 1}
-            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName]}
+            minimumFontScale={0.52}
+            numberOfLines={showingWholeRegion || showingMultipleRegionCodes ? 2 : 1}
+            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
           >{selectedRegionLabel}</Text>
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
@@ -2368,6 +2367,7 @@ const styles = StyleSheet.create({
   regionCodeBox: { alignItems: "center", flex: 1, height: "100%", justifyContent: "center", minWidth: 0 },
   regionCodeInput: { color: "#111827", fontSize: 18, fontWeight: "900", maxWidth: "100%", textAlign: "center" },
   regionCodeInputName: { fontSize: 15, lineHeight: 18, paddingHorizontal: 7 },
+  regionCodeInputMultiple: { fontSize: 16, lineHeight: 18, paddingHorizontal: 7 },
   regionCodePlaceholder: { color: "#667085" },
   rusLabel: { color: "#344054", fontSize: 10, fontWeight: "800", marginTop: -5 },
   advancedButton: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 13, paddingVertical: 5 },
