@@ -189,6 +189,7 @@ export default function HomeScreen() {
   const catalogScrollRef = useRef<ScrollView>(null);
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
   const [catalogLoading, setCatalogLoading] = useState(false);
+  const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
   const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(40);
   const [catalogOnly, setCatalogOnly] = useState(false);
@@ -735,6 +736,7 @@ export default function HomeScreen() {
       // и при плановом обновлении в ту же секунду.
       if (loadingCatalog) return;
       loadingCatalog = true;
+      setCatalogRefreshing(true);
       setCatalogLoadError("");
       let requestTimeout: ReturnType<typeof setTimeout> | undefined;
       const stopSlowRequest = new Promise<never>((_, reject) => {
@@ -869,6 +871,7 @@ export default function HomeScreen() {
       } finally {
         if (requestTimeout) clearTimeout(requestTimeout);
         setCatalogLoading(false);
+        setCatalogRefreshing(false);
         loadingCatalog = false;
       }
     }
@@ -1552,7 +1555,7 @@ export default function HomeScreen() {
         style={[styles.catalogHeroButton, compactLayout && styles.catalogHeroButtonCompact]}
       >
         <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
-        <Text style={styles.catalogHeroButtonHint}>{catalogLoading ? "Обновляем каталог…" : catalogLoadError ? "Нет связи с каталогом — проверь интернет" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
+        <Text style={styles.catalogHeroButtonHint}>{catalogRefreshing ? "Каталог обновляется в фоне…" : catalogLoadError ? "Нет связи с каталогом — проверь интернет" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
       </Pressable>}
 
       {activeTab === "buy" && !catalogOnly && <>
