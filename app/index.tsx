@@ -1101,7 +1101,14 @@ export default function HomeScreen() {
   }, [catalog, archivedPartnerSources]);
   const selectedRegionOption = regionGroups.find((item) => item.title === region);
   const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
-  const selectedRegionLabel = selectedRegionCodes.length === 0 ? "77" : selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : `${selectedRegionCodes[0]}+${selectedRegionCodes.length - 1}`;
+  const showingWholeRegion = region !== "Все" && selectedRegionCodes.length === 0;
+  const selectedRegionLabel = region === "Все"
+    ? "77"
+    : showingWholeRegion
+      ? selectedRegionOption?.title ?? region
+      : selectedRegionCodes.length === 1
+        ? selectedRegionCodes[0]
+        : `${selectedRegionCodes[0]}+${selectedRegionCodes.length - 1}`;
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${selectedRegionCodes.length ? ` · ${selectedRegionCodes.join(", ")}` : ""}`;
   const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode);
 
@@ -1603,7 +1610,12 @@ export default function HomeScreen() {
         <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
         <View style={styles.plateDivider} />
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
-          <Text numberOfLines={1} style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder]}>{selectedRegionLabel}</Text>
+          <Text
+            adjustsFontSizeToFit
+            minimumFontScale={0.62}
+            numberOfLines={showingWholeRegion ? 2 : 1}
+            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName]}
+          >{selectedRegionLabel}</Text>
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
       </View>
@@ -2355,6 +2367,7 @@ const styles = StyleSheet.create({
   quickFilterTextActive: { color: "#FFFFFF" },
   regionCodeBox: { alignItems: "center", flex: 1, height: "100%", justifyContent: "center", minWidth: 0 },
   regionCodeInput: { color: "#111827", fontSize: 18, fontWeight: "900", maxWidth: "100%", textAlign: "center" },
+  regionCodeInputName: { fontSize: 15, lineHeight: 18, paddingHorizontal: 7 },
   regionCodePlaceholder: { color: "#667085" },
   rusLabel: { color: "#344054", fontSize: 10, fontWeight: "800", marginTop: -5 },
   advancedButton: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 13, paddingVertical: 5 },
@@ -2442,7 +2455,7 @@ const styles = StyleSheet.create({
   filterTextActive: { color: "#FFFFFF" },
   platePickerPanel: { backgroundColor: "#FFFFFF", borderColor: "#B2CCFF", borderRadius: 16, borderWidth: 1, marginTop: 10, padding: 12, shadowColor: "#155EEF", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 12 },
   regionPickerPanel: { alignSelf: "flex-end", borderColor: "#D8D1FF", maxWidth: "100%", shadowColor: "#5143C2", width: 380, zIndex: 20 },
-  regionPickerPanelDesktop: { left: "100%", marginLeft: 185, marginTop: 0, position: "absolute", top: 122, zIndex: 50 },
+  regionPickerPanelDesktop: { left: "100%", marginLeft: 185, marginTop: 0, position: "absolute", top: -308, zIndex: 50 },
   platePickerTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
   platePickerTitle: { color: "#101828", fontSize: 14, fontWeight: "900" },
   platePickerClose: { color: "#155EEF", fontSize: 13, fontWeight: "800" },
