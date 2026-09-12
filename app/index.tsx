@@ -737,6 +737,10 @@ export default function HomeScreen() {
       loadingCatalog = true;
       setCatalogLoading(true);
       setCatalogLoadError("");
+      let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+      const stopSlowRequest = new Promise<never>((_, reject) => {
+        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 15_000);
+      });
       // Supabase возвращает не более 1 000 строк за запрос. Две соседние
       // страницы запрашиваем параллельно: на мобильной сети это заметно
       // сокращает ожидание, при этом весь каталог остаётся доступен.
@@ -764,14 +768,14 @@ export default function HomeScreen() {
       // Таблицы загружаются независимо: партнёрский каталог не должен исчезать,
       // если пользовательские объявления временно недоступны гостю по RLS.
       try {
-      const [siteResult, partnerResult] = await Promise.all([
+      const [siteResult, partnerResult] = await Promise.race([Promise.all([
         client
           .from("auto_listings")
           .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url")
           .eq("status", "active")
           .order("created_at", { ascending: false }),
         loadAllPartnerListings(),
-      ]);
+      ]), stopSlowRequest]);
       const data = siteResult.data ?? [];
       const partnerData = partnerResult.data ?? [];
       if (siteResult.error && partnerResult.error) {
@@ -853,8 +857,9 @@ export default function HomeScreen() {
       setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : initialPlates);
       if (partnerResult.error) setCatalogLoadError("Каталог загружен не полностью. Проверь интернет и обнови страницу позже.");
       } catch {
-        setCatalogLoadError("Не удалось обновить каталог. Проверь интернет или VPN и перезапусти приложение.");
+        setCatalogLoadError("Каталог долго не отвечает. Проверь интернет или VPN и попробуй обновить позже.");
       } finally {
+        if (requestTimeout) clearTimeout(requestTimeout);
         setCatalogLoading(false);
         loadingCatalog = false;
       }
