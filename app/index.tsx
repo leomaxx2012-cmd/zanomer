@@ -1108,7 +1108,11 @@ export default function HomeScreen() {
     : showingWholeRegion
       ? selectedRegionOption?.title ?? region
       : selectedRegionCodes.join(", ");
-  const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionOption?.title ?? region}${selectedRegionCodes.length ? ` · ${selectedRegionCodes.join(", ")}` : ""}`;
+  const selectedRegionFilterLabel = region === "Все"
+    ? "Любой регион"
+    : showingWholeRegion
+      ? selectedRegionOption?.title ?? region
+      : selectedRegionCodes.join(", ");
   const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode);
 
   function toggleSaved(id: string) {
