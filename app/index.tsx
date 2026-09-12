@@ -985,9 +985,11 @@ export default function HomeScreen() {
         const leftLetterMatch = matchesPattern(plate.leftLetter, leftLetter);
         const rightLettersMatch = matchesPattern(plate.rightLetters, rightLetters);
         const digitsMatch = matchesPattern(plate.digits, digits);
-        const regionMatches = region === "Все" || plate.region.startsWith(region);
         // Можно отметить несколько кодов одного региона: например 77, 97 и 177.
         const selectedRegionCodes = regionCode.split(",").map((code) => code.trim()).filter(Boolean);
+        // Отдельно отмеченные коды могут относиться к разным регионам.
+        // В этом режиме фильтруем именно по кодам, а не по последнему открытому названию региона.
+        const regionMatches = selectedRegionCodes.length > 0 || region === "Все" || plate.region.startsWith(region);
         const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plate.region.endsWith(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
         const groupMatches = !similarFiltersOpen || seriesListingIds.has(plate.id);
