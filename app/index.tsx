@@ -188,7 +188,7 @@ export default function HomeScreen() {
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
   const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(40);
   const [catalogOnly, setCatalogOnly] = useState(false);
@@ -735,7 +735,6 @@ export default function HomeScreen() {
       // и при плановом обновлении в ту же секунду.
       if (loadingCatalog) return;
       loadingCatalog = true;
-      setCatalogLoading(true);
       setCatalogLoadError("");
       let requestTimeout: ReturnType<typeof setTimeout> | undefined;
       const stopSlowRequest = new Promise<never>((_, reject) => {
