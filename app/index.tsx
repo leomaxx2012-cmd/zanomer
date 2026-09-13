@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as Updates from "expo-updates";
 import { supabase } from "../lib/supabase";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
@@ -84,10 +85,10 @@ const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
 function TrailerIcon({ active = false }: { active?: boolean }) {
   return <View accessibilityLabel="Прицеп" style={[styles.trailerIcon, active && styles.trailerIconActive]}>
-    <View style={styles.trailerBody} />
-    <View style={styles.trailerHitch} />
-    <View style={[styles.trailerWheel, styles.trailerWheelLeft]} />
-    <View style={[styles.trailerWheel, styles.trailerWheelRight]} />
+    <View style={[styles.trailerBody, active && styles.trailerBodyActive]} />
+    <View style={[styles.trailerHitch, active && styles.trailerHitchActive]} />
+    <View style={[styles.trailerWheel, styles.trailerWheelLeft, active && styles.trailerWheelActive]} />
+    <View style={[styles.trailerWheel, styles.trailerWheelRight, active && styles.trailerWheelActive]} />
   </View>;
 }
 
@@ -187,6 +188,7 @@ export default function HomeScreen() {
   const compactLayout = windowWidth < 430;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
+  const downloadedUpdateRef = useRef(false);
   const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
@@ -313,6 +315,38 @@ export default function HomeScreen() {
       return !isOpen;
     });
   }
+
+  // Обновление скачивается незаметно. Перезагрузка выполняется только после
+  // сворачивания приложения, поэтому пользователь не теряет открытый поиск.
+  useEffect(() => {
+    if (Platform.OS === "web" || !Updates.isEnabled) return;
+    let mounted = true;
+
+    async function downloadAvailableUpdate() {
+      try {
+        const update = await Updates.checkForUpdateAsync();
+        if (!mounted || !update.isAvailable) return;
+        await Updates.fetchUpdateAsync();
+        if (mounted) downloadedUpdateRef.current = true;
+      } catch {
+        // Обновления не должны мешать каталогу, если сеть временно недоступна.
+      }
+    }
+
+    void downloadAvailableUpdate();
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state !== "background" || !downloadedUpdateRef.current) return;
+      downloadedUpdateRef.current = false;
+      void Updates.reloadAsync().catch(() => {
+        // Если ОС уже приостановила процесс, скачанная версия всё равно
+        // применится при следующем холодном запуске.
+      });
+    });
+    return () => {
+      mounted = false;
+      appStateSubscription.remove();
+    };
+  }, []);
 
   useEffect(() => {
     if (!supabase) return;
@@ -1623,7 +1657,7 @@ export default function HomeScreen() {
         ] as const).map(([type, icon, label]) => (
           <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
             {type === "truck" ? <TrailerIcon active={vehicle === "truck"} /> : <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>}
-            <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
+            <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, type === "truck" && vehicle !== type && styles.vehicleTrailerLabel, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
       </View>
@@ -1859,8 +1893,8 @@ export default function HomeScreen() {
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
               </Pressable>}
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
-              <View style={styles.cardMainRow}>
-                <View style={[styles.cardPlate, windowWidth >= 1000 && styles.cardPlateDesktop]}>
+              <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
+                <View style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
                   <View style={[styles.cardPlateMain, windowWidth >= 1000 && styles.cardPlateMainDesktop]}>
                     <Text style={[styles.cardPlateLetter, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
                     <Text style={[styles.cardPlateDigits, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
@@ -1873,7 +1907,7 @@ export default function HomeScreen() {
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltLeft]} />
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltRight]} />
                 </View>
-                <View style={styles.cardInfo}>
+                <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                     {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
@@ -2364,19 +2398,24 @@ const styles = StyleSheet.create({
   catalogCountCaption: { color: "#655F7A", fontSize: 10, fontWeight: "700" },
   vehicleTabs: { alignItems: "stretch", flexDirection: "row", gap: 8, marginBottom: 15, width: "100%" },
   vehicleTab: { alignItems: "center", backgroundColor: "#F2F4F7", borderColor: "#E2E8F0", borderRadius: 16, borderWidth: 1, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", minWidth: 0, paddingHorizontal: 10, paddingVertical: 11 },
-  vehicleTabCompact: { gap: 4, paddingHorizontal: 6, paddingVertical: 10 },
+  // На телефоне пиктограмма над подписью, но высота кнопки остаётся прежней.
+  vehicleTabCompact: { flexDirection: "column", gap: 1, justifyContent: "center", paddingHorizontal: 6, paddingVertical: 4 },
   vehicleTabActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   vehicleIcon: { fontSize: 18 },
   vehicleIconCompact: { fontSize: 16 },
   trailerIcon: { height: 18, marginRight: 2, position: "relative", width: 27 },
   trailerIconActive: { opacity: 1 },
-  trailerBody: { backgroundColor: "#667085", borderRadius: 2, height: 10, left: 4, position: "absolute", top: 1, width: 19 },
-  trailerHitch: { backgroundColor: "#667085", height: 2, left: 0, position: "absolute", top: 7, width: 5 },
-  trailerWheel: { backgroundColor: "#344054", borderRadius: 99, bottom: 1, height: 5, position: "absolute", width: 5 },
+  trailerBody: { backgroundColor: "#D92D20", borderRadius: 2, height: 10, left: 4, position: "absolute", top: 1, width: 19 },
+  trailerBodyActive: { backgroundColor: "#FFFFFF" },
+  trailerHitch: { backgroundColor: "#D92D20", height: 2, left: 0, position: "absolute", top: 7, width: 5 },
+  trailerHitchActive: { backgroundColor: "#FFFFFF" },
+  trailerWheel: { backgroundColor: "#B42318", borderRadius: 99, bottom: 1, height: 5, position: "absolute", width: 5 },
+  trailerWheelActive: { backgroundColor: "#FFFFFF" },
   trailerWheelLeft: { left: 7 },
   trailerWheelRight: { right: 3 },
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
+  vehicleTrailerLabel: { color: "#D92D20" },
   vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
   plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", height: "100%", letterSpacing: 1, minWidth: 0, textAlign: "center" },
@@ -2554,7 +2593,11 @@ const styles = StyleSheet.create({
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
   card: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", padding: 14, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
+  // На телефоне сначала показываем номер на всю ширину, затем все сведения
+  // в этой же карточке. Так знак никогда не обрезается сбоку.
+  cardMainRowCompact: { flexDirection: "column", gap: 12 },
   cardPlate: { alignItems: "stretch", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden", position: "relative" },
+  cardPlateCompact: { alignSelf: "stretch", flex: 0, height: 82, width: "100%" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
   // Стандартный российский знак: 520 × 112 мм, пропорция 4,64:1.
@@ -2587,6 +2630,7 @@ const styles = StyleSheet.create({
   cardPlateBoltLeft: { left: 8, marginTop: -2.5 },
   cardPlateBoltRight: { marginTop: -2.5, right: 8 },
   cardInfo: { flex: 1, minWidth: 0 },
+  cardInfoCompact: { flex: 0, width: "100%" },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
   availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 7, paddingVertical: 3 },
