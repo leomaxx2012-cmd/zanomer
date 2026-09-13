@@ -776,36 +776,33 @@ export default function HomeScreen() {
       const stopSlowRequest = new Promise<never>((_, reject) => {
         requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 45_000);
       });
-      // Supabase возвращает не более 1 000 строк за запрос. Две соседние
-      // страницы запрашиваем параллельно: на мобильной сети это заметно
-      // сокращает ожидание, при этом весь каталог остаётся доступен.
+      // Supabase возвращает не более 1 000 строк за запрос. В каталоге сейчас
+      // около трёх тысяч записей, поэтому первые три страницы берём сразу
+      // параллельно. Раньше третья страница ждала две первые и на мобильном
+      // интернете обновление выглядело как зависшее.
       async function loadAllPartnerListings() {
         const rows: Record<string, any>[] = [];
-        for (let from = 0; ; from += 2000) {
-          const loadPage = (start: number) => client
-            .from("partner_listings")
-            .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
-            .eq("status", "active")
-            .order("created_at", { ascending: false })
-            .range(start, start + 999);
-          const [firstResult, secondResult] = await Promise.all([loadPage(from), loadPage(from + 1000)]);
-          if (firstResult.error) return { data: rows, error: firstResult.error };
-          const firstPage = firstResult.data ?? [];
-          rows.push(...firstPage);
-          if (firstPage.length < 1000) return { data: rows, error: null };
-          if (secondResult.error) return { data: rows, error: secondResult.error };
-          const secondPage = secondResult.data ?? [];
-          rows.push(...secondPage);
-          if (secondPage.length < 1000) return { data: rows, error: null };
-          // После двух полных страниц догружаем оставшиеся страницы по одной.
-          // Так не отправляем пустой запрос на следующую страницу каталога.
-          for (let start = from + 2000; ; start += 1000) {
-            const nextResult = await loadPage(start);
-            if (nextResult.error) return { data: rows, error: nextResult.error };
-            const nextPage = nextResult.data ?? [];
-            rows.push(...nextPage);
-            if (nextPage.length < 1000) return { data: rows, error: null };
-          }
+        const loadPage = (start: number) => client
+          .from("partner_listings")
+          .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
+          .eq("status", "active")
+          .order("created_at", { ascending: false })
+          .range(start, start + 999);
+
+        const firstPages = await Promise.all([0, 1000, 2000].map(loadPage));
+        for (const result of firstPages) {
+          if (result.error) return { data: rows, error: result.error };
+          rows.push(...(result.data ?? []));
+        }
+        if ((firstPages.at(-1)?.data ?? []).length < 1000) return { data: rows, error: null };
+
+        // Если каталог станет больше трёх тысяч, догружаем остальные страницы.
+        for (let start = 3000; ; start += 1000) {
+          const nextResult = await loadPage(start);
+          if (nextResult.error) return { data: rows, error: nextResult.error };
+          const nextPage = nextResult.data ?? [];
+          rows.push(...nextPage);
+          if (nextPage.length < 1000) return { data: rows, error: null };
         }
       }
 
