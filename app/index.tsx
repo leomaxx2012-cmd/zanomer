@@ -830,11 +830,9 @@ export default function HomeScreen() {
           if (nextResult.error) return { data: rows, error: nextResult.error };
           const nextPage = nextResult.data ?? [];
           rows.push(...nextPage);
-          // Первые 120 уже видны; остальные добавляем без ожидания всего
-          // каталога, чтобы на телефоне сразу было видно, что загрузка идёт.
-          const progressiveCatalog = rows.map(toPartnerPlate);
-          setCatalog(progressiveCatalog);
-          if (Platform.OS !== "web") void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(progressiveCatalog));
+          // Встроенный снимок уже показан при запуске. Не заменяем его
+          // неполной страницей из сети: на слабом интернете это раньше
+          // визуально превращало полный каталог в 120–1000 карточек.
           if (nextPage.length < partnerPageSize) return { data: rows, error: null };
         }
       }
@@ -880,10 +878,9 @@ export default function HomeScreen() {
         setTimeout(() => resolve({ data: [], error: null }), 8_000);
       });
       const firstPartnerResult = await Promise.race([firstPartnerPageRequest, firstPageFallback]);
-      if (!firstPartnerResult.error && firstPartnerResult.data?.length) {
-        setCatalog(firstPartnerResult.data.map(toPartnerPlate));
-        setCatalogRefreshing(false);
-      }
+      // Первый сетевой ответ используем только как начало тихой синхронизации.
+      // Экран продолжает показывать встроенный полный каталог без ожидания.
+      if (!firstPartnerResult.error && firstPartnerResult.data?.length) setCatalogRefreshing(false);
 
       // Полную историю получаем только после быстрого ответа с новинками,
       // чтобы параллельные тяжёлые запросы не мешали старту каталога.
@@ -940,7 +937,9 @@ export default function HomeScreen() {
       });
       const partners: Plate[] = partnerData.map(toPartnerPlate);
 
-      const loaded = [...fromDatabase, ...partners];
+      // Снимок из APK — надёжная база каталога офлайн. Сетевые данные лишь
+      // обновляют его и добавляют свежие объявления, но не могут его уменьшить.
+      const loaded = [...catalogFallback, ...fromDatabase, ...partners];
       // Один и тот же номер с тем же кодом региона показываем только один раз.
       // Если запись пришла повторно, оставляем самую свежую.
       const uniqueListings = new Map<string, Plate>();
@@ -956,9 +955,10 @@ export default function HomeScreen() {
       // Mixing them into a real catalogue inflated the public count.
       setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : catalogFallback);
       if (Platform.OS !== "web" && uniqueLoaded.length > 0) void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(uniqueLoaded));
-      if (partnerResult.error) setCatalogLoadError("Каталог загружен не полностью. Проверь интернет и обнови страницу позже.");
       } catch {
-        setCatalogLoadError("Каталог долго не отвечает. Проверь интернет или VPN и попробуй обновить позже.");
+        // Нет сети — это нормальный офлайн-режим: встроенные номера уже
+        // отображены. Не пугать пользователя фоновым обновлением каталога.
+        setCatalogLoadError("");
       } finally {
         if (requestTimeout) clearTimeout(requestTimeout);
         clearTimeout(refreshIndicatorTimeout);
