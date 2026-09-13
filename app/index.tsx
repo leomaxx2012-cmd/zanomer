@@ -809,16 +809,53 @@ export default function HomeScreen() {
         }
       }
 
+      const toPartnerPlate = (item: Record<string, any>): Plate => ({
+        id: item.id,
+        value: `${item.plate_left} ${item.plate_digits} ${item.plate_right}`,
+        leftLetter: item.plate_left,
+        rightLetters: item.plate_right,
+        digits: item.plate_digits,
+        region: item.region,
+        price: `${Number(item.price_rub).toLocaleString("ru-RU")} ₽`,
+        priceValue: Number(item.price_rub),
+        vehicle: item.vehicle_type as Plate["vehicle"],
+        seller: item.source_name,
+        createdAt: item.created_at.slice(0, 10),
+        publishedAt: item.created_at,
+        tag: item.tag ?? "Партнёрское объявление",
+        sourceName: "Открыть исходное объявление",
+        sourceUrl: item.source_url,
+        featuredUntil: item.featured_until,
+      });
+
+      const firstPartnerPageRequest = client
+        .from("partner_listings")
+        .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .range(0, 999);
+      const allPartnerPagesRequest = loadAllPartnerListings();
+      const siteListingsRequest = client
+        .from("auto_listings")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url")
+        .eq("status", "active")
+        .order("created_at", { ascending: false });
+
       // Таблицы загружаются независимо: партнёрский каталог не должен исчезать,
       // если пользовательские объявления временно недоступны гостю по RLS.
       try {
+      const firstPageFallback = new Promise<{ data: Record<string, any>[]; error: null }>((resolve) => {
+        setTimeout(() => resolve({ data: [], error: null }), 8_000);
+      });
+      const firstPartnerResult = await Promise.race([firstPartnerPageRequest, firstPageFallback]);
+      if (!firstPartnerResult.error && firstPartnerResult.data?.length) {
+        setCatalog(firstPartnerResult.data.map(toPartnerPlate));
+        setCatalogRefreshing(false);
+      }
+
       const [siteResult, partnerResult] = await Promise.race([Promise.all([
-        client
-          .from("auto_listings")
-          .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url")
-          .eq("status", "active")
-          .order("created_at", { ascending: false }),
-        loadAllPartnerListings(),
+        siteListingsRequest,
+        allPartnerPagesRequest,
       ]), stopSlowRequest]);
       const data = siteResult.data ?? [];
       const partnerData = partnerResult.data ?? [];
@@ -865,24 +902,7 @@ export default function HomeScreen() {
         photoUrl: item.photo_url ?? undefined,
       };
       });
-      const partners: Plate[] = partnerData.map((item) => ({
-        id: item.id,
-        value: `${item.plate_left} ${item.plate_digits} ${item.plate_right}`,
-        leftLetter: item.plate_left,
-        rightLetters: item.plate_right,
-        digits: item.plate_digits,
-        region: item.region,
-        price: `${Number(item.price_rub).toLocaleString("ru-RU")} ₽`,
-        priceValue: Number(item.price_rub),
-        vehicle: item.vehicle_type as Plate["vehicle"],
-        seller: item.source_name,
-        createdAt: item.created_at.slice(0, 10),
-        publishedAt: item.created_at,
-        tag: item.tag ?? "Партнёрское объявление",
-        sourceName: "Открыть исходное объявление",
-        sourceUrl: item.source_url,
-        featuredUntil: item.featured_until,
-      }));
+      const partners: Plate[] = partnerData.map(toPartnerPlate);
 
       const loaded = [...fromDatabase, ...partners];
       // Один и тот же номер с тем же кодом региона показываем только один раз.
