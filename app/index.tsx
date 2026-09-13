@@ -1676,10 +1676,10 @@ export default function HomeScreen() {
         {([
           ["car", "🚗", "Авто"],
           ["motorcycle", "🏍️", "Мото"],
-          ["truck", "", "Прицеп"],
+          ["truck", "🚛", "Прицеп"],
         ] as const).map(([type, icon, label]) => (
           <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
-            {type === "truck" ? <TrailerIcon active={vehicle === "truck"} /> : <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>}
+            <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
             <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
