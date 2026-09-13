@@ -319,8 +319,9 @@ export default function HomeScreen() {
     });
   }
 
-  // Обновление скачивается незаметно. Перезагрузка выполняется только после
-  // сворачивания приложения, поэтому пользователь не теряет открытый поиск.
+  // Обновление применяется сразу после скачивания. Это надёжнее, чем ждать
+  // сворачивания приложения: на некоторых Android оно не присылает событие
+  // background при закрытии из списка последних приложений.
   useEffect(() => {
     if (Platform.OS === "web" || !Updates.isEnabled) return;
     let mounted = true;
@@ -330,7 +331,7 @@ export default function HomeScreen() {
         const update = await Updates.checkForUpdateAsync();
         if (!mounted || !update.isAvailable) return;
         await Updates.fetchUpdateAsync();
-        if (mounted) downloadedUpdateRef.current = true;
+        if (mounted) await Updates.reloadAsync();
       } catch {
         // Обновления не должны мешать каталогу, если сеть временно недоступна.
       }
