@@ -39,9 +39,6 @@ jobs:
           test -n "$EXPO_PUBLIC_SUPABASE_URL"
           test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
 
-      - name: Упаковать актуальный каталог в APK
-        run: node scripts/snapshot-mobile-catalog.mjs
-
       - name: Подготовить Android-проект
         run: npx expo prebuild --platform android --clean --no-install
 
