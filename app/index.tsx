@@ -856,9 +856,10 @@ export default function HomeScreen() {
         .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
         .eq("status", "active")
         .order("created_at", { ascending: false })
-        // На телефоне сначала важнее показать самые свежие номера. Большая
-        // страница на 1 000 строк могла ждать слишком долго на мобильной сети.
-        .range(0, 119);
+        // Первая страница должна быть достаточно большой, чтобы приложение
+        // не оставалось на 120 карточках, если фоновая догрузка задержалась.
+        // Supabase поддерживает выдачу 1 000 строк за запрос.
+        .range(0, 999);
       const siteListingsRequest = client
         .from("auto_listings")
         .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url")
