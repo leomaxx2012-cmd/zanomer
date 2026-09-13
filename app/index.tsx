@@ -1053,6 +1053,10 @@ export default function HomeScreen() {
   }, [currentUserId, catalog]);
 
   const seriesGroupByListingId = useMemo(() => {
+    // Группы нужны только после нажатия «Похожие номера». Раньше расчёт
+    // запускался уже на первом кадре и сравнивал каждый из 1327 номеров со
+    // всеми остальными, из-за чего слабый телефон мог показать белый экран.
+    if (!similarFiltersOpen) return new Map<string, { key: string; size: number }>();
     const groups = new Map<string, { key: string; size: number }>();
     const remaining = new Set(catalog.map((plate) => plate.id));
 
@@ -1077,7 +1081,7 @@ export default function HomeScreen() {
       component.forEach((id) => groups.set(id, { key, size: component.size }));
     }
     return groups;
-  }, [catalog]);
+  }, [catalog, similarFiltersOpen]);
 
   const seriesListingIds = useMemo(() => new Set(seriesGroupByListingId.keys()), [seriesGroupByListingId]);
 
