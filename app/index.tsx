@@ -19,6 +19,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase } from "../lib/supabase";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
@@ -186,13 +187,19 @@ const initialPlates: Plate[] = [
   { id: "runomer-71808-k555oc790", value: "К 555 ОС", leftLetter: "К", rightLetters: "ОС", digits: "555", region: "Московская область · 790", price: "320 000 ₽", priceValue: 320000, vehicle: "car", seller: "Красивые номера на авто", createdAt: "2026-08-28", tag: "Одинаковые цифры", sourceName: "Открыть исходное объявление", sourceUrl: "https://t.me/runomer/71808" },
 ];
 
+// В релизный APK всегда упаковывается свежий срез каталога. Он нужен не
+// вместо сервера, а чтобы при проблеме с мобильной сетью пользователь не
+// видел 18 демонстрационных карточек.
+const bundledCatalog = bundledCatalogData as Plate[];
+const catalogFallback = bundledCatalog.length > 0 ? bundledCatalog : initialPlates;
+
 export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const compactLayout = windowWidth < 430;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
-  const [catalog, setCatalog] = useState<Plate[]>(initialPlates);
+  const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
@@ -947,7 +954,7 @@ export default function HomeScreen() {
       const uniqueLoaded = [...uniqueListings.values()].sort((first, second) => (second.publishedAt ?? second.createdAt).localeCompare(first.publishedAt ?? first.createdAt));
       // Demo cards are useful only before the first database data arrives.
       // Mixing them into a real catalogue inflated the public count.
-      setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : initialPlates);
+      setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : catalogFallback);
       if (Platform.OS !== "web" && uniqueLoaded.length > 0) void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(uniqueLoaded));
       if (partnerResult.error) setCatalogLoadError("Каталог загружен не полностью. Проверь интернет и обнови страницу позже.");
       } catch {
