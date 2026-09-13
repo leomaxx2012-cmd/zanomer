@@ -773,8 +773,11 @@ export default function HomeScreen() {
       setCatalogRefreshing(true);
       setCatalogLoadError("");
       let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+      // Индикатор — только короткое подтверждение запуска. Длительный запрос
+      // не должен создавать впечатление, что приложение зависло.
+      const refreshIndicatorTimeout = setTimeout(() => setCatalogRefreshing(false), 8_000);
       const stopSlowRequest = new Promise<never>((_, reject) => {
-        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 45_000);
+        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 20_000);
       });
       // Supabase возвращает не более 1 000 строк за запрос. В каталоге сейчас
       // около трёх тысяч записей, поэтому первые три страницы берём сразу
@@ -901,6 +904,7 @@ export default function HomeScreen() {
         setCatalogLoadError("Каталог долго не отвечает. Проверь интернет или VPN и попробуй обновить позже.");
       } finally {
         if (requestTimeout) clearTimeout(requestTimeout);
+        clearTimeout(refreshIndicatorTimeout);
         setCatalogLoading(false);
         setCatalogRefreshing(false);
         loadingCatalog = false;
@@ -913,7 +917,9 @@ export default function HomeScreen() {
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void loadCatalog();
     });
-    const refreshTimer = setInterval(() => void loadCatalog(), 60_000);
+    // Не расходуем мобильный интернет постоянными полными перезагрузками.
+    // При возврате в приложение проверка по-прежнему запускается сразу.
+    const refreshTimer = setInterval(() => void loadCatalog(), 5 * 60_000);
     return () => {
       appStateSubscription.remove();
       clearInterval(refreshTimer);
