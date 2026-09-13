@@ -776,8 +776,11 @@ export default function HomeScreen() {
       // Индикатор — только короткое подтверждение запуска. Длительный запрос
       // не должен создавать впечатление, что приложение зависло.
       const refreshIndicatorTimeout = setTimeout(() => setCatalogRefreshing(false), 8_000);
+      // Новые номера уже показаны отдельным быстрым запросом ниже. Полный
+      // каталог может быть объёмным, поэтому даём ему больше времени и не
+      // обрываем фоновую догрузку через 20 секунд на мобильной сети.
       const stopSlowRequest = new Promise<never>((_, reject) => {
-        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 20_000);
+        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 90_000);
       });
       // Supabase возвращает не более 1 000 строк за запрос. В каталоге сейчас
       // около трёх тысяч записей, поэтому первые три страницы берём сразу
