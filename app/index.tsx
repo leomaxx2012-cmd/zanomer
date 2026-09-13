@@ -1612,7 +1612,7 @@ export default function HomeScreen() {
         style={[styles.catalogHeroButton, compactLayout && styles.catalogHeroButtonCompact]}
       >
         <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
-        <Text style={styles.catalogHeroButtonHint}>{catalogRefreshing ? "Каталог обновляется в фоне…" : catalogLoadError ? "Нет связи с каталогом — проверь интернет" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
+        <Text style={styles.catalogHeroButtonHint}>{catalogLoadError ? "Нет связи с каталогом — проверь интернет" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
       </Pressable>}
 
       {activeTab === "buy" && !catalogOnly && <>
@@ -1680,7 +1680,7 @@ export default function HomeScreen() {
         ] as const).map(([type, icon, label]) => (
           <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
             {type === "truck" ? <TrailerIcon active={vehicle === "truck"} /> : <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>}
-            <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, type === "truck" && vehicle !== type && styles.vehicleTrailerLabel, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
+            <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
       </View>
@@ -2428,17 +2428,16 @@ const styles = StyleSheet.create({
   vehicleIconCompact: { fontSize: 16 },
   trailerIcon: { height: 18, marginRight: 2, position: "relative", width: 27 },
   trailerIconActive: { opacity: 1 },
-  trailerBody: { backgroundColor: "#D92D20", borderRadius: 2, height: 10, left: 4, position: "absolute", top: 1, width: 19 },
+  trailerBody: { backgroundColor: "#667085", borderRadius: 2, height: 10, left: 4, position: "absolute", top: 1, width: 19 },
   trailerBodyActive: { backgroundColor: "#FFFFFF" },
-  trailerHitch: { backgroundColor: "#D92D20", height: 2, left: 0, position: "absolute", top: 7, width: 5 },
+  trailerHitch: { backgroundColor: "#667085", height: 2, left: 0, position: "absolute", top: 7, width: 5 },
   trailerHitchActive: { backgroundColor: "#FFFFFF" },
-  trailerWheel: { backgroundColor: "#B42318", borderRadius: 99, bottom: 1, height: 5, position: "absolute", width: 5 },
+  trailerWheel: { backgroundColor: "#344054", borderRadius: 99, bottom: 1, height: 5, position: "absolute", width: 5 },
   trailerWheelActive: { backgroundColor: "#FFFFFF" },
   trailerWheelLeft: { left: 7 },
   trailerWheelRight: { right: 3 },
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
-  vehicleTrailerLabel: { color: "#D92D20" },
   vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
   plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", height: "100%", letterSpacing: 1, minWidth: 0, textAlign: "center" },
