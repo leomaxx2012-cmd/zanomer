@@ -782,33 +782,26 @@ export default function HomeScreen() {
       const stopSlowRequest = new Promise<never>((_, reject) => {
         requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 90_000);
       });
-      // Supabase возвращает не более 1 000 строк за запрос. В каталоге сейчас
-      // около трёх тысяч записей, поэтому первые три страницы берём сразу
-      // параллельно. Раньше третья страница ждала две первые и на мобильном
-      // интернете обновление выглядело как зависшее.
-      async function loadAllPartnerListings() {
-        const rows: Record<string, any>[] = [];
+      // Каталог большой для одного ответа на мобильной сети. Догружаем его
+      // небольшими порциями и обновляем экран после каждой порции.
+      async function loadAllPartnerListings(initialRows: Record<string, any>[] = []) {
+        const rows: Record<string, any>[] = [...initialRows];
         const loadPage = (start: number) => client
           .from("partner_listings")
           .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
           .eq("status", "active")
           .order("created_at", { ascending: false })
-          .range(start, start + 999);
+          .range(start, start + 249);
 
-        const firstPages = await Promise.all([0, 1000, 2000].map(loadPage));
-        for (const result of firstPages) {
-          if (result.error) return { data: rows, error: result.error };
-          rows.push(...(result.data ?? []));
-        }
-        if ((firstPages.at(-1)?.data ?? []).length < 1000) return { data: rows, error: null };
-
-        // Если каталог станет больше трёх тысяч, догружаем остальные страницы.
-        for (let start = 3000; ; start += 1000) {
+        for (let start = rows.length; ; start += 250) {
           const nextResult = await loadPage(start);
           if (nextResult.error) return { data: rows, error: nextResult.error };
           const nextPage = nextResult.data ?? [];
           rows.push(...nextPage);
-          if (nextPage.length < 1000) return { data: rows, error: null };
+          // Первые 120 уже видны; остальные добавляем без ожидания всего
+          // каталога, чтобы на телефоне сразу было видно, что загрузка идёт.
+          setCatalog(rows.map(toPartnerPlate));
+          if (nextPage.length < 250) return { data: rows, error: null };
         }
       }
 
@@ -859,7 +852,7 @@ export default function HomeScreen() {
 
       // Полную историю получаем только после быстрого ответа с новинками,
       // чтобы параллельные тяжёлые запросы не мешали старту каталога.
-      const allPartnerPagesRequest = loadAllPartnerListings();
+      const allPartnerPagesRequest = loadAllPartnerListings(firstPartnerResult.data ?? []);
 
       const [siteResult, partnerResult] = await Promise.race([Promise.all([
         siteListingsRequest,
