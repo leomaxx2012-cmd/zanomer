@@ -17,7 +17,7 @@
     ],
     "android": {
       "package": "ru.zanomer.app",
-      "versionCode": 1,
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/zanomer-plate-avatar.png",
         "backgroundColor": "#21154F"
@@ -26,7 +26,7 @@
         "POST_NOTIFICATIONS"
       ]
     },
-    "version": "1.0.0",
+    "version": "1.0.1",
     "runtimeVersion": {
       "policy": "appVersion"
     },
