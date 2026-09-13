@@ -807,14 +807,18 @@ export default function HomeScreen() {
       // небольшими порциями и обновляем экран после каждой порции.
       async function loadAllPartnerListings(initialRows: Record<string, any>[] = []) {
         const rows: Record<string, any>[] = [...initialRows];
+        // Supabase отдаёт до 1000 строк за запрос. Так полный каталог из
+        // нескольких тысяч номеров не застревает после первых 370 карточек
+        // на медленном мобильном интернете.
+        const partnerPageSize = 1000;
         const loadPage = (start: number) => client
           .from("partner_listings")
           .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
           .eq("status", "active")
           .order("created_at", { ascending: false })
-          .range(start, start + 249);
+          .range(start, start + partnerPageSize - 1);
 
-        for (let start = rows.length; ; start += 250) {
+        for (let start = rows.length; ; start += partnerPageSize) {
           const nextResult = await loadPage(start);
           if (nextResult.error) return { data: rows, error: nextResult.error };
           const nextPage = nextResult.data ?? [];
@@ -824,7 +828,7 @@ export default function HomeScreen() {
           const progressiveCatalog = rows.map(toPartnerPlate);
           setCatalog(progressiveCatalog);
           if (Platform.OS !== "web") void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(progressiveCatalog));
-          if (nextPage.length < 250) return { data: rows, error: null };
+          if (nextPage.length < partnerPageSize) return { data: rows, error: null };
         }
       }
 
