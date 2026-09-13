@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as Updates from "expo-updates";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../lib/supabase";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
@@ -80,6 +81,8 @@ const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
 };
+
+const CATALOG_CACHE_KEY = "zanomer.catalog.v1";
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
 
@@ -760,6 +763,23 @@ export default function HomeScreen() {
     };
   }, [selectedPlate, catalog, archivedPartnerSources]);
 
+  // При следующем запуске сразу показываем последнюю полную версию каталога,
+  // сохранённую на устройстве. Проверка свежих данных продолжается в фоне.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    let mounted = true;
+    void AsyncStorage.getItem(CATALOG_CACHE_KEY).then((saved) => {
+      if (!mounted || !saved) return;
+      try {
+        const cached = JSON.parse(saved) as Plate[];
+        if (Array.isArray(cached) && cached.length > 120) setCatalog(cached);
+      } catch {
+        void AsyncStorage.removeItem(CATALOG_CACHE_KEY);
+      }
+    });
+    return () => { mounted = false; };
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
     const client = supabase;
@@ -800,7 +820,9 @@ export default function HomeScreen() {
           rows.push(...nextPage);
           // Первые 120 уже видны; остальные добавляем без ожидания всего
           // каталога, чтобы на телефоне сразу было видно, что загрузка идёт.
-          setCatalog(rows.map(toPartnerPlate));
+          const progressiveCatalog = rows.map(toPartnerPlate);
+          setCatalog(progressiveCatalog);
+          if (Platform.OS !== "web") void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(progressiveCatalog));
           if (nextPage.length < 250) return { data: rows, error: null };
         }
       }
@@ -920,6 +942,7 @@ export default function HomeScreen() {
       // Demo cards are useful only before the first database data arrives.
       // Mixing them into a real catalogue inflated the public count.
       setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : initialPlates);
+      if (Platform.OS !== "web" && uniqueLoaded.length > 0) void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(uniqueLoaded));
       if (partnerResult.error) setCatalogLoadError("Каталог загружен не полностью. Проверь интернет и обнови страницу позже.");
       } catch {
         setCatalogLoadError("Каталог долго не отвечает. Проверь интернет или VPN и попробуй обновить позже.");
