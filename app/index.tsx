@@ -2281,9 +2281,8 @@ export default function HomeScreen() {
               <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Информация</Text></View>
               <Pressable onPress={() => setPaymentInfoOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках.</Text>
-              <View style={styles.legalScrollHint}><Text style={styles.legalScrollHintText}>↓ Прокрутите вниз — там реквизиты продавца</Text></View>
               <Text style={styles.legalHeading}>Платные услуги</Text>
               <View style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Подписка ЗаНомером Плюс — 199 ₽ в месяц</Text>
@@ -2770,8 +2769,6 @@ const styles = StyleSheet.create({
   requisitesRow: { color: "#475467", fontSize: 14, fontWeight: "700", marginTop: 9 },
   requisitesPhone: { color: "#155EEF", fontSize: 15, fontWeight: "900", marginTop: 13, textDecorationLine: "underline" },
   legalLead: { color: "#475467", fontSize: 14, lineHeight: 20, marginTop: 16 },
-  legalScrollHint: { alignItems: "center", backgroundColor: "#F4F3FA", borderColor: "#DDD6FE", borderRadius: 12, borderWidth: 1, marginTop: 14, paddingHorizontal: 12, paddingVertical: 10 },
-  legalScrollHintText: { color: "#5143C2", fontSize: 13, fontWeight: "800", textAlign: "center" },
   legalHeading: { color: "#24213E", fontSize: 17, fontWeight: "900", marginTop: 20 },
   legalCard: { backgroundColor: "#F8F7FF", borderColor: "#E2DEF7", borderRadius: 14, borderWidth: 1, marginTop: 10, padding: 13 },
   legalCardTitle: { color: "#352F67", fontSize: 14, fontWeight: "900", lineHeight: 20 },
