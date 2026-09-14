@@ -288,8 +288,7 @@ export default function HomeScreen() {
   const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
   const [testPaymentDone, setTestPaymentDone] = useState(false);
   const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
-  const [requisitesOpen, setRequisitesOpen] = useState(isRequisitesPage);
-  const [paymentInfoOpen, setPaymentInfoOpen] = useState(isPaymentInfoPage);
+  const [paymentInfoOpen, setPaymentInfoOpen] = useState(() => isPaymentInfoPage() || isRequisitesPage());
 
   function openTestPayment(title: string, amount: string) {
     setTestPayment({ title, amount });
@@ -1490,18 +1489,18 @@ export default function HomeScreen() {
       <View pointerEvents="none" style={styles.backgroundGlowRight} />
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
-        <View style={styles.headerBrand}>
+          <View style={styles.headerBrand}>
           <View style={styles.headerBrandRow}>
-            <Image source={require("../assets/zanomer-plate-avatar-readable.png")} style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
+            <View style={[styles.headerLogo, compactLayout && styles.headerLogoCompact]} accessibilityLabel="Логотип ЗаНомером">
+              <Text style={[styles.headerLogoText, compactLayout && styles.headerLogoTextCompact]}>ЗН</Text>
+              <View style={styles.headerLogoFlag}><View style={styles.headerLogoFlagWhite} /><View style={styles.headerLogoFlagBlue} /><View style={styles.headerLogoFlagRed} /></View>
+            </View>
             <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.brand, compactLayout && styles.brandCompact]}>ЗаНомером</Text>
           </View>
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => setPaymentInfoOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Услуги и условия оплаты">
-            <Text style={styles.requisitesHeaderButtonText}>₽</Text>
-          </Pressable>
-          <Pressable onPress={() => setRequisitesOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Реквизиты ИП">
+          <Pressable onPress={() => setPaymentInfoOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
             <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
           </Pressable>
           <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
@@ -2282,7 +2281,7 @@ export default function HomeScreen() {
         <Pressable style={styles.detailsOverlay} onPress={() => setPaymentInfoOpen(false)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.legalPanel}>
             <View style={styles.detailsHeader}>
-              <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Услуги и оплата</Text></View>
+              <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Информация</Text></View>
               <Pressable onPress={() => setPaymentInfoOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
@@ -2304,35 +2303,20 @@ export default function HomeScreen() {
               <Text style={styles.legalText}>После успешной оплаты через ПСБ услуга активируется автоматически в личном кабинете. Подписка открывает график изменения цены и увеличивает лимит сохранённых поисков и избранных номеров с 15 до 30. Подписка и продвижение относятся только к работе сервиса и не являются оплатой самого номера.</Text>
               <Text style={styles.legalHeading}>Условия использования и возврат</Text>
               <Text style={styles.legalText}>Перед оплатой пользователь видит название услуги, её стоимость и срок. Отменить подписку можно до следующего списания. Если платная услуга не была активирована по технической ошибке, обратитесь по телефону, указанному в реквизитах, в течение 14 дней — мы проверим обращение и при подтверждении ошибки вернём деньги тем же способом оплаты.</Text>
-              <Text style={styles.legalText}>Оплата производится через ПСБ. ЗаНомером не продаёт государственные номера и не является стороной сделки между продавцом и покупателем объявления.</Text>
-              <Pressable onPress={() => { setPaymentInfoOpen(false); setRequisitesOpen(true); }} style={styles.legalRequisitesButton}>
-                <Text style={styles.legalRequisitesButtonText}>Контакты и реквизиты ИП</Text>
-              </Pressable>
+              <Text style={styles.legalText}>После подключения оплата будет производиться через ПСБ. ЗаНомером не продаёт государственные номера и не является стороной сделки между продавцом и покупателем объявления.</Text>
+              <Text style={styles.legalHeading}>Реквизиты продавца услуг</Text>
+              <View style={styles.requisitesCard}>
+                <Text style={styles.requisitesName}>ИП Леонович Александр Леонидович</Text>
+                <Text style={styles.requisitesRow}>ИНН: 504406730552</Text>
+                <Text style={styles.requisitesRow}>ОГРНИП: 319508100089501</Text>
+                <Text style={styles.requisitesRow}>КПП: не применяется для ИП</Text>
+                <Text style={styles.requisitesRow}>Расчётный счёт: 40802 810 5 0000 0054446</Text>
+                <Text style={styles.requisitesRow}>Банк: ПАО «Банк ПСБ», г. Ярославль</Text>
+                <Text style={styles.requisitesRow}>БИК: 044525555</Text>
+                <Text style={styles.requisitesRow}>Корреспондентский счёт: 30101 810 4 0000 0000555</Text>
+                <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
+              </View>
             </ScrollView>
-          </Pressable>
-        </Pressable>
-      </Modal>
-
-      <Modal visible={requisitesOpen} transparent animationType="fade" onRequestClose={() => setRequisitesOpen(false)}>
-        <Pressable style={styles.detailsOverlay} onPress={() => setRequisitesOpen(false)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.requisitesPanel}>
-            <View style={styles.detailsHeader}>
-              <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Реквизиты</Text></View>
-              <Pressable onPress={() => setRequisitesOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
-            </View>
-            <Text style={styles.requisitesHint}>Продавец услуг на площадке</Text>
-            <View style={styles.requisitesCard}>
-              <Text style={styles.requisitesName}>Индивидуальный предприниматель Леонович Александр Леонидович</Text>
-              <Text style={styles.requisitesRow}>ИНН: 504406730552</Text>
-              <Text style={styles.requisitesRow}>ОГРНИП: 319508100089501</Text>
-              <Text style={styles.requisitesRow}>КПП: не применяется для ИП</Text>
-              <Text style={styles.requisitesRow}>Расчётный счёт: 40802 810 5 0000 0054446</Text>
-              <Text style={styles.requisitesRow}>Банк: ПАО «Банк ПСБ», г. Ярославль</Text>
-              <Text style={styles.requisitesRow}>БИК: 044525555</Text>
-              <Text style={styles.requisitesRow}>Корреспондентский счёт: 30101 810 4 0000 0000555</Text>
-              <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
-            </View>
-            <Text style={styles.requisitesHint}>Оплата подписки и продвижения объявлений осуществляется через ПСБ. ЗаНомером — площадка объявлений и не является стороной сделки купли-продажи номера.</Text>
           </Pressable>
         </Pressable>
       </Modal>
@@ -2369,8 +2353,14 @@ const styles = StyleSheet.create({
   headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 12 },
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
   headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
-  headerAvatar: { borderRadius: 7, height: 34, width: 62 },
-  headerAvatarCompact: { borderRadius: 5, height: 25, width: 45 },
+  headerLogo: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#171B2A", borderRadius: 6, borderWidth: 2, flexDirection: "row", gap: 3, height: 34, justifyContent: "center", paddingHorizontal: 5, width: 62 },
+  headerLogoCompact: { borderRadius: 5, borderWidth: 1.5, gap: 2, height: 25, paddingHorizontal: 3, width: 45 },
+  headerLogoText: { color: "#111827", fontSize: 15, fontWeight: "900", letterSpacing: -0.7 },
+  headerLogoTextCompact: { fontSize: 11 },
+  headerLogoFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.5, height: 14, overflow: "hidden", width: 19 },
+  headerLogoFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
+  headerLogoFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
+  headerLogoFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
   brandCompact: { flexShrink: 1, fontSize: 25, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
