@@ -1497,8 +1497,8 @@ export default function HomeScreen() {
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => setPaymentInfoOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
-            <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
+          <Pressable onPress={() => setPaymentInfoOpen(true)} style={[styles.requisitesHeaderButton, !compactLayout && styles.requisitesHeaderButtonWide]} accessibilityLabel="Информация об услугах, оплате и реквизитах">
+            <Text style={styles.requisitesHeaderButtonText}>{compactLayout ? "ⓘ" : "ⓘ Информация и реквизиты"}</Text>
           </Pressable>
           <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
             <Text style={styles.chatsButtonText}>💬</Text>
@@ -2358,6 +2358,7 @@ const styles = StyleSheet.create({
   subtitleCompact: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },
   requisitesHeaderButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 42, justifyContent: "center", width: 42 },
+  requisitesHeaderButtonWide: { paddingHorizontal: 13, width: "auto" },
   requisitesHeaderButtonText: { color: "#5143C2", fontSize: 20, fontWeight: "900" },
   chatsButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 42, justifyContent: "center", position: "relative", width: 42 },
   chatsButtonText: { fontSize: 18 },
