@@ -1491,10 +1491,7 @@ export default function HomeScreen() {
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
           <View style={styles.headerBrand}>
           <View style={styles.headerBrandRow}>
-            <View style={[styles.headerLogo, compactLayout && styles.headerLogoCompact]} accessibilityLabel="Логотип ЗаНомером">
-              <Text style={[styles.headerLogoText, compactLayout && styles.headerLogoTextCompact]}>ЗН</Text>
-              <View style={styles.headerLogoFlag}><View style={styles.headerLogoFlagWhite} /><View style={styles.headerLogoFlagBlue} /><View style={styles.headerLogoFlagRed} /></View>
-            </View>
+            <Image source={require("../assets/zanomer-plate-avatar-readable.png")} resizeMode="cover" style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
             <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.brand, compactLayout && styles.brandCompact]}>ЗаНомером</Text>
           </View>
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
@@ -2353,14 +2350,8 @@ const styles = StyleSheet.create({
   headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 12 },
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
   headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
-  headerLogo: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#171B2A", borderRadius: 6, borderWidth: 2, flexDirection: "row", gap: 3, height: 34, justifyContent: "center", paddingHorizontal: 5, width: 62 },
-  headerLogoCompact: { borderRadius: 5, borderWidth: 1.5, gap: 2, height: 25, paddingHorizontal: 3, width: 45 },
-  headerLogoText: { color: "#111827", fontSize: 15, fontWeight: "900", letterSpacing: -0.7 },
-  headerLogoTextCompact: { fontSize: 11 },
-  headerLogoFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.5, height: 14, overflow: "hidden", width: 19 },
-  headerLogoFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
-  headerLogoFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
-  headerLogoFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
+  headerAvatar: { borderRadius: 7, height: 44, width: 112 },
+  headerAvatarCompact: { borderRadius: 5, height: 32, width: 72 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
   brandCompact: { flexShrink: 1, fontSize: 25, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
