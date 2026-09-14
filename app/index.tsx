@@ -2265,7 +2265,7 @@ export default function HomeScreen() {
               <View><Text style={styles.paymentKicker}>ТЕСТОВЫЙ РЕЖИМ</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
               <Pressable onPress={() => setTestPayment(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
-            {testPaymentDone ? <View style={styles.paymentSuccess}><Text style={styles.paymentSuccessIcon}>✓</Text><Text style={styles.paymentSuccessTitle}>Тест прошёл успешно</Text><Text style={styles.paymentHint}>Деньги не списывались. При подключении ЮKassa здесь появится настоящая безопасная оплата.</Text></View> : <>
+            {testPaymentDone ? <View style={styles.paymentSuccess}><Text style={styles.paymentSuccessIcon}>✓</Text><Text style={styles.paymentSuccessTitle}>Тест прошёл успешно</Text><Text style={styles.paymentHint}>Деньги не списывались. При подключении ПСБ здесь появится настоящая безопасная оплата.</Text></View> : <>
               <Text style={styles.paymentItem}>{testPayment?.title}</Text>
               <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
               <Text style={styles.paymentHint}>Это имитация платежа: карту вводить не нужно, деньги не списываются и услуга пока не активируется.</Text>
@@ -2298,10 +2298,10 @@ export default function HomeScreen() {
                 <Text style={styles.legalText}>Объявление постоянно отображается в блоке «Горячие предложения», пока активно на площадке.</Text>
               </View>
               <Text style={styles.legalHeading}>Как получается услуга</Text>
-              <Text style={styles.legalText}>После успешной оплаты через ЮKassa услуга активируется автоматически в личном кабинете. Подписка открывает график изменения цены и увеличивает лимит сохранённых поисков и избранных номеров с 15 до 30. Подписка и продвижение относятся только к работе сервиса и не являются оплатой самого номера.</Text>
+              <Text style={styles.legalText}>После успешной оплаты через ПСБ услуга активируется автоматически в личном кабинете. Подписка открывает график изменения цены и увеличивает лимит сохранённых поисков и избранных номеров с 15 до 30. Подписка и продвижение относятся только к работе сервиса и не являются оплатой самого номера.</Text>
               <Text style={styles.legalHeading}>Условия использования и возврат</Text>
               <Text style={styles.legalText}>Перед оплатой пользователь видит название услуги, её стоимость и срок. Отменить подписку можно до следующего списания. Если платная услуга не была активирована по технической ошибке, обратитесь по телефону, указанному в реквизитах, в течение 14 дней — мы проверим обращение и при подтверждении ошибки вернём деньги тем же способом оплаты.</Text>
-              <Text style={styles.legalText}>Оплата производится через ЮKassa. ЗаНомером не продаёт государственные номера и не является стороной сделки между продавцом и покупателем объявления.</Text>
+              <Text style={styles.legalText}>Оплата производится через ПСБ. ЗаНомером не продаёт государственные номера и не является стороной сделки между продавцом и покупателем объявления.</Text>
               <Pressable onPress={() => { setPaymentInfoOpen(false); setRequisitesOpen(true); }} style={styles.legalRequisitesButton}>
                 <Text style={styles.legalRequisitesButtonText}>Контакты и реквизиты ИП</Text>
               </Pressable>
@@ -2324,7 +2324,7 @@ export default function HomeScreen() {
               <Text style={styles.requisitesRow}>ОГРНИП: 319508100089501</Text>
               <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
             </View>
-            <Text style={styles.requisitesHint}>Оплата подписки и продвижения объявлений осуществляется через ЮKassa. ЗаНомером — площадка объявлений и не является стороной сделки купли-продажи номера.</Text>
+            <Text style={styles.requisitesHint}>Оплата подписки и продвижения объявлений осуществляется через ПСБ. ЗаНомером — площадка объявлений и не является стороной сделки купли-продажи номера.</Text>
           </Pressable>
         </Pressable>
       </Modal>
