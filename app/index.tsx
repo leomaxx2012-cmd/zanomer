@@ -2322,6 +2322,11 @@ export default function HomeScreen() {
               <Text style={styles.requisitesName}>Индивидуальный предприниматель Леонович Александр Леонидович</Text>
               <Text style={styles.requisitesRow}>ИНН: 504406730552</Text>
               <Text style={styles.requisitesRow}>ОГРНИП: 319508100089501</Text>
+              <Text style={styles.requisitesRow}>КПП: не применяется для ИП</Text>
+              <Text style={styles.requisitesRow}>Расчётный счёт: 40802 810 5 0000 0054446</Text>
+              <Text style={styles.requisitesRow}>Банк: ПАО «Банк ПСБ», г. Ярославль</Text>
+              <Text style={styles.requisitesRow}>БИК: 044525555</Text>
+              <Text style={styles.requisitesRow}>Корреспондентский счёт: 30101 810 4 0000 0000555</Text>
               <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
             </View>
             <Text style={styles.requisitesHint}>Оплата подписки и продвижения объявлений осуществляется через ПСБ. ЗаНомером — площадка объявлений и не является стороной сделки купли-продажи номера.</Text>
