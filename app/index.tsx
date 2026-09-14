@@ -1962,14 +1962,14 @@ export default function HomeScreen() {
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
               <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
                 <View style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
-                  <View style={[styles.cardPlateMain, windowWidth >= 1000 && styles.cardPlateMainDesktop]}>
-                    <Text style={[styles.cardPlateLetter, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
-                    <Text style={[styles.cardPlateDigits, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
-                    <Text style={[styles.cardPlateLetters, windowWidth >= 1000 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
+                  <View style={[styles.cardPlateMain, compactLayout && styles.cardPlateMainCompact, windowWidth >= 1000 && styles.cardPlateMainDesktop]}>
+                    <Text style={[styles.cardPlateLetter, compactLayout && styles.cardPlateLetterCompact, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
+                    <Text style={[styles.cardPlateDigits, compactLayout && styles.cardPlateDigitsCompact, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
+                    <Text style={[styles.cardPlateLetters, compactLayout && styles.cardPlateLettersCompact, windowWidth >= 1000 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
                   </View>
-                  <View style={[styles.cardPlateRegion, windowWidth >= 1000 && styles.cardPlateRegionDesktop]}>
-                    <Text style={[styles.cardPlateRegionValue, windowWidth >= 1000 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
-                    <View style={[styles.cardPlateRegionMeta, windowWidth >= 1000 && styles.cardPlateRegionMetaDesktop]}><Text style={[styles.cardPlateRus, windowWidth >= 1000 && styles.cardPlateRusDesktop]}>RUS</Text><View style={[styles.cardFlag, windowWidth >= 1000 && styles.cardFlagDesktop]} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View></View>
+                  <View style={[styles.cardPlateRegion, compactLayout && styles.cardPlateRegionCompact, windowWidth >= 1000 && styles.cardPlateRegionDesktop]}>
+                    <Text style={[styles.cardPlateRegionValue, compactLayout && styles.cardPlateRegionValueCompact, windowWidth >= 1000 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
+                    <View style={[styles.cardPlateRegionMeta, compactLayout && styles.cardPlateRegionMetaCompact, windowWidth >= 1000 && styles.cardPlateRegionMetaDesktop]}><Text style={[styles.cardPlateRus, compactLayout && styles.cardPlateRusCompact, windowWidth >= 1000 && styles.cardPlateRusDesktop]}>RUS</Text><View style={[styles.cardFlag, compactLayout && styles.cardFlagCompact, windowWidth >= 1000 && styles.cardFlagDesktop]} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View></View>
                   </View>
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltLeft]} />
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltRight]} />
@@ -2670,29 +2670,40 @@ const styles = StyleSheet.create({
   // в этой же карточке. Так знак никогда не обрезается сбоку.
   cardMainRowCompact: { flexDirection: "column", gap: 12 },
   cardPlate: { alignItems: "stretch", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden", position: "relative" },
-  cardPlateCompact: { alignSelf: "stretch", flex: 0, height: 82, width: "100%" },
+  cardPlateCompact: { alignSelf: "stretch", flex: 0, height: 102, width: "100%" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
   // Стандартный российский знак: 520 × 112 мм, пропорция 4,64:1.
   cardPlateDesktop: { flexBasis: 520, flexGrow: 0, flexShrink: 1, height: 112, maxWidth: "62%", width: 520 },
   cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", gap: 8, justifyContent: "center", minWidth: 0, paddingHorizontal: 5 },
+  // Телефон повторяет пропорции компьютерной версии: цифры выше букв,
+  // а код региона начинается на одной высоте с основными цифрами.
+  cardPlateMainCompact: { gap: 0, justifyContent: "flex-start", paddingHorizontal: 0, position: "relative" },
   // На десктопе позиции повторяют разметку реального знака: 15%, 45% и 82% ширины основной зоны.
   cardPlateMainDesktop: { gap: 0, justifyContent: "flex-start", paddingHorizontal: 0, position: "relative" },
   cardPlateLetter: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
+  cardPlateLetterCompact: { fontSize: 50, left: "3%", lineHeight: 56, position: "absolute", top: 25, width: "19%" },
   // Буквы ниже цифр: нижняя кромка знаков совпадает, как на реальном номере.
   cardPlateLetterDesktop: { fontSize: 71, left: "4%", position: "absolute", top: 25, width: "18%" },
   cardPlateDigits: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 44, fontWeight: "700", letterSpacing: -1.8, paddingHorizontal: 0, textAlign: "center" },
+  cardPlateDigitsCompact: { fontSize: 70, left: "22%", lineHeight: 76, position: "absolute", top: -3, width: "43%" },
   cardPlateDigitsDesktop: { fontSize: 99, left: "23%", position: "absolute", top: -3, width: "42%" },
   cardPlateLetters: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.8, paddingHorizontal: 0, textAlign: "center" },
+  cardPlateLettersCompact: { fontSize: 50, left: "63%", lineHeight: 56, position: "absolute", top: 25, width: "34%" },
   cardPlateLettersDesktop: { fontSize: 71, left: "61%", position: "absolute", top: 25, width: "35%" },
   cardPlateRegion: { alignItems: "center", borderLeftColor: "#131B2A", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 4, width: 56 },
+  cardPlateRegionCompact: { justifyContent: "flex-start", paddingTop: 0, position: "relative", width: 86 },
   cardPlateRegionDesktop: { justifyContent: "flex-start", paddingTop: 0, position: "relative", width: 120 },
   cardPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 19, fontWeight: "700", letterSpacing: -0.6, lineHeight: 21 },
+  cardPlateRegionValueCompact: { fontSize: 50, lineHeight: 56, position: "absolute", top: 5 },
   // Код региона равен по кеглю буквам и начинается на высоте верхнего края цифр.
   cardPlateRegionValueDesktop: { fontSize: 71, lineHeight: 74, position: "absolute", top: 5 },
   cardPlateRegionMeta: { alignItems: "center", flexDirection: "row", gap: 3, marginTop: 2 },
+  cardPlateRegionMetaCompact: { gap: 3, marginTop: 0, position: "absolute", top: 60 },
   cardPlateRus: { color: "#111827", fontSize: 7, fontWeight: "900", letterSpacing: 0.1 },
+  cardPlateRusCompact: { fontSize: 9, letterSpacing: 0.15 },
   cardFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 11, overflow: "hidden", width: 20 },
+  cardFlagCompact: { height: 12, width: 25 },
   cardPlateRegionMetaDesktop: { gap: 4, marginTop: 0, position: "absolute", top: 75 },
   cardPlateRusDesktop: { fontSize: 12, letterSpacing: 0.2 },
   cardFlagDesktop: { height: 15, width: 32 },
