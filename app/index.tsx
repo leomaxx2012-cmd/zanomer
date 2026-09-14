@@ -2697,8 +2697,6 @@ const styles = StyleSheet.create({
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
   cardPublishedTop: { color: "#7A738F", flexShrink: 1, fontSize: 10, fontWeight: "700", textAlign: "right" },
-  availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 9, paddingVertical: 5 },
-  availableBadgeText: { color: "#18794E", fontSize: 12, fontWeight: "900" },
   region: { color: "#68627D", fontSize: 12, lineHeight: 16, marginTop: 4 },
   seriesBadge: { alignSelf: "flex-start", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 8, borderWidth: 1, marginTop: 5, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   seriesBadgeText: { color: "#175CD3", fontSize: 10, fontWeight: "900" },
