@@ -1970,17 +1970,15 @@ export default function HomeScreen() {
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltLeft]} />
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltRight]} />
                 </View>
-                <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
+                  <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
-                    {!!item.sourceUrl && <View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View>}
                   </View>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
                   <View style={styles.cardBadgesSpread}>
                     <Text style={styles.price}>{item.price}</Text>
-                    <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>{item.sourceUrl ? "Источник проверен" : "Объявление сайта"}</Text></View>
+                    {!!item.sourceUrl ? <><View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View><View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View></> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
-                    {!!item.sourceUrl && <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View>}
                     {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Проверенный продавец" : `★ ${item.sellerRating.toFixed(1)} · есть отзывы`}</Text></View>}
                   </View>
                   <View style={styles.cardButtonsSpread}>
@@ -2707,7 +2705,7 @@ const styles = StyleSheet.create({
   sellerLink: { color: "#5143C2", textDecorationLine: "underline" },
   catalogRating: { alignSelf: "flex-start", backgroundColor: "#FFF7E8", borderColor: "#FDE2A7", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   catalogRatingText: { color: "#9A5B00", fontSize: 10, fontWeight: "900" },
-  trustBadge: { alignSelf: "flex-start", backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 8, borderWidth: 1, marginTop: 6, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
+  trustBadge: { alignSelf: "flex-start", backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 8, borderWidth: 1, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   trustBadgeText: { color: "#18794E", fontSize: 10, fontWeight: "900" },
   cardBadgesSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8 },
   cardButtonsSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
