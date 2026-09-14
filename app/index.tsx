@@ -1639,6 +1639,9 @@ export default function HomeScreen() {
         <Text style={styles.catalogOnlyTitle}>Все объявления</Text>
         <Text style={styles.catalogOnlyCount}>{catalogLoading ? "…" : visiblePlates.length}</Text>
       </View>}
+      {activeTab === "buy" && catalogOnly && catalogRefreshing && <View style={styles.catalogUpdateNotice} accessibilityLiveRegion="polite">
+        <Text style={styles.catalogUpdateNoticeText}>↻ Каталог обновляется…</Text>
+      </View>}
 
       {activeTab === "buy" && !catalogOnly && <Pressable
         onPress={() => {
@@ -1653,7 +1656,7 @@ export default function HomeScreen() {
         style={[styles.catalogHeroButton, compactLayout && styles.catalogHeroButtonCompact]}
       >
         <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
-        <Text style={styles.catalogHeroButtonHint}>{catalogLoadError ? "Нет связи с каталогом — проверь интернет" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
+        <Text style={styles.catalogHeroButtonHint} accessibilityLiveRegion="polite">{catalogLoadError ? "Нет связи с каталогом — проверь интернет" : catalogRefreshing ? "↻ Каталог обновляется… сохранённые номера уже доступны" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
       </Pressable>}
 
       {activeTab === "buy" && !catalogOnly && <>
@@ -2613,6 +2616,8 @@ const styles = StyleSheet.create({
   listFilters: { alignSelf: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: 1100, paddingBottom: 3, paddingTop: 10, width: "100%" },
   filterControlPanel: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 18, borderWidth: 1, marginTop: 10, maxWidth: 1100, padding: 13, width: "100%" },
   catalogOnlyToolbar: { alignItems: "center", alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 16, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, maxWidth: 1100, padding: 11, width: "100%" },
+  catalogUpdateNotice: { alignSelf: "center", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 10, borderWidth: 1, marginTop: 8, maxWidth: 1100, paddingHorizontal: 12, paddingVertical: 7, width: "100%" },
+  catalogUpdateNoticeText: { color: "#155EEF", fontSize: 12, fontWeight: "800", textAlign: "center" },
   catalogOnlyBack: { backgroundColor: "#F0EEFF", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
   catalogOnlyBackText: { color: "#5143C2", fontSize: 13, fontWeight: "900" },
   catalogOnlyTitle: { color: "#24213E", flex: 1, fontSize: 15, fontWeight: "900", marginHorizontal: 10, textAlign: "center" },
