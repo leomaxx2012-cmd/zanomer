@@ -1973,30 +1973,30 @@ export default function HomeScreen() {
                   <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
+                    <Text numberOfLines={1} style={styles.cardPublishedTop}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
                   </View>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
                   <View style={styles.cardBadgesSpread}>
                     <Text style={styles.price}>{item.price}</Text>
-                    {!!item.sourceUrl ? <><View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View><View style={styles.availableBadge}><Text style={styles.availableBadgeText}>В наличии</Text></View></> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
+                    {!!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
                     {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Проверенный продавец" : `★ ${item.sellerRating.toFixed(1)} · есть отзывы`}</Text></View>}
                   </View>
                   <View style={styles.cardButtonsSpread}>
-                    {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={styles.sourceButton}>
+                    {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={[styles.sourceButton, compactLayout && styles.cardPrimaryActionCompact]}>
                       <Text numberOfLines={1} style={styles.sourceButtonText}>Открыть объявление ↗</Text>
-                    </Pressable>}
-                    {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarityPickerPlate(item); }} style={styles.similarButton}>
-                      <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                     </Pressable>}
                     {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
                     {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
-                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
+                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={[styles.cardAction, compactLayout && styles.cardShareActionCompact]}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
+                    {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarityPickerPlate(item); }} style={[styles.similarButton, compactLayout && styles.similarButtonWideCompact]}>
+                      <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
+                    </Pressable>}
                   </View>
                 </View>
               </View>
               <View style={styles.cardFooter}>
                 <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }} style={styles.cardFooterSeller}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
-                <Text numberOfLines={1} style={styles.seller}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
               </View>
             </Pressable>
             </View>
@@ -2696,6 +2696,7 @@ const styles = StyleSheet.create({
   cardInfoCompact: { flex: 0, width: "100%" },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
+  cardPublishedTop: { color: "#7A738F", flexShrink: 1, fontSize: 10, fontWeight: "700", textAlign: "right" },
   availableBadge: { backgroundColor: "#E8F8F0", borderColor: "#BAE9D1", borderRadius: 10, borderWidth: 1, flexShrink: 0, paddingHorizontal: 9, paddingVertical: 5 },
   availableBadgeText: { color: "#18794E", fontSize: 12, fontWeight: "900" },
   region: { color: "#68627D", fontSize: 12, lineHeight: 16, marginTop: 4 },
@@ -2717,10 +2718,13 @@ const styles = StyleSheet.create({
   catalogSourceText: { color: "#5B4CC4", fontSize: 10, fontWeight: "900" },
   sourceButton: { alignSelf: "flex-start", backgroundColor: "#C4327B", borderRadius: 11, maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
   sourceButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  cardPrimaryActionCompact: { alignItems: "center", flex: 1 },
   similarButton: { alignSelf: "flex-start", backgroundColor: "#155EEF", borderRadius: 11, maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
+  similarButtonWideCompact: { alignItems: "center", width: "100%" },
   similarButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   cardActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
   cardAction: { backgroundColor: "#5143C2", borderColor: "#4338A8", borderRadius: 11, borderWidth: 1, minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
+  cardShareActionCompact: { alignItems: "center", flex: 1 },
   cardActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   cardActionLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
   cardActionLikedText: { color: "#C01048" },
