@@ -49,7 +49,7 @@ const catalogue = [...unique.values()]
     createdAt: item.created_at.slice(0, 10),
     publishedAt: item.created_at,
     tag: item.tag ?? "Партнёрское объявление",
-    sourceName: "Открыть исходное объявление",
+    sourceName: item.source_name,
     sourceUrl: item.source_url,
     featuredUntil: item.featured_until,
   }))

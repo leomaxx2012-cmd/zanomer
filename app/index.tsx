@@ -122,8 +122,11 @@ function formatListingDate(value?: string) {
   });
 }
 
-function publicationSourceName(plate?: Pick<Plate, "sourceName" | "sourceUrl" | "isSiteListing">) {
-  if (plate?.sourceName) return plate.sourceName;
+function publicationSourceName(plate?: Pick<Plate, "seller" | "sourceName" | "sourceUrl" | "isSiteListing">) {
+  // Старые офлайн-снимки содержали технический текст кнопки вместо имени
+  // канала. Для них используем сохранённое имя продавца/канала.
+  if (plate?.sourceName && plate.sourceName !== "Открыть исходное объявление") return plate.sourceName;
+  if (plate?.seller && plate.sourceUrl) return plate.seller;
   if (plate?.sourceUrl?.includes("t.me/")) return "Telegram";
   if (plate?.sourceUrl?.includes("vk.com/") || plate?.sourceUrl?.includes("vk.ru/")) return "ВКонтакте";
   return plate?.isSiteListing ? "сайте" : "каталоге";
@@ -131,7 +134,7 @@ function publicationSourceName(plate?: Pick<Plate, "sourceName" | "sourceUrl" | 
 
 // Дата партнёрского объявления сохраняется парсером из самого поста, а не
 // подменяется моментом, когда GitHub Actions увидел этот пост.
-function formatPublication(plate?: Pick<Plate, "publishedAt" | "createdAt" | "sourceName" | "sourceUrl" | "isSiteListing">) {
+function formatPublication(plate?: Pick<Plate, "publishedAt" | "createdAt" | "seller" | "sourceName" | "sourceUrl" | "isSiteListing">) {
   const source = publicationSourceName(plate);
   if (source === "сайте" || source === "каталоге") return `Опубликовано на ${source}: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
   return `Канал «${source}»: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
