@@ -1156,6 +1156,7 @@ export default function HomeScreen() {
   }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly]);
 
   const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
+  const sellerProfileIsChannel = sellerProfileListings.length > 0 && sellerProfileListings.every((plate) => !!plate.sourceUrl);
   const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
   const sellerProfileJoinedAt = sellerProfileListings.find((plate) => plate.sellerJoinedAt)?.sellerJoinedAt;
   const hotPlates = useMemo(() => {
@@ -2031,17 +2032,17 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={!!sellerProfile} transparent animationType="slide" onRequestClose={() => setSellerProfile(null)}>
-        <Pressable style={styles.detailsOverlay} onPress={() => setSellerProfile(null)}>
+      <Modal visible={!!sellerProfile} transparent animationType="fade" onRequestClose={() => setSellerProfile(null)}>
+        <Pressable style={[styles.detailsOverlay, styles.sellerProfileOverlay]} onPress={() => setSellerProfile(null)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.sellerProfilePanel}>
             <View style={styles.detailsHeader}>
-              <View><Text style={styles.detailsTitle}>{sellerProfile}</Text><Text style={styles.sellerProfileSubtitle}>Профиль продавца</Text></View>
+              <View><Text style={styles.detailsTitle}>{sellerProfile}</Text><Text style={styles.sellerProfileSubtitle}>{sellerProfileIsChannel ? "Канал объявлений" : "Профиль продавца"}</Text></View>
               <Pressable onPress={() => setSellerProfile(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
             <View style={styles.sellerProfileStats}>
               <View><Text style={styles.sellerProfileNumber}>{sellerProfileListings.length}</Text><Text style={styles.sellerProfileLabel}>активных объявлений</Text></View>
-              <View><Text style={styles.sellerProfileNumber}>{sellerProfileRating ? `★ ${sellerProfileRating.toFixed(1)}` : "—"}</Text><Text style={styles.sellerProfileLabel}>рейтинг</Text></View>
-              <View><Text numberOfLines={1} style={styles.sellerProfileJoined}>{sellerProfileJoinedAt ? formatListingDate(sellerProfileJoinedAt).slice(0, 10) : "—"}</Text><Text style={styles.sellerProfileLabel}>на сайте с</Text></View>
+              {!sellerProfileIsChannel && <><View><Text style={styles.sellerProfileNumber}>{sellerProfileRating ? `★ ${sellerProfileRating.toFixed(1)}` : "—"}</Text><Text style={styles.sellerProfileLabel}>рейтинг</Text></View>
+              <View><Text numberOfLines={1} style={styles.sellerProfileJoined}>{sellerProfileJoinedAt ? formatListingDate(sellerProfileJoinedAt).slice(0, 10) : "—"}</Text><Text style={styles.sellerProfileLabel}>на сайте с</Text></View></>}
             </View>
             <ScrollView style={styles.sellerProfileList} contentContainerStyle={styles.sellerProfileListContent}>
               {sellerProfileListings.map((plate) => <Pressable key={plate.id} onPress={() => { setSellerProfile(null); setSelectedPlate(plate); }} style={styles.sellerProfileItem}>
@@ -2786,6 +2787,7 @@ const styles = StyleSheet.create({
   subscribeButton: { alignItems: "center", backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderRadius: 13, borderWidth: 1, marginBottom: 84, paddingHorizontal: 13, paddingVertical: 13 },
   subscribeButtonText: { color: "#067647", fontSize: 13, fontWeight: "800", textAlign: "center" },
   detailsOverlay: { backgroundColor: "rgba(16,24,40,0.5)", flex: 1 },
+  sellerProfileOverlay: { alignItems: "center", justifyContent: "center", padding: 16 },
   detailsScroll: { flexGrow: 1, justifyContent: "flex-end", padding: 14 },
   detailsPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 660, padding: 22, width: "100%" },
   similarityPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 480, padding: 20, width: "92%" },
@@ -2867,7 +2869,7 @@ const styles = StyleSheet.create({
   publicCommentMessage: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 7 },
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
-  sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "78%", maxWidth: 560, padding: 20, width: "92%" },
+  sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "78%", maxWidth: 560, padding: 20, width: "100%" },
   sellerProfileSubtitle: { color: "#716A88", fontSize: 13, marginTop: 3 },
   sellerProfileStats: { backgroundColor: "#F4F3FF", borderRadius: 16, flexDirection: "row", flexWrap: "wrap", gap: 18, justifyContent: "space-between", marginTop: 18, padding: 14 },
   sellerProfileNumber: { color: "#5143C2", fontSize: 20, fontWeight: "900" },
