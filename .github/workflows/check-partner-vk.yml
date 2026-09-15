@@ -1,0 +1,19 @@
+name: Check permitted VK source
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 03:30 Moscow time (00:30 UTC): one polite public-page availability check.
+    - cron: "30 0 * * *"
+
+jobs:
+  check-vk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/check-partner-vk-source.mjs
