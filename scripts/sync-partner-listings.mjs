@@ -19,6 +19,10 @@ if (!url || !serviceKey) {
 
 const db = createClient(url, serviceKey, { auth: { persistSession: false } });
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+// Partner sources requested a slow, low-impact nightly scan. One public page
+// is read per source and this pause prevents a burst of requests.
+const SOURCE_REQUEST_DELAY_MS = 8_000;
+const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const SOURCES = [
   { handle: "runomer", name: "Красивые номера на авто" },
   { handle: "runomer23", name: "Красивые номера Краснодар" },
@@ -225,7 +229,8 @@ async function syncSource(source) {
 }
 
 const result = [];
-for (const source of SOURCES) {
+for (const [index, source] of SOURCES.entries()) {
+  if (index > 0) await sleep(SOURCE_REQUEST_DELAY_MS);
   try {
     result.push(await syncSource(source));
   } catch (error) {
