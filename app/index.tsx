@@ -122,26 +122,6 @@ function formatListingDate(value?: string) {
   });
 }
 
-function publicationSourceName(plate?: Pick<Plate, "seller" | "sourceName" | "sourceUrl" | "isSiteListing">) {
-  // URL — самый надёжный источник имени: старые снимки могли содержать
-  // технический текст кнопки «Открыть исходное объявление».
-  const telegram = plate?.sourceUrl?.match(/^https?:\/\/(?:t\.me|telegram\.me)\/([^/?#]+)/i)?.[1];
-  if (telegram) return `@${telegram}`;
-  const vk = plate?.sourceUrl?.match(/^https?:\/\/(?:www\.)?(?:vk\.com|vk\.ru)\/([^/?#]+)/i)?.[1];
-  if (vk) return `vk.ru/${vk}`;
-  if (plate?.sourceName && plate.sourceName !== "Открыть исходное объявление") return plate.sourceName;
-  if (plate?.seller && plate.sourceUrl) return plate.seller;
-  return plate?.isSiteListing ? "сайте" : "каталоге";
-}
-
-// Дата партнёрского объявления сохраняется парсером из самого поста, а не
-// подменяется моментом, когда GitHub Actions увидел этот пост.
-function formatPublication(plate?: Pick<Plate, "publishedAt" | "createdAt" | "seller" | "sourceName" | "sourceUrl" | "isSiteListing">) {
-  const source = publicationSourceName(plate);
-  if (source === "сайте" || source === "каталоге") return `Опубликовано на ${source}: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
-  return `Канал «${source}»: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
-}
-
 function isRequisitesPage() {
   if (typeof window === "undefined" || !window.location) return false;
   return new URLSearchParams(window.location.search).get("page") === "requisites";
@@ -1993,7 +1973,6 @@ export default function HomeScreen() {
                   <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
-                    <Text numberOfLines={1} style={styles.cardPublishedTop}>{formatPublication(item)}</Text>
                   </View>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
                   <View style={styles.cardBadgesSpread}>
@@ -2017,6 +1996,7 @@ export default function HomeScreen() {
               </View>
               <View style={styles.cardFooter}>
                 <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }} style={styles.cardFooterSeller}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
+                <Text numberOfLines={1} style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
               </View>
             </Pressable>
             </View>
@@ -2100,7 +2080,7 @@ export default function HomeScreen() {
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
               <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Регион</Text><Text style={styles.detailsValue}>{selectedPlate?.region}</Text>
-                <Text style={styles.detailsLabel}>Дата и время в источнике</Text><Text style={styles.detailsValue}>{formatPublication(selectedPlate)}</Text>
+                <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
                 <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate?.seller}</Text>
               </View>
               {hasPlusSubscription ? <View style={styles.priceHistoryBlock}>
