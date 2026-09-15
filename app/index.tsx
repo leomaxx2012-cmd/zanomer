@@ -122,7 +122,8 @@ function formatListingDate(value?: string) {
   });
 }
 
-function publicationSourceName(plate?: Pick<Plate, "sourceUrl" | "isSiteListing">) {
+function publicationSourceName(plate?: Pick<Plate, "sourceName" | "sourceUrl" | "isSiteListing">) {
+  if (plate?.sourceName) return plate.sourceName;
   if (plate?.sourceUrl?.includes("t.me/")) return "Telegram";
   if (plate?.sourceUrl?.includes("vk.com/") || plate?.sourceUrl?.includes("vk.ru/")) return "ВКонтакте";
   return plate?.isSiteListing ? "сайте" : "каталоге";
@@ -130,9 +131,10 @@ function publicationSourceName(plate?: Pick<Plate, "sourceUrl" | "isSiteListing"
 
 // Дата партнёрского объявления сохраняется парсером из самого поста, а не
 // подменяется моментом, когда GitHub Actions увидел этот пост.
-function formatPublication(plate?: Pick<Plate, "publishedAt" | "createdAt" | "sourceUrl" | "isSiteListing">) {
+function formatPublication(plate?: Pick<Plate, "publishedAt" | "createdAt" | "sourceName" | "sourceUrl" | "isSiteListing">) {
   const source = publicationSourceName(plate);
-  return `Опубликовано ${source === "сайте" || source === "каталоге" ? "на" : "в"} ${source}: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
+  if (source === "сайте" || source === "каталоге") return `Опубликовано на ${source}: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
+  return `Канал «${source}»: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
 }
 
 function isRequisitesPage() {
