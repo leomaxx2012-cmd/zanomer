@@ -196,6 +196,10 @@ const catalogFallback = bundledCatalog.length > 0 ? bundledCatalog : initialPlat
 export default function HomeScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const compactLayout = windowWidth < 430;
+  // Тяжёлая карточка содержит разметку номера и несколько действий. На
+  // телефоне выводим меньшую первую страницу, чтобы прокрутка оставалась
+  // отзывчивой даже при каталоге из тысяч объявлений.
+  const catalogPageSize = compactLayout ? 16 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
@@ -203,7 +207,7 @@ export default function HomeScreen() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
-  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(40);
+  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 16 : 40);
   const [catalogOnly, setCatalogOnly] = useState(false);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
@@ -310,7 +314,7 @@ export default function HomeScreen() {
     setSimilarFiltersOpen(false);
     setPlatePicker(null);
     setRegionPickerGroup(null);
-    setCatalogDisplayLimit(40);
+    setCatalogDisplayLimit(catalogPageSize);
   }
 
   function toggleSpecialFilter(filter: SpecialFilter) {
@@ -1152,8 +1156,8 @@ export default function HomeScreen() {
   const renderedPlates = visiblePlates.slice(0, catalogDisplayLimit);
 
   useEffect(() => {
-    setCatalogDisplayLimit(40);
-  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly]);
+    setCatalogDisplayLimit(catalogPageSize);
+  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, catalogPageSize]);
 
   const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
   const sellerProfileIsChannel = sellerProfileListings.length > 0 && sellerProfileListings.every((plate) => !!plate.sourceUrl);
@@ -1630,7 +1634,7 @@ export default function HomeScreen() {
       )}
 
       {activeTab === "buy" && catalogOnly && <View style={styles.catalogOnlyToolbar}>
-        <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(40); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); }} style={styles.catalogOnlyBack}>
+        <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(catalogPageSize); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); }} style={styles.catalogOnlyBack}>
           <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
         </Pressable>
         <Text style={styles.catalogOnlyTitle}>Все объявления</Text>
@@ -1956,6 +1960,7 @@ export default function HomeScreen() {
                 <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
               </Pressable>}
+            <View style={styles.cardShell}>
             <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
               <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
                 <View style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
@@ -1995,17 +2000,20 @@ export default function HomeScreen() {
                   </View>
                 </View>
               </View>
-              <View style={styles.cardFooter}>
-                <Pressable onPress={(event) => { event.stopPropagation(); setSellerProfile(item.seller); }} style={styles.cardFooterSeller}><Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text></Pressable>
-                <Text numberOfLines={1} style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
-              </View>
             </Pressable>
+            <View style={styles.cardFooter}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${item.seller}`} onPress={() => setSellerProfile(item.seller)} hitSlop={8} style={styles.cardFooterSeller}>
+                <Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text>
+              </Pressable>
+              <Text numberOfLines={1} style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
+            </View>
+            </View>
             </View>
           );
         })}
         {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
       </View>
-      {renderedPlates.length < visiblePlates.length && <Pressable onPress={() => setCatalogDisplayLimit((current) => current + 40)} style={styles.showMoreButton}>
+      {renderedPlates.length < visiblePlates.length && <Pressable onPress={() => setCatalogDisplayLimit((current) => current + catalogPageSize)} style={styles.showMoreButton}>
         <Text style={styles.showMoreText}>Показать ещё · осталось {visiblePlates.length - renderedPlates.length}</Text>
       </Pressable>}
       </View>
@@ -2644,7 +2652,8 @@ const styles = StyleSheet.create({
   catalogError: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
   showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F3F0FF", borderColor: "#7A5AF8", borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
-  card: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", padding: 14, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
+  cardShell: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
+  card: { paddingHorizontal: 14, paddingTop: 14 },
   cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
   // На телефоне сначала показываем номер на всю ширину, затем все сведения
   // в этой же карточке. Так знак никогда не обрезается сбоку.
@@ -2709,7 +2718,7 @@ const styles = StyleSheet.create({
   trustBadgeText: { color: "#18794E", fontSize: 12, fontWeight: "900" },
   cardBadgesSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8 },
   cardButtonsSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  cardFooter: { borderTopColor: "#EEEAF8", borderTopWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", marginTop: 12, paddingTop: 10 },
+  cardFooter: { borderTopColor: "#EEEAF8", borderTopWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", marginTop: 12, paddingBottom: 14, paddingHorizontal: 14, paddingTop: 10 },
   cardFooterSeller: { flex: 1, minWidth: 0 },
   cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
   price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
