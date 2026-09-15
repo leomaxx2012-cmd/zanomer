@@ -123,12 +123,14 @@ function formatListingDate(value?: string) {
 }
 
 function publicationSourceName(plate?: Pick<Plate, "seller" | "sourceName" | "sourceUrl" | "isSiteListing">) {
-  // Старые офлайн-снимки содержали технический текст кнопки вместо имени
-  // канала. Для них используем сохранённое имя продавца/канала.
+  // URL — самый надёжный источник имени: старые снимки могли содержать
+  // технический текст кнопки «Открыть исходное объявление».
+  const telegram = plate?.sourceUrl?.match(/^https?:\/\/(?:t\.me|telegram\.me)\/([^/?#]+)/i)?.[1];
+  if (telegram) return `@${telegram}`;
+  const vk = plate?.sourceUrl?.match(/^https?:\/\/(?:www\.)?(?:vk\.com|vk\.ru)\/([^/?#]+)/i)?.[1];
+  if (vk) return `vk.ru/${vk}`;
   if (plate?.sourceName && plate.sourceName !== "Открыть исходное объявление") return plate.sourceName;
   if (plate?.seller && plate.sourceUrl) return plate.seller;
-  if (plate?.sourceUrl?.includes("t.me/")) return "Telegram";
-  if (plate?.sourceUrl?.includes("vk.com/") || plate?.sourceUrl?.includes("vk.ru/")) return "ВКонтакте";
   return plate?.isSiteListing ? "сайте" : "каталоге";
 }
 
