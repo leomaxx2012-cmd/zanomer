@@ -122,6 +122,19 @@ function formatListingDate(value?: string) {
   });
 }
 
+function publicationSourceName(plate?: Pick<Plate, "sourceUrl" | "isSiteListing">) {
+  if (plate?.sourceUrl?.includes("t.me/")) return "Telegram";
+  if (plate?.sourceUrl?.includes("vk.com/") || plate?.sourceUrl?.includes("vk.ru/")) return "ВКонтакте";
+  return plate?.isSiteListing ? "сайте" : "каталоге";
+}
+
+// Дата партнёрского объявления сохраняется парсером из самого поста, а не
+// подменяется моментом, когда GitHub Actions увидел этот пост.
+function formatPublication(plate?: Pick<Plate, "publishedAt" | "createdAt" | "sourceUrl" | "isSiteListing">) {
+  const source = publicationSourceName(plate);
+  return `Опубликовано ${source === "сайте" || source === "каталоге" ? "на" : "в"} ${source}: ${formatListingDate(plate?.publishedAt ?? plate?.createdAt)}`;
+}
+
 function isRequisitesPage() {
   if (typeof window === "undefined" || !window.location) return false;
   return new URLSearchParams(window.location.search).get("page") === "requisites";
@@ -1973,7 +1986,7 @@ export default function HomeScreen() {
                   <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
-                    <Text numberOfLines={1} style={styles.cardPublishedTop}>Опубликовано: {formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
+                    <Text numberOfLines={1} style={styles.cardPublishedTop}>{formatPublication(item)}</Text>
                   </View>
                   <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
                   <View style={styles.cardBadgesSpread}>
@@ -2080,7 +2093,7 @@ export default function HomeScreen() {
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
               <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Регион</Text><Text style={styles.detailsValue}>{selectedPlate?.region}</Text>
-                <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
+                <Text style={styles.detailsLabel}>Дата и время в источнике</Text><Text style={styles.detailsValue}>{formatPublication(selectedPlate)}</Text>
                 <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate?.seller}</Text>
               </View>
               {hasPlusSubscription ? <View style={styles.priceHistoryBlock}>
