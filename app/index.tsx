@@ -199,7 +199,7 @@ export default function HomeScreen() {
   // Тяжёлая карточка содержит разметку номера и несколько действий. На
   // телефоне выводим меньшую первую страницу, чтобы прокрутка оставалась
   // отзывчивой даже при каталоге из тысяч объявлений.
-  const catalogPageSize = compactLayout ? 16 : 40;
+  const catalogPageSize = compactLayout ? 12 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
@@ -207,7 +207,7 @@ export default function HomeScreen() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
-  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 16 : 40);
+  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 12 : 40);
   const [catalogOnly, setCatalogOnly] = useState(false);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
@@ -1961,9 +1961,9 @@ export default function HomeScreen() {
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
               </Pressable>}
             <View style={styles.cardShell}>
-            <Pressable onPress={() => setSelectedPlate(item)} style={styles.card}>
+            <View style={styles.card}>
               <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
-                <View style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
                   <View style={[styles.cardPlateMain, compactLayout && styles.cardPlateMainCompact, windowWidth >= 1000 && styles.cardPlateMainDesktop]}>
                     <Text style={[styles.cardPlateLetter, compactLayout && styles.cardPlateLetterCompact, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
                     <Text style={[styles.cardPlateDigits, compactLayout && styles.cardPlateDigitsCompact, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
@@ -1975,7 +1975,7 @@ export default function HomeScreen() {
                   </View>
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltLeft]} />
                   <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltRight]} />
-                </View>
+                </Pressable>
                   <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
@@ -2000,7 +2000,7 @@ export default function HomeScreen() {
                   </View>
                 </View>
               </View>
-            </Pressable>
+            </View>
             <View style={styles.cardFooter}>
               <Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${item.seller}`} onPress={() => setSellerProfile(item.seller)} hitSlop={8} style={styles.cardFooterSeller}>
                 <Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text>
