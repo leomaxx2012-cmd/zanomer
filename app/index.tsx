@@ -1229,10 +1229,6 @@ export default function HomeScreen() {
     : showingWholeRegion
       ? selectedRegionOption?.title ?? region
       : selectedRegionCodes.join(", ");
-  const selectedRegionLineCount = showingWholeRegion || showingMultipleRegionCodes
-    ? Math.max(2, Math.ceil(selectedRegionLabel.length / 14))
-    : 1;
-  const plateSearchHeight = selectedRegionLineCount > 1 ? 42 + selectedRegionLineCount * 19 : 84;
   const selectedRegionFilterLabel = region === "Все"
     ? "Любой регион"
     : showingWholeRegion
@@ -1730,7 +1726,7 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
-      <View style={[styles.plateSearch, selectedRegionLineCount > 1 && { height: plateSearchHeight }]}>
+      <View style={styles.plateSearch}>
         <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={1} />
         <View style={styles.plateDivider} />
         <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={3} />
@@ -1739,11 +1735,8 @@ export default function HomeScreen() {
         <View style={styles.plateDivider} />
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text
-            adjustsFontSizeToFit
-            minimumFontScale={0.52}
-            numberOfLines={selectedRegionLineCount}
             style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
-          >{selectedRegionLabel}</Text>
+          >{showingMultipleRegionCodes && compactLayout ? selectedRegionCodes.join("\n") : selectedRegionLabel}</Text>
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
       </View>
@@ -1971,7 +1964,10 @@ export default function HomeScreen() {
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   </View>
-                  <Text numberOfLines={2} style={styles.region}>{item.region}</Text>
+                  <View style={styles.cardRegionRow}>
+                    <Text style={[styles.region, styles.cardRegionName]}>{item.region}</Text>
+                    <Text style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
+                  </View>
                   <View style={styles.cardBadgesSpread}>
                     <Text style={styles.price}>{item.price}</Text>
                     {!!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
@@ -1980,7 +1976,7 @@ export default function HomeScreen() {
                   </View>
                   <View style={styles.cardButtonsSpread}>
                     {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={[styles.sourceButton, compactLayout && styles.cardPrimaryActionCompact]}>
-                      <Text numberOfLines={1} style={styles.sourceButtonText}>Открыть объявление ↗</Text>
+                      <Text style={styles.sourceButtonText}>Открыть объявление ↗</Text>
                     </Pressable>}
                     {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
                     {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
@@ -1992,12 +1988,9 @@ export default function HomeScreen() {
                 </View>
               </View>
             </View>
-            <View style={styles.cardFooter}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${item.seller}`} onPress={() => setSellerProfile(item.seller)} hitSlop={8} style={styles.cardFooterSeller}>
-                <Text numberOfLines={1} style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text>
-              </Pressable>
-              <Text numberOfLines={1} style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
-            </View>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${item.seller}`} onPress={() => setSellerProfile(item.seller)} style={styles.cardFooter}>
+              <Text style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text>
+            </Pressable>
             </View>
             </View>
           );
@@ -2032,10 +2025,11 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={!!sellerProfile} transparent animationType="fade" onRequestClose={() => setSellerProfile(null)}>
-        <Pressable style={[styles.detailsOverlay, styles.sellerProfileOverlay]} onPress={() => setSellerProfile(null)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.sellerProfilePanel}>
+        <View style={[styles.detailsOverlay, styles.sellerProfileOverlay]}>
+          <Pressable accessibilityLabel="Закрыть профиль" style={StyleSheet.absoluteFill} onPress={() => setSellerProfile(null)} />
+          <View style={styles.sellerProfilePanel}>
             <View style={styles.detailsHeader}>
-              <View><Text style={styles.detailsTitle}>{sellerProfile}</Text><Text style={styles.sellerProfileSubtitle}>{sellerProfileIsChannel ? "Канал объявлений" : "Профиль продавца"}</Text></View>
+              <View style={styles.sellerProfileHeading}><Text style={styles.detailsTitle}>{sellerProfile}</Text><Text style={styles.sellerProfileSubtitle}>{sellerProfileIsChannel ? "Канал объявлений" : "Профиль продавца"}</Text></View>
               <Pressable onPress={() => setSellerProfile(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
             <View style={styles.sellerProfileStats}>
@@ -2043,14 +2037,14 @@ export default function HomeScreen() {
               {!sellerProfileIsChannel && <><View><Text style={styles.sellerProfileNumber}>{sellerProfileRating ? `★ ${sellerProfileRating.toFixed(1)}` : "—"}</Text><Text style={styles.sellerProfileLabel}>рейтинг</Text></View>
               <View><Text numberOfLines={1} style={styles.sellerProfileJoined}>{sellerProfileJoinedAt ? formatListingDate(sellerProfileJoinedAt).slice(0, 10) : "—"}</Text><Text style={styles.sellerProfileLabel}>на сайте с</Text></View></>}
             </View>
-            <ScrollView style={styles.sellerProfileList} contentContainerStyle={styles.sellerProfileListContent}>
+            <ScrollView style={styles.sellerProfileList} contentContainerStyle={styles.sellerProfileListContent} nestedScrollEnabled keyboardShouldPersistTaps="handled">
               {sellerProfileListings.map((plate) => <Pressable key={plate.id} onPress={() => { setSellerProfile(null); setSelectedPlate(plate); }} style={styles.sellerProfileItem}>
                 <View><Text style={styles.sellerProfilePlate}>{plate.value}</Text><Text style={styles.sellerProfileMeta}>{plate.region} · {formatListingDate(plate.publishedAt ?? plate.createdAt)}</Text></View>
                 <Text style={styles.sellerProfilePrice}>{plate.price}</Text>
               </Pressable>)}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={!!selectedPlate} transparent animationType="slide" onRequestClose={() => setSelectedPlate(null)}>
@@ -2123,7 +2117,7 @@ export default function HomeScreen() {
                 <View style={styles.publicCommentInputRow}><TextInput value={publicCommentDraft} onChangeText={setPublicCommentDraft} placeholder="Написать публичный комментарий…" placeholderTextColor="#98A2B3" style={styles.publicCommentInput} multiline maxLength={600} /><Pressable onPress={() => { void sendPublicComment(); }} style={styles.publicCommentSend}><Text style={styles.publicCommentSendText}>Отправить</Text></Pressable></View>
                 {!!publicCommentMessage && <Text style={styles.publicCommentMessage}>{publicCommentMessage}</Text>}
               </View>}
-              <View style={styles.detailsActionsRow}>
+              <View style={[styles.detailsActionsRow, styles.detailsShareSection]}>
                 <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
               </View>
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
@@ -2263,13 +2257,14 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={paymentInfoOpen} transparent animationType="slide" onRequestClose={() => setPaymentInfoOpen(false)}>
-        <Pressable style={styles.detailsOverlay} onPress={() => setPaymentInfoOpen(false)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.legalPanel}>
+        <View style={[styles.detailsOverlay, styles.sellerProfileOverlay]}>
+          <Pressable accessibilityLabel="Закрыть информацию" style={StyleSheet.absoluteFill} onPress={() => setPaymentInfoOpen(false)} />
+          <View style={styles.legalPanel}>
             <View style={styles.detailsHeader}>
               <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Информация</Text></View>
               <Pressable onPress={() => setPaymentInfoOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
-            <ScrollView showsVerticalScrollIndicator>
+            <ScrollView style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках.</Text>
               <Text style={styles.legalHeading}>Платные услуги</Text>
               <View style={styles.legalCard}>
@@ -2302,8 +2297,8 @@ export default function HomeScreen() {
                 <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
               </View>
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <View style={styles.bottomNav}>
@@ -2457,9 +2452,9 @@ const styles = StyleSheet.create({
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
-  plateSearch: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
-  plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", height: "100%", letterSpacing: 1, minWidth: 0, textAlign: "center" },
-  plateDivider: { backgroundColor: "#252525", height: "100%", width: 2 },
+  plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", minHeight: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
+  plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", textAlignVertical: "center", letterSpacing: 1, minWidth: 0, textAlign: "center" },
+  plateDivider: { backgroundColor: "#252525", alignSelf: "stretch", width: 2 },
   quickFiltersTitle: { color: "#344054", fontSize: 14, fontWeight: "900", marginTop: 16 },
   quickFilters: { flexDirection: "row", flexWrap: "wrap", gap: 9, paddingBottom: 3, paddingTop: 9, width: "100%" },
   quickSelect: { alignItems: "center", backgroundColor: "#F4F2FF", borderColor: "#D8D1FF", borderRadius: 18, borderWidth: 1, flexDirection: "row", gap: 5, paddingHorizontal: 15, paddingVertical: 11 },
@@ -2469,12 +2464,12 @@ const styles = StyleSheet.create({
   quickFilterActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
   quickFilterText: { color: "#5143C2", fontSize: 13, fontWeight: "800" },
   quickFilterTextActive: { color: "#FFFFFF" },
-  regionCodeBox: { alignItems: "center", flex: 1, height: "100%", justifyContent: "center", minWidth: 0 },
+  regionCodeBox: { alignItems: "center", flex: 1, paddingVertical: 12, justifyContent: "center", minWidth: 0 },
   regionCodeInput: { color: "#111827", fontSize: 18, fontWeight: "900", maxWidth: "100%", textAlign: "center" },
   regionCodeInputName: { fontSize: 15, lineHeight: 18, paddingHorizontal: 7 },
   regionCodeInputMultiple: { fontSize: 16, lineHeight: 18, paddingHorizontal: 7 },
   regionCodePlaceholder: { color: "#667085" },
-  rusLabel: { color: "#344054", fontSize: 10, fontWeight: "800", marginTop: -5 },
+  rusLabel: { color: "#344054", fontSize: 10, fontWeight: "800", marginTop: 3 },
   advancedButton: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 13, paddingVertical: 5 },
   advancedButtonText: { color: "#155EEF", fontSize: 14, fontWeight: "700" },
   advancedChevron: { color: "#155EEF", fontSize: 22, fontWeight: "600" },
@@ -2646,10 +2641,12 @@ const styles = StyleSheet.create({
   // Стандартный российский знак: 520 × 112 мм, пропорция 4,64:1.
   cardPlateDesktop: { flexBasis: 520, flexGrow: 0, flexShrink: 1, height: 112, maxWidth: "62%", width: 520 },
   cardInfo: { flex: 1, minWidth: 0 },
-  cardInfoCompact: { flex: 0, width: "100%" },
+  cardInfoCompact: { flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: "100%" },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
-  cardPublishedTop: { color: "#7A738F", flexShrink: 1, fontSize: 10, fontWeight: "700", textAlign: "right" },
+  cardRegionRow: { alignItems: "flex-start", flexDirection: "row", gap: 8, justifyContent: "space-between" },
+  cardRegionName: { flex: 1, minWidth: 0 },
+  cardPublishedTop: { color: "#7A738F", flexShrink: 0, fontSize: 10, lineHeight: 16, marginTop: 4, fontWeight: "700", textAlign: "right" },
   region: { color: "#68627D", fontSize: 12, lineHeight: 16, marginTop: 4 },
   seriesBadge: { alignSelf: "flex-start", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 8, borderWidth: 1, marginTop: 5, maxWidth: "100%", paddingHorizontal: 7, paddingVertical: 3 },
   seriesBadgeText: { color: "#175CD3", fontSize: 10, fontWeight: "900" },
@@ -2661,15 +2658,14 @@ const styles = StyleSheet.create({
   trustBadgeText: { color: "#18794E", fontSize: 12, fontWeight: "900" },
   cardBadgesSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8 },
   cardButtonsSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  cardFooter: { borderTopColor: "#EEEAF8", borderTopWidth: 1, flexDirection: "row", gap: 12, justifyContent: "space-between", marginTop: 12, paddingBottom: 14, paddingHorizontal: 14, paddingTop: 10 },
-  cardFooterSeller: { flex: 1, minWidth: 0 },
+  cardFooter: { borderTopColor: "#EEEAF8", borderTopWidth: 1, minHeight: 48, justifyContent: "center", marginTop: 12, paddingBottom: 14, paddingHorizontal: 14, paddingTop: 10 },
   cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
   price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
   catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, flexShrink: 1, maxWidth: 126, paddingHorizontal: 7, paddingVertical: 4 },
   catalogSourceText: { color: "#5B4CC4", fontSize: 10, fontWeight: "900" },
   sourceButton: { alignSelf: "flex-start", backgroundColor: "#C4327B", borderRadius: 11, maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
-  sourceButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
-  cardPrimaryActionCompact: { alignItems: "center", flex: 1 },
+  sourceButtonText: { color: "#FFFFFF", fontSize: 13, lineHeight: 19, textAlign: "center", fontWeight: "900" },
+  cardPrimaryActionCompact: { alignItems: "center", width: "100%" },
   similarButton: { alignSelf: "flex-start", backgroundColor: "#155EEF", borderRadius: 11, maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
   similarButtonWideCompact: { alignItems: "center", width: "100%" },
   similarButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
@@ -2711,7 +2707,9 @@ const styles = StyleSheet.create({
   comingSoonButton: { alignItems: "center", backgroundColor: "#344054", borderRadius: 11, marginTop: 17, paddingVertical: 12 },
   comingSoonButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   paymentPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 470, padding: 22, width: "92%" },
-  legalPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "88%", maxWidth: 620, padding: 22, width: "92%" },
+  legalScroll: { flex: 1, minHeight: 0 },
+  legalScrollContent: { paddingBottom: 24 },
+  legalPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, height: "88%", maxWidth: 620, padding: 22, width: "92%" },
   paymentKicker: { color: "#7F56D9", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   paymentTitle: { color: "#101828", fontSize: 23, fontWeight: "900", marginTop: 3 },
   requisitesPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 540, padding: 22, width: "92%" },
@@ -2786,6 +2784,7 @@ const styles = StyleSheet.create({
   publicDiscussionHeader: { gap: 10 },
   publicDiscussionTitle: { color: "#24213E", fontSize: 16, fontWeight: "900" },
   publicDiscussionHint: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 3 },
+  detailsShareSection: { borderTopColor: "#E7E3F8", borderTopWidth: 1, marginTop: 20, paddingTop: 16, paddingBottom: 8 },
   detailsActionsRow: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
   detailsActionButton: { backgroundColor: "#FFFFFF", borderColor: "#D8D2FF", borderRadius: 10, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
   detailsActionButtonLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
@@ -2806,13 +2805,14 @@ const styles = StyleSheet.create({
   publicCommentMessage: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 7 },
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
-  sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, maxHeight: "78%", maxWidth: 560, padding: 20, width: "100%" },
+  sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, height: "78%", maxWidth: 560, padding: 20, width: "100%" },
+  sellerProfileHeading: { flex: 1, minWidth: 0, marginRight: 12 },
   sellerProfileSubtitle: { color: "#716A88", fontSize: 13, marginTop: 3 },
   sellerProfileStats: { backgroundColor: "#F4F3FF", borderRadius: 16, flexDirection: "row", flexWrap: "wrap", gap: 18, justifyContent: "space-between", marginTop: 18, padding: 14 },
   sellerProfileNumber: { color: "#5143C2", fontSize: 20, fontWeight: "900" },
   sellerProfileJoined: { color: "#5143C2", fontSize: 14, fontWeight: "900", maxWidth: 94 },
   sellerProfileLabel: { color: "#716A88", fontSize: 11, fontWeight: "700", marginTop: 2 },
-  sellerProfileList: { marginTop: 14 },
+  sellerProfileList: { flex: 1, minHeight: 0, marginTop: 14 },
   sellerProfileListContent: { gap: 8, paddingBottom: 4 },
   sellerProfileItem: { alignItems: "center", backgroundColor: "#FAFAFF", borderColor: "#E7E3F8", borderRadius: 14, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", padding: 12 },
   sellerProfilePlate: { color: "#24213E", fontSize: 16, fontWeight: "900" },
