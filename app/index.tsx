@@ -19,6 +19,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { PlateFace } from "../components/PlateFace";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase } from "../lib/supabase";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
@@ -1964,17 +1965,7 @@ export default function HomeScreen() {
             <View style={styles.card}>
               <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
-                  <View style={[styles.cardPlateMain, compactLayout && styles.cardPlateMainCompact, windowWidth >= 1000 && styles.cardPlateMainDesktop]}>
-                    <Text style={[styles.cardPlateLetter, compactLayout && styles.cardPlateLetterCompact, windowWidth >= 1000 && styles.cardPlateLetterDesktop]}>{item.leftLetter}</Text>
-                    <Text style={[styles.cardPlateDigits, compactLayout && styles.cardPlateDigitsCompact, windowWidth >= 1000 && styles.cardPlateDigitsDesktop]}>{item.digits}</Text>
-                    <Text style={[styles.cardPlateLetters, compactLayout && styles.cardPlateLettersCompact, windowWidth >= 1000 && styles.cardPlateLettersDesktop]}>{item.rightLetters}</Text>
-                  </View>
-                  <View style={[styles.cardPlateRegion, compactLayout && styles.cardPlateRegionCompact, windowWidth >= 1000 && styles.cardPlateRegionDesktop]}>
-                    <Text style={[styles.cardPlateRegionValue, compactLayout && styles.cardPlateRegionValueCompact, windowWidth >= 1000 && styles.cardPlateRegionValueDesktop]}>{item.region.split(" · ")[1] ?? ""}</Text>
-                    <View style={[styles.cardPlateRegionMeta, compactLayout && styles.cardPlateRegionMetaCompact, windowWidth >= 1000 && styles.cardPlateRegionMetaDesktop]}><Text style={[styles.cardPlateRus, compactLayout && styles.cardPlateRusCompact, windowWidth >= 1000 && styles.cardPlateRusDesktop]}>RUS</Text><View style={[styles.cardFlag, compactLayout && styles.cardFlagCompact, windowWidth >= 1000 && styles.cardFlagDesktop]} accessibilityLabel="Флаг России"><View style={styles.cardFlagWhite} /><View style={styles.cardFlagBlue} /><View style={styles.cardFlagRed} /></View></View>
-                  </View>
-                  <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltLeft]} />
-                  <View pointerEvents="none" style={[styles.cardPlateBolt, styles.cardPlateBoltRight]} />
+                  <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} />
                 </Pressable>
                   <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
@@ -2074,17 +2065,7 @@ export default function HomeScreen() {
                 <Pressable onPress={() => setSelectedPlate(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
               </View>
               <View style={styles.detailsPlatePreview}>
-                <View style={styles.detailsPlateMain}>
-                  <Text style={styles.detailsPlateLetter}>{selectedPlate?.leftLetter}</Text>
-                  <Text style={styles.detailsPlateDigits}>{selectedPlate?.digits}</Text>
-                  <Text style={styles.detailsPlateLetters}>{selectedPlate?.rightLetters}</Text>
-                </View>
-                <View style={styles.detailsPlateRegionBox}>
-                  <Text style={styles.detailsPlateRegionValue}>{selectedPlate?.region.split(" · ")[1] ?? ""}</Text>
-                  <View style={styles.detailsPlateRegionMeta}><Text style={styles.detailsPlateRus}>RUS</Text><View style={styles.detailsPlateFlag} accessibilityLabel="Флаг России"><View style={styles.detailsPlateFlagWhite} /><View style={styles.detailsPlateFlagBlue} /><View style={styles.detailsPlateFlagRed} /></View></View>
-                </View>
-                <View pointerEvents="none" style={[styles.detailsPlateBolt, styles.detailsPlateBoltLeft]} />
-                <View pointerEvents="none" style={[styles.detailsPlateBolt, styles.detailsPlateBoltRight]} />
+                <PlateFace leftLetter={selectedPlate?.leftLetter} digits={selectedPlate?.digits} rightLetters={selectedPlate?.rightLetters} region={selectedPlate?.region.split(" · ")[1] ?? ""} />
               </View>
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
               <View style={styles.detailsBlock}>
@@ -2659,49 +2640,11 @@ const styles = StyleSheet.create({
   // в этой же карточке. Так знак никогда не обрезается сбоку.
   cardMainRowCompact: { flexDirection: "column", gap: 12 },
   cardPlate: { alignItems: "stretch", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden", position: "relative" },
-  cardPlateCompact: { alignSelf: "stretch", flex: 0, height: 102, width: "100%" },
+  cardPlateCompact: { alignSelf: "stretch", flexBasis: "auto", flexGrow: 0, flexShrink: 0, height: 102, width: "100%" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
   // Стандартный российский знак: 520 × 112 мм, пропорция 4,64:1.
   cardPlateDesktop: { flexBasis: 520, flexGrow: 0, flexShrink: 1, height: 112, maxWidth: "62%", width: 520 },
-  cardPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", gap: 8, justifyContent: "center", minWidth: 0, paddingHorizontal: 5 },
-  // Телефон повторяет пропорции компьютерной версии: цифры выше букв,
-  // а код региона начинается на одной высоте с основными цифрами.
-  cardPlateMainCompact: { gap: 0, justifyContent: "flex-start", paddingHorizontal: 0, position: "relative" },
-  // На десктопе позиции повторяют разметку реального знака: 15%, 45% и 82% ширины основной зоны.
-  cardPlateMainDesktop: { gap: 0, justifyContent: "flex-start", paddingHorizontal: 0, position: "relative" },
-  cardPlateLetter: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.3, textAlign: "center" },
-  cardPlateLetterCompact: { fontSize: 50, left: "3%", lineHeight: 56, position: "absolute", top: 25, width: "19%" },
-  // Буквы ниже цифр: нижняя кромка знаков совпадает, как на реальном номере.
-  cardPlateLetterDesktop: { fontSize: 71, left: "4%", position: "absolute", top: 25, width: "18%" },
-  cardPlateDigits: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 44, fontWeight: "700", letterSpacing: -1.8, paddingHorizontal: 0, textAlign: "center" },
-  cardPlateDigitsCompact: { fontSize: 70, left: "22%", lineHeight: 76, position: "absolute", top: -3, width: "43%" },
-  cardPlateDigitsDesktop: { fontSize: 99, left: "23%", position: "absolute", top: -3, width: "42%" },
-  cardPlateLetters: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 40, fontWeight: "700", letterSpacing: -1.8, paddingHorizontal: 0, textAlign: "center" },
-  cardPlateLettersCompact: { fontSize: 50, left: "63%", lineHeight: 56, position: "absolute", top: 25, width: "34%" },
-  cardPlateLettersDesktop: { fontSize: 71, left: "61%", position: "absolute", top: 25, width: "35%" },
-  cardPlateRegion: { alignItems: "center", borderLeftColor: "#131B2A", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 4, width: 56 },
-  cardPlateRegionCompact: { justifyContent: "flex-start", paddingTop: 0, position: "relative", width: 86 },
-  cardPlateRegionDesktop: { justifyContent: "flex-start", paddingTop: 0, position: "relative", width: 120 },
-  cardPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 19, fontWeight: "700", letterSpacing: -0.6, lineHeight: 21 },
-  cardPlateRegionValueCompact: { fontSize: 50, lineHeight: 56, position: "absolute", top: 5 },
-  // Код региона равен по кеглю буквам и начинается на высоте верхнего края цифр.
-  cardPlateRegionValueDesktop: { fontSize: 71, lineHeight: 74, position: "absolute", top: 5 },
-  cardPlateRegionMeta: { alignItems: "center", flexDirection: "row", gap: 3, marginTop: 2 },
-  cardPlateRegionMetaCompact: { gap: 3, marginTop: 0, position: "absolute", top: 60 },
-  cardPlateRus: { color: "#111827", fontSize: 7, fontWeight: "900", letterSpacing: 0.1 },
-  cardPlateRusCompact: { fontSize: 9, letterSpacing: 0.15 },
-  cardFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 11, overflow: "hidden", width: 20 },
-  cardFlagCompact: { height: 12, width: 25 },
-  cardPlateRegionMetaDesktop: { gap: 4, marginTop: 0, position: "absolute", top: 75 },
-  cardPlateRusDesktop: { fontSize: 12, letterSpacing: 0.2 },
-  cardFlagDesktop: { height: 15, width: 32 },
-  cardFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
-  cardFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
-  cardFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
-  cardPlateBolt: { backgroundColor: "#1B2430", borderColor: "#86909C", borderRadius: 99, borderWidth: 0.5, height: 5, position: "absolute", top: "50%", width: 5, zIndex: 3 },
-  cardPlateBoltLeft: { left: 8, marginTop: -2.5 },
-  cardPlateBoltRight: { marginTop: -2.5, right: 8 },
   cardInfo: { flex: 1, minWidth: 0 },
   cardInfoCompact: { flex: 0, width: "100%" },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
@@ -2809,21 +2752,6 @@ const styles = StyleSheet.create({
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
   // В полном просмотре — тот же размер стандартного знака 520 × 112.
   detailsPlatePreview: { alignSelf: "center", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 112, marginTop: 20, maxWidth: "100%", overflow: "hidden", position: "relative", width: 520 },
-  detailsPlateMain: { alignItems: "center", flex: 1, flexDirection: "row", justifyContent: "flex-start", minWidth: 0, paddingHorizontal: 0, position: "relative" },
-  detailsPlateLetter: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 71, fontWeight: "700", left: "4%", letterSpacing: -2.2, position: "absolute", textAlign: "center", top: 10, width: "18%" },
-  detailsPlateDigits: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 101, fontWeight: "700", left: "23%", letterSpacing: -2.8, paddingHorizontal: 0, position: "absolute", textAlign: "center", top: -5, width: "42%" },
-  detailsPlateLetters: { color: "#121722", flex: 0, fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 71, fontWeight: "700", left: "61%", letterSpacing: -2.8, paddingHorizontal: 0, position: "absolute", textAlign: "center", top: 10, width: "35%" },
-  detailsPlateRegionBox: { alignItems: "center", borderLeftColor: "#131B2A", borderLeftWidth: 2, justifyContent: "center", paddingHorizontal: 8, width: 120 },
-  detailsPlateRegionValue: { color: "#111827", fontFamily: Platform.select({ web: "Arial Narrow", default: "System" }), fontSize: 54, fontWeight: "700", letterSpacing: -1, lineHeight: 57 },
-  detailsPlateRegionMeta: { alignItems: "center", flexDirection: "row", gap: 4, marginTop: 2 },
-  detailsPlateRus: { color: "#111827", fontSize: 12, fontWeight: "900", letterSpacing: 0.3 },
-  detailsPlateFlag: { borderColor: "#667085", borderRadius: 1, borderWidth: 0.7, height: 15, overflow: "hidden", width: 37 },
-  detailsPlateFlagWhite: { backgroundColor: "#FFFFFF", flex: 1 },
-  detailsPlateFlagBlue: { backgroundColor: "#2455A6", flex: 1 },
-  detailsPlateFlagRed: { backgroundColor: "#D52B1E", flex: 1 },
-  detailsPlateBolt: { backgroundColor: "#1B2430", borderColor: "#86909C", borderRadius: 99, borderWidth: 0.5, height: 6, position: "absolute", top: "50%", width: 6, zIndex: 3 },
-  detailsPlateBoltLeft: { left: 9, marginTop: -3 },
-  detailsPlateBoltRight: { marginTop: -3, right: 9 },
   detailsPhoto: { borderRadius: 14, height: 230, marginTop: 14, width: "100%" },
   detailsClose: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
   detailsCloseText: { color: "#475467", fontSize: 25, lineHeight: 29 },
