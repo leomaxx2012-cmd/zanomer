@@ -37,14 +37,29 @@ const SOURCES = [
 
 function matchesSearchAlert(row, alert) {
   const regionCode = row.region.split(" · ").at(-1)?.trim() ?? "";
-  const matches = (expected, actual) => !expected || expected === actual;
-  const matchesCodes = !alert.region_code || alert.region_code.split(",").map((code) => code.trim()).includes(regionCode);
-  return matches(alert.left_letter, row.plate_left)
-    && matches(alert.right_letters, row.plate_right)
-    && matches(alert.digits, row.plate_digits)
+  // Keep alert matching identical to the search form. A star stands for one
+  // arbitrary character, so "5*5" finds 505, 515, 525, etc. Empty fields
+  // remain unrestricted.
+  const matchesPattern = (value, pattern) => {
+    const clean = (pattern ?? "").trim().toUpperCase();
+    if (!clean) return true;
+    if (!clean.includes("*")) return value.includes(clean);
+    const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\\\*/g, ".");
+    return new RegExp(escaped).test(value);
+  };
+  const matchesExact = (expected, actual) => !expected || expected === actual;
+  const selectedRegionCodes = (alert.region_code ?? "").split(",").map((code) => code.trim()).filter(Boolean);
+  // Codes may belong to several region names. When explicit codes are saved,
+  // their list is the filter (just like the mobile search), not the last
+  // region-name group opened in the picker.
+  const matchesCodes = selectedRegionCodes.length === 0 || selectedRegionCodes.includes(regionCode);
+  const matchesRegion = selectedRegionCodes.length > 0 || alert.region === "Все" || row.region.startsWith(alert.region);
+  return matchesPattern(row.plate_left, alert.left_letter)
+    && matchesPattern(row.plate_right, alert.right_letters)
+    && matchesPattern(row.plate_digits, alert.digits)
     && matchesCodes
-    && (alert.region === "Все" || row.region.startsWith(alert.region))
-    && matches(alert.vehicle_type, row.vehicle_type)
+    && matchesRegion
+    && matchesExact(alert.vehicle_type, row.vehicle_type)
     && (!alert.price_limit || row.price_rub <= alert.price_limit);
 }
 
