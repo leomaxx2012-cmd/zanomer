@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "431389208167",
+    "project_id": "zanomer-mobile-2026",
+    "storage_bucket": "zanomer-mobile-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:431389208167:android:778455f8a72a82b249aec2",
+        "android_client_info": {
+          "package_name": "ru.zanomer.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDGkP2s0FH_Rk2sMxGsHQOHbICMWJUmN8k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
