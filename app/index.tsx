@@ -2048,10 +2048,10 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={!!sellerProfile} transparent animationType="fade" onRequestClose={() => setSellerProfile(null)}>
-        <View style={[styles.detailsOverlay, styles.sellerProfileOverlay]}>
+      <Modal visible={!!sellerProfile} transparent={!compactLayout} animationType={compactLayout ? "slide" : "fade"} onRequestClose={() => setSellerProfile(null)}>
+        <View style={[styles.detailsOverlay, styles.sellerProfileOverlay, compactLayout && styles.sellerProfileOverlayCompact]}>
           <Pressable accessibilityLabel="Закрыть профиль" style={StyleSheet.absoluteFill} onPress={() => setSellerProfile(null)} />
-          <View style={styles.sellerProfilePanel}>
+          <View style={[styles.sellerProfilePanel, compactLayout && styles.sellerProfilePanelCompact]}>
             <View style={styles.detailsHeader}>
               <View style={styles.sellerProfileHeading}><Text style={styles.detailsTitle}>{sellerProfile}</Text><Text style={styles.sellerProfileSubtitle}>{sellerProfileIsChannel ? "Канал объявлений" : "Профиль продавца"}</Text></View>
               <Pressable onPress={() => setSellerProfile(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
@@ -2764,6 +2764,7 @@ const styles = StyleSheet.create({
   subscribeButtonText: { color: "#067647", fontSize: 13, fontWeight: "800", textAlign: "center" },
   detailsOverlay: { backgroundColor: "rgba(16,24,40,0.5)", flex: 1 },
   sellerProfileOverlay: { alignItems: "center", justifyContent: "center", padding: 16 },
+  sellerProfileOverlayCompact: { backgroundColor: "#FFFFFF", padding: 0 },
   detailsScroll: { flexGrow: 1, justifyContent: "flex-end", padding: 14 },
   detailsPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 660, padding: 22, width: "100%" },
   similarityPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 480, padding: 20, width: "92%" },
@@ -2832,6 +2833,7 @@ const styles = StyleSheet.create({
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
   detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
   sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, height: "78%", maxWidth: 560, padding: 20, width: "100%" },
+  sellerProfilePanelCompact: { borderRadius: 0, flex: 1, height: undefined, maxWidth: undefined, paddingBottom: 22, paddingHorizontal: 20, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 18 : 24, width: "100%" },
   sellerProfileHeading: { flex: 1, minWidth: 0, marginRight: 12 },
   sellerProfileSubtitle: { color: "#716A88", fontSize: 13, marginTop: 3 },
   sellerProfileStats: { backgroundColor: "#F4F3FF", borderRadius: 16, flexDirection: "row", flexWrap: "wrap", gap: 18, justifyContent: "space-between", marginTop: 18, padding: 14 },
