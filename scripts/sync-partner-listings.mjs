@@ -35,6 +35,41 @@ const SOURCES = [
   { handle: "jelezki77", name: "Железки77" },
 ];
 
+function matchesSearchAlert(row, alert) {
+  const regionCode = row.region.split(" · ").at(-1)?.trim() ?? "";
+  const matches = (expected, actual) => !expected || expected === actual;
+  const matchesCodes = !alert.region_code || alert.region_code.split(",").map((code) => code.trim()).includes(regionCode);
+  return matches(alert.left_letter, row.plate_left)
+    && matches(alert.right_letters, row.plate_right)
+    && matches(alert.digits, row.plate_digits)
+    && matchesCodes
+    && (alert.region === "Все" || row.region.startsWith(alert.region))
+    && matches(alert.vehicle_type, row.vehicle_type)
+    && (!alert.price_limit || row.price_rub <= alert.price_limit);
+}
+
+async function notifySearchAlerts(rows) {
+  if (!rows.length) return 0;
+  const { data: alerts, error: alertError } = await db.from("auto_search_alerts").select("id,owner_id,left_letter,right_letters,digits,region,region_code,vehicle_type,price_limit").eq("enabled", true);
+  if (alertError) throw alertError;
+  const matches = (alerts ?? []).flatMap((alert) => rows.filter((row) => matchesSearchAlert(row, alert)).map((row) => ({ alert, row })));
+  if (!matches.length) return 0;
+  const ownerIds = [...new Set(matches.map(({ alert }) => alert.owner_id))];
+  const { data: tokens, error: tokenError } = await db.from("auto_push_tokens").select("owner_id,token").in("owner_id", ownerIds);
+  if (tokenError) throw tokenError;
+  const tokensByOwner = new Map();
+  for (const token of tokens ?? []) tokensByOwner.set(token.owner_id, [...(tokensByOwner.get(token.owner_id) ?? []), token.token]);
+  const messages = matches.flatMap(({ alert, row }) => (tokensByOwner.get(alert.owner_id) ?? []).map((token) => ({
+    to: token,
+    sound: "default",
+    title: "Подходящий номер появился",
+    body: `${row.plate_left} ${row.plate_digits} ${row.plate_right} · ${row.region}`,
+    data: { kind: "search-alert", listingId: row.id, alertId: alert.id },
+  })));
+  if (messages.length) await fetch("https://exp.host/--/api/v2/push/send", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(messages) });
+  return messages.length;
+}
+
 // Only codes whose Russian region name is known to the importer are accepted.
 // An unknown code is skipped instead of publishing a misleading region.
 const REGION_NAMES = new Map([
@@ -220,8 +255,13 @@ async function syncSource(source) {
       rows = parsePost(`${post.text}\n${photoText}`, source, post.postId, post.postedAt);
     }
     if (!rows.length) continue;
+    const { data: existing, error: existingError } = await db.from("partner_listings").select("id").in("id", rows.map((row) => row.id));
+    if (existingError) throw existingError;
+    const existingIds = new Set((existing ?? []).map((row) => row.id));
+    const newlyAddedRows = rows.filter((row) => !existingIds.has(row.id));
     const { error } = await db.from("partner_listings").upsert(rows, { onConflict: "id" });
     if (error) throw error;
+    await notifySearchAlerts(newlyAddedRows);
     await db.from("partner_listing_statuses").upsert({ source_url: sourceUrl, status: "active", archive_reason: null, checked_at: new Date().toISOString(), updated_at: new Date().toISOString() });
     added += rows.length;
   }

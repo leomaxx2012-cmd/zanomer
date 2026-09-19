@@ -73,6 +73,17 @@ type SavedSearch = {
   priceLimit: number | null;
 };
 
+type SavedSearchRow = {
+  id: string;
+  left_letter: string;
+  right_letters: string;
+  digits: string;
+  region: string;
+  region_code: string;
+  vehicle_type: Plate["vehicle"];
+  price_limit: number;
+};
+
 type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
 type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
@@ -1037,6 +1048,7 @@ export default function HomeScreen() {
         setIsSignedIn(false);
         setIsAnonymous(false);
         setCurrentUserId("");
+        setSavedSearches([]);
         setMyListings([]); setModerationListings([]); setIsModerator(false);
         return;
       }
@@ -1054,6 +1066,7 @@ export default function HomeScreen() {
       }
       setProfileName(name);
       void loadManagement(user.id, name);
+      void loadSavedSearches(user.id);
       // На Android приложение один раз спросит разрешение, а затем сохранит
       // токен устройства для уведомлений о подходящих номерах.
       void registerForPushNotifications(user.id);
@@ -1063,6 +1076,28 @@ export default function HomeScreen() {
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => setProfile(session?.user ?? null));
     return () => subscription.subscription.unsubscribe();
   }, []);
+
+  async function loadSavedSearches(ownerId: string) {
+    if (!supabase || !ownerId) return;
+    const { data } = await supabase
+      .from("auto_search_alerts")
+      .select("id,left_letter,right_letters,digits,region,region_code,vehicle_type,price_limit")
+      .eq("owner_id", ownerId)
+      .eq("enabled", true)
+      .order("created_at", { ascending: false });
+    if (!data) return;
+    setSavedSearches((data as SavedSearchRow[]).map((item) => ({
+      id: item.id,
+      title: `${item.left_letter || "А"} ${item.digits || "•••"} ${item.right_letters || "АА"}${item.region_code ? ` · ${item.region_code}` : ""}${item.region !== "Все" ? ` · ${item.region}` : ""}`,
+      leftLetter: item.left_letter,
+      rightLetters: item.right_letters,
+      digits: item.digits,
+      region: item.region,
+      regionCode: item.region_code,
+      vehicle: item.vehicle_type,
+      priceLimit: item.price_limit || null,
+    })));
+  }
 
   // Получатель узнаёт о новом сообщении, не обновляя вручную страницу.
   useEffect(() => {
@@ -1297,7 +1332,12 @@ export default function HomeScreen() {
     return `${number}${code}${region !== "Все" ? ` · ${region}` : ""}`;
   }
 
-  function subscribeToCurrentSearch() {
+  async function subscribeToCurrentSearch() {
+    if (!supabase || !currentUserId) {
+      setAuthMessage("Войди в профиль, чтобы получать уведомления даже при закрытом приложении.");
+      setAuthOpen(true);
+      return;
+    }
     const current: SavedSearch = {
       id: `${Date.now()}`,
       title: makeSearchTitle(),
@@ -1309,8 +1349,32 @@ export default function HomeScreen() {
       vehicle,
       priceLimit,
     };
+    const { data, error } = await supabase.from("auto_search_alerts")
+      .upsert({
+        owner_id: currentUserId,
+        left_letter: current.leftLetter,
+        right_letters: current.rightLetters,
+        digits: current.digits,
+        region: current.region,
+        region_code: current.regionCode,
+        vehicle_type: current.vehicle,
+        price_limit: current.priceLimit ?? 0,
+        enabled: true,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "owner_id,left_letter,right_letters,digits,region,region_code,vehicle_type,price_limit" })
+      .select("id")
+      .single();
+    if (error || !data) return;
+    current.id = data.id;
     setSavedSearches((searches) => [current, ...searches.filter((item) => item.title !== current.title)].slice(0, hasPlusSubscription ? 30 : 15));
     setSubscriptionToast(true);
+  }
+
+  async function removeSavedSearch(searchId: string) {
+    setSavedSearches((items) => items.filter((item) => item.id !== searchId));
+    if (supabase && currentUserId && !searchId.startsWith("favorite-")) {
+      await supabase.from("auto_search_alerts").delete().eq("id", searchId);
+    }
   }
 
   function applySavedSearch(search: SavedSearch) {
@@ -1947,7 +2011,7 @@ export default function HomeScreen() {
               <Text numberOfLines={1} style={styles.savedSearchName}>🔔 {search.title}</Text>
               <Text style={styles.savedSearchHint}>Уведомления включены · нажми, чтобы применить поиск</Text>
             </Pressable>
-            <Pressable onPress={() => setSavedSearches((items) => items.filter((item) => item.id !== search.id))} hitSlop={8}>
+            <Pressable onPress={() => void removeSavedSearch(search.id)} hitSlop={8}>
               <Text style={styles.savedSearchRemove}>×</Text>
             </Pressable>
           </View>
