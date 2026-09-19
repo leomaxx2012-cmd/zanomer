@@ -204,6 +204,7 @@ export default function HomeScreen() {
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
+  const latestPartnerListingRef = useRef("");
   const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
@@ -816,7 +817,7 @@ export default function HomeScreen() {
       });
       // Каталог большой для одного ответа на мобильной сети. Догружаем его
       // небольшими порциями и обновляем экран после каждой порции.
-      async function loadAllPartnerListings(initialRows: Record<string, any>[] = []) {
+      async function loadAllPartnerListings(initialRows: Record<string, any>[] = [], totalCount?: number | null) {
         const rows: Record<string, any>[] = [...initialRows];
         // Supabase отдаёт до 1000 строк за запрос. Так полный каталог из
         // нескольких тысяч номеров не застревает после первых 370 карточек
@@ -829,16 +830,17 @@ export default function HomeScreen() {
           .order("created_at", { ascending: false })
           .range(start, start + partnerPageSize - 1);
 
-        for (let start = rows.length; ; start += partnerPageSize) {
-          const nextResult = await loadPage(start);
-          if (nextResult.error) return { data: rows, error: nextResult.error };
-          const nextPage = nextResult.data ?? [];
-          rows.push(...nextPage);
-          // Встроенный снимок уже показан при запуске. Не заменяем его
-          // неполной страницей из сети: на слабом интернете это раньше
-          // визуально превращало полный каталог в 120–1000 карточек.
-          if (nextPage.length < partnerPageSize) return { data: rows, error: null };
-        }
+        const expectedCount = Math.max(rows.length, totalCount ?? rows.length);
+        const pageStarts: number[] = [];
+        for (let start = rows.length; start < expectedCount; start += partnerPageSize) pageStarts.push(start);
+        // 4–5 страниц каталога не ждут друг друга по очереди. Это особенно
+        // важно на телефоне: при 4 000+ номерах последовательная загрузка
+        // могла не успеть до тайм-аута и оставляла старую локальную копию.
+        const pageResults = await Promise.all(pageStarts.map(loadPage));
+        const failedPage = pageResults.find((result) => result.error);
+        if (failedPage?.error) return { data: rows, error: failedPage.error };
+        pageResults.forEach((result) => rows.push(...(result.data ?? [])));
+        return { data: rows, error: null };
       }
 
       const toPartnerPlate = (item: Record<string, any>): Plate => ({
@@ -862,7 +864,7 @@ export default function HomeScreen() {
 
       const firstPartnerPageRequest = client
         .from("partner_listings")
-        .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
+        .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until", { count: "exact" })
         .eq("status", "active")
         .order("created_at", { ascending: false })
         // Первая страница должна быть достаточно большой, чтобы приложение
@@ -878,8 +880,8 @@ export default function HomeScreen() {
       // Таблицы загружаются независимо: партнёрский каталог не должен исчезать,
       // если пользовательские объявления временно недоступны гостю по RLS.
       try {
-      const firstPageFallback = new Promise<{ data: Record<string, any>[]; error: null }>((resolve) => {
-        setTimeout(() => resolve({ data: [], error: null }), 8_000);
+      const firstPageFallback = new Promise<{ data: Record<string, any>[]; error: null; count: null }>((resolve) => {
+        setTimeout(() => resolve({ data: [], error: null, count: null }), 8_000);
       });
       const firstPartnerResult = await Promise.race([firstPartnerPageRequest, firstPageFallback]);
       // Первый сетевой ответ используем только как начало тихой синхронизации.
@@ -888,7 +890,7 @@ export default function HomeScreen() {
 
       // Полную историю получаем только после быстрого ответа с новинками,
       // чтобы параллельные тяжёлые запросы не мешали старту каталога.
-      const allPartnerPagesRequest = loadAllPartnerListings(firstPartnerResult.data ?? []);
+      const allPartnerPagesRequest = loadAllPartnerListings(firstPartnerResult.data ?? [], firstPartnerResult.count);
 
       const [siteResult, partnerResult] = await Promise.race([Promise.all([
         siteListingsRequest,
@@ -940,6 +942,10 @@ export default function HomeScreen() {
       };
       });
       const partners: Plate[] = partnerData.map(toPartnerPlate);
+      latestPartnerListingRef.current = partners.reduce((latest, plate) => {
+        const timestamp = plate.publishedAt ?? plate.createdAt;
+        return timestamp > latest ? timestamp : latest;
+      }, latestPartnerListingRef.current);
 
       // Снимок из APK — надёжная база каталога офлайн. Сетевые данные лишь
       // обновляют его и добавляют свежие объявления, но не могут его уменьшить.
@@ -978,12 +984,30 @@ export default function HomeScreen() {
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void loadCatalog();
     });
-    // Не расходуем мобильный интернет постоянными полными перезагрузками.
-    // При возврате в приложение проверка по-прежнему запускается сразу.
-    const refreshTimer = setInterval(() => void loadCatalog(), 5 * 60_000);
+    // Каждую минуту передаём только один свежий timestamp. Полный каталог
+    // скачивается лишь если на сервере действительно появилось что-то новое.
+    async function checkForCatalogUpdates() {
+      if (loadingCatalog) return;
+      const { data } = await client
+        .from("partner_listings")
+        .select("created_at")
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      const latest = data?.[0]?.created_at;
+      if (latest && (!latestPartnerListingRef.current || latest > latestPartnerListingRef.current)) void loadCatalog();
+    }
+    const refreshTimer = setInterval(() => void checkForCatalogUpdates(), 60_000);
+    // Realtime даёт мгновенное обновление, если оно разрешено на стороне
+    // Supabase. Минутная проверка выше остаётся надёжным резервом.
+    const updatesChannel = client
+      .channel("zanomer-partner-listings")
+      .on("postgres_changes", { event: "*", schema: "public", table: "partner_listings" }, () => void loadCatalog())
+      .subscribe();
     return () => {
       appStateSubscription.remove();
       clearInterval(refreshTimer);
+      void client.removeChannel(updatesChannel);
     };
   }, []);
 
