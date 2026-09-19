@@ -17,7 +17,7 @@
     ],
     "android": {
       "package": "ru.zanomer.app",
-      "versionCode": 14,
+      "versionCode": 15,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/zanomer-plate-avatar.png",
@@ -27,7 +27,7 @@
         "POST_NOTIFICATIONS"
       ]
     },
-    "version": "1.0.13",
+    "version": "1.0.14",
     "runtimeVersion": {
       "policy": "appVersion"
     },

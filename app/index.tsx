@@ -542,6 +542,11 @@ export default function HomeScreen() {
     const note = status === "active" ? "Одобрено модератором" : "Не прошло проверку";
     const { error } = await supabase.rpc("review_auto_listing", { listing: listing.id, new_status: status, note });
     if (error) return setAuthMessage("Не удалось завершить модерацию. Проверь, что твой аккаунт добавлен в модераторы.");
+    if (status === "active") {
+      // The edge function validates the moderator and finds every matching
+      // saved search before delivering push notifications.
+      await supabase.functions.invoke("notify", { body: { kind: "search-alert", id: listing.id } });
+    }
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
   }
@@ -1511,7 +1516,7 @@ export default function HomeScreen() {
         }
         photoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
       }
-      const { error } = await supabase.from("auto_listings").insert({
+      const { data: insertedListing, error } = await supabase.from("auto_listings").insert({
         owner_id: userData.user.id,
         plate_left: entry.leftLetter,
         plate_digits: entry.digits,
@@ -1521,10 +1526,13 @@ export default function HomeScreen() {
         price_rub: entry.priceValue,
         photo_url: photoUrl,
         status: isModerator ? "active" : "moderation",
-      });
+      }).select("id, status").single();
       if (error) {
         setAuthMessage("Не удалось опубликовать. Проверь вход в аккаунт и попробуй ещё раз.");
         return;
+      }
+      if (insertedListing?.status === "active") {
+        await supabase.functions.invoke("notify", { body: { kind: "search-alert", id: insertedListing.id } });
       }
     }
     setAddOpen(false);
