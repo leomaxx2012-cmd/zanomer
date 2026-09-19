@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
   Image,
+  Keyboard,
   Linking,
   Modal,
   Platform,
@@ -257,6 +258,7 @@ export default function HomeScreen() {
   const [authStep, setAuthStep] = useState<1 | 2 | 3>(1);
   const [authCode, setAuthCode] = useState("");
   const [authMessage, setAuthMessage] = useState("");
+  const [authSending, setAuthSending] = useState(false);
   const [subscriptionToast, setSubscriptionToast] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [listingLeftLetter, setListingLeftLetter] = useState("");
@@ -1554,6 +1556,28 @@ export default function HomeScreen() {
       : "✓ Объявление принято: проверим номер, регион, цену и повторные публикации. После одобрения оно появится в разделе «Купить».");
   }
 
+  async function requestAuthCode() {
+    if (!supabase) return;
+    const email = authEmail.trim().toLowerCase();
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return setAuthMessage("Введи корректный email.");
+    if (authSending) return;
+    Keyboard.dismiss();
+    setAuthSending(true);
+    setAuthMessage("Отправляем код…");
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        data: authMode === "signup" ? { display_name: profileDraft.trim() } : undefined,
+      },
+    });
+    setAuthSending(false);
+    if (error) return setAuthMessage(`Не удалось отправить код: ${error.message}`);
+    setAuthCode("");
+    setAuthStep(3);
+    setAuthMessage("Код отправлен. Проверь «Входящие» и папку «Спам».");
+  }
+
   async function submitAuth() {
     if (!supabase) {
       if (profileDraft.trim()) { setProfileName(profileDraft.trim()); setAuthOpen(false); }
@@ -1566,18 +1590,7 @@ export default function HomeScreen() {
       return;
     }
     if (authStep === 2) {
-      if (!authEmail.trim()) return setAuthMessage("Введи email.");
-      const { error } = await supabase.auth.signInWithOtp({
-        email: authEmail.trim(),
-        options: {
-          shouldCreateUser: authMode === "signup",
-          data: authMode === "signup" ? { display_name: profileDraft.trim() } : undefined,
-        },
-      });
-      if (error) return setAuthMessage(error.message);
-      setAuthCode("");
-      setAuthStep(3);
-      setAuthMessage("Мы отправили код на почту. Введи его ниже.");
+      await requestAuthCode();
       return;
     }
     if (authStep === 3) {
@@ -1725,7 +1738,7 @@ export default function HomeScreen() {
               <View style={styles.authRow}>
                 {supabase && authStep !== 3 && <Pressable onPress={() => { setAuthMode((value) => value === "signup" ? "signin" : "signup"); setAuthStep(authMode === "signup" ? 2 : 1); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>{authMode === "signup" ? "Уже есть аккаунт" : "Зарегистрироваться"}</Text></Pressable>}
                 {supabase && authStep === 3 && <Pressable onPress={() => { setAuthStep(2); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Отправить новый код</Text></Pressable>}
-                <Pressable onPress={submitAuth} style={styles.authSubmit}><Text style={styles.authSubmitText}>{supabase ? authStep === 3 ? "Подтвердить код" : authStep === 2 ? "Получить код" : "Далее" : "Далее"}</Text></Pressable>
+                <Pressable disabled={authSending} onPress={() => { void submitAuth(); }} style={[styles.authSubmit, authSending && styles.authSubmitDisabled]}><Text style={styles.authSubmitText}>{authSending ? "Отправляем…" : supabase ? authStep === 3 ? "Подтвердить код" : authStep === 2 ? "Получить код" : "Далее" : "Далее"}</Text></Pressable>
               </View>
             </>
           )}
@@ -2470,6 +2483,7 @@ const styles = StyleSheet.create({
   authRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end", marginTop: 10 },
   authInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", fontSize: 14, marginTop: 8, paddingHorizontal: 11, paddingVertical: 9 },
   authSubmit: { alignItems: "center", backgroundColor: "#155EEF", borderRadius: 10, flexGrow: 1, justifyContent: "center", minHeight: 40, paddingHorizontal: 12 },
+  authSubmitDisabled: { backgroundColor: "#84ADFF" },
   authSubmitText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   authSwitch: { alignItems: "center", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, flexGrow: 1, justifyContent: "center", minHeight: 40, paddingHorizontal: 10, paddingVertical: 10 },
   authSwitchText: { color: "#475467", fontSize: 12, fontWeight: "750" },
