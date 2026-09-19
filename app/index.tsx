@@ -569,9 +569,12 @@ export default function HomeScreen() {
   }
 
   async function openChat(listing: Plate) {
-    if (!supabase) return;
+    if (!supabase) {
+      setAuthMessage("Чат пока загружается. Закрой объявление и открой его ещё раз через пару секунд.");
+      return;
+    }
     if (listing.ownerId && listing.ownerId === currentUserId) {
-      setChatMessage("Нельзя написать самому себе по своему объявлению.");
+      setPublicCommentMessage("Это твоё объявление — написать самому себе нельзя.");
       return;
     }
 
@@ -1334,7 +1337,13 @@ export default function HomeScreen() {
   function makeSearchTitle() {
     const number = `${leftLetter || "А"} ${digits || "•••"} ${rightLetters || "АА"}`;
     const code = regionCode ? ` · ${regionCode}` : "";
-    return `${number}${code}${region !== "Все" ? ` · ${region}` : ""}`;
+    return `${number}${code}${!regionCode && region !== "Все" ? ` · ${region}` : ""}`;
+  }
+
+  function savedSearchLabel(search: SavedSearch) {
+    const number = `${search.leftLetter || "А"} ${search.digits || "•••"} ${search.rightLetters || "АА"}`;
+    const codes = search.regionCode ? ` · ${search.regionCode}` : "";
+    return `${number}${codes}${!search.regionCode && search.region !== "Все" ? ` · ${search.region}` : ""}`;
   }
 
   async function subscribeToCurrentSearch() {
@@ -2016,7 +2025,7 @@ export default function HomeScreen() {
         ) : savedSearches.map((search) => (
           <View key={search.id} style={styles.savedSearchRow}>
             <Pressable onPress={() => applySavedSearch(search)} style={styles.savedSearchApply}>
-              <Text numberOfLines={1} style={styles.savedSearchName}>🔔 {search.title}</Text>
+              <Text numberOfLines={1} style={styles.savedSearchName}>🔔 {savedSearchLabel(search)}</Text>
               <Text style={styles.savedSearchHint}>Уведомления включены · нажми, чтобы применить поиск</Text>
             </Pressable>
             <Pressable onPress={() => void removeSavedSearch(search.id)} hitSlop={8}>
@@ -2068,15 +2077,14 @@ export default function HomeScreen() {
                     <Text style={styles.price}>{item.price}</Text>
                     {!!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
-                    {item.isSiteListing && item.sellerRating != null && <View style={styles.catalogRating}><Text numberOfLines={1} style={styles.catalogRatingText}>{item.sellerRating >= 4.5 ? "✓ Проверенный продавец" : `★ ${item.sellerRating.toFixed(1)} · есть отзывы`}</Text></View>}
                   </View>
                   <View style={styles.cardButtonsSpread}>
                     {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={[styles.sourceButton, compactLayout && styles.cardPrimaryActionCompact]}>
                       <Text style={styles.sourceButtonText}>Открыть объявление ↗</Text>
                     </Pressable>}
-                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
-                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
-                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={[styles.cardAction, compactLayout && styles.cardShareActionCompact]}><Text style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
+                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text numberOfLines={1} style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
+                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text numberOfLines={1} style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
+                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={[styles.cardAction, compactLayout && styles.cardShareActionCompact]}><Text numberOfLines={1} style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
                     {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarityPickerPlate(item); }} style={[styles.similarButton, compactLayout && styles.similarButtonWideCompact]}>
                       <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                     </Pressable>}
@@ -2217,11 +2225,6 @@ export default function HomeScreen() {
                 <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
               </View>
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
-                <Text style={styles.detailsLabel}>Рейтинг продавца</Text>
-                <Text style={styles.detailsValue}>{selectedPlate.sellerRating ? `★ ${selectedPlate.sellerRating.toFixed(1)} / 5` : "Пока нет отзывов"}</Text>
-                {selectedPlate.sellerRating && selectedPlate.sellerRating >= 4.5 && <Text style={styles.verifiedSeller}>✓ Проверенный продавец</Text>}
-                {selectedPlate.ownerId !== currentUserId && <View style={styles.ratingRow}><Text style={styles.ratingPrompt}>Оценить продавца:</Text>{[1,2,3,4,5].map((score) => <Pressable key={score} onPress={() => { void rateSeller(score); }}><Text style={styles.ratingStar}>★</Text></Pressable>)}</View>}
-                {!!ratingMessage && <Text style={styles.detailsMuted}>{ratingMessage}</Text>}
                 {!!selectedPlate.sellerComment && <><Text style={styles.detailsLabel}>Комментарий продавца</Text><Text style={styles.detailsComment}>{selectedPlate.sellerComment}</Text></>}
                 <View style={styles.safeContactCard}>
                   <Text style={styles.safeContactTitle}>Безопасная связь</Text>
@@ -2769,7 +2772,7 @@ const styles = StyleSheet.create({
   similarButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
   cardActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
   cardAction: { backgroundColor: "#5143C2", borderColor: "#4338A8", borderRadius: 11, borderWidth: 1, minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
-  cardShareActionCompact: { alignItems: "center", flex: 1 },
+  cardShareActionCompact: { alignItems: "center", minWidth: 122 },
   cardActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   cardActionLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
   cardActionLikedText: { color: "#C01048" },
