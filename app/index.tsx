@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
   Image,
+  InteractionManager,
   Keyboard,
   Linking,
   Modal,
@@ -212,7 +213,7 @@ export default function HomeScreen() {
   // Тяжёлая карточка содержит разметку номера и несколько действий. На
   // телефоне выводим меньшую первую страницу, чтобы прокрутка оставалась
   // отзывчивой даже при каталоге из тысяч объявлений.
-  const catalogPageSize = compactLayout ? 12 : 40;
+  const catalogPageSize = compactLayout ? 6 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
@@ -221,7 +222,7 @@ export default function HomeScreen() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
-  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 12 : 40);
+  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 6 : 40);
   const [catalogOnly, setCatalogOnly] = useState(false);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
@@ -999,7 +1000,13 @@ export default function HomeScreen() {
       }
     }
 
-    void loadCatalog();
+    // Сначала даём Android отрисовать шапку, поиск и первые карточки из
+    // встроенного снимка. Полная синхронизация каталога содержит тысячи
+    // записей и раньше могла на несколько секунд занять JS-поток — из-за
+    // этого кнопки казались «не нажимающимися».
+    const initialCatalogTask = InteractionManager.runAfterInteractions(() => {
+      void loadCatalog();
+    });
     // После сворачивания приложение могло пропустить новые объявления.
     // При возврате на экран и во время работы обновляем каталог автоматически.
     const appStateSubscription = AppState.addEventListener("change", (state) => {
@@ -1026,6 +1033,7 @@ export default function HomeScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "partner_listings" }, () => void loadCatalog())
       .subscribe();
     return () => {
+      initialCatalogTask.cancel();
       appStateSubscription.remove();
       clearInterval(refreshTimer);
       void client.removeChannel(updatesChannel);
