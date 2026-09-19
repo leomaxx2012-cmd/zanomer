@@ -1517,8 +1517,8 @@ export default function HomeScreen() {
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
           <View style={styles.headerBrand}>
           <View style={styles.headerBrandRow}>
-            <Image source={require("../assets/zanomer-plate-avatar-readable.png")} resizeMode="cover" style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.brand, compactLayout && styles.brandCompact]}>ЗаНомером</Text>
+            <Image source={require("../assets/zanomer-plate-avatar-readable.png")} resizeMode="contain" style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
+            {!compactLayout && <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.brand}>ЗаНомером</Text>}
           </View>
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
@@ -2358,7 +2358,9 @@ const styles = StyleSheet.create({
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
   headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
   headerAvatar: { borderRadius: 7, height: 44, width: 112 },
-  headerAvatarCompact: { borderRadius: 5, height: 32, width: 72 },
+  // На телефоне текст названия скрыт: сам знак заметнее и занимает всё
+  // свободное место слева от кнопок шапки.
+  headerAvatarCompact: { borderRadius: 6, height: 42, width: 132 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
   brandCompact: { flexShrink: 1, fontSize: 25, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
