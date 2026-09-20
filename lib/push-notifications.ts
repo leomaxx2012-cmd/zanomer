@@ -39,7 +39,22 @@ export async function registerForPushNotifications(userId: string) {
   const projectId = Constants.easConfig?.projectId ?? Constants.expoConfig?.extra?.eas?.projectId;
   if (!projectId) return { ok: false, reason: "project" as const };
 
-  const token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  let token: string;
+  try {
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  } catch {
+    // При запуске с нестабильной сетью или VPN токен будет повторно
+    // запрошен при следующем входе, без зависания кнопок приложения.
+    return { ok: false, reason: "token" as const };
+  }
+
+  // После переустановки Android выдаёт новый Expo-токен. Старые токены
+  // больше не принимаются FCM и понижают доставляемость уведомлений.
+  await supabase
+    .from("auto_push_tokens")
+    .delete()
+    .eq("owner_id", userId)
+    .neq("token", token);
   const { error } = await supabase.from("auto_push_tokens").upsert({
     token,
     owner_id: userId,
