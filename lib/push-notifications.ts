@@ -48,13 +48,9 @@ export async function registerForPushNotifications(userId: string) {
     return { ok: false, reason: "token" as const };
   }
 
-  // После переустановки Android выдаёт новый Expo-токен. Старые токены
-  // больше не принимаются FCM и понижают доставляемость уведомлений.
-  await supabase
-    .from("auto_push_tokens")
-    .delete()
-    .eq("owner_id", userId)
-    .neq("token", token);
+  // У одного аккаунта может быть несколько телефонов. Не удаляем их токены
+  // при входе на другом устройстве: каждый действующий телефон должен
+  // получать уведомление, как в прежних рабочих версиях приложения.
   const { error } = await supabase.from("auto_push_tokens").upsert({
     token,
     owner_id: userId,
