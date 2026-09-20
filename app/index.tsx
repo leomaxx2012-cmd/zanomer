@@ -258,11 +258,14 @@ export default function HomeScreen() {
   const [profileDraft, setProfileDraft] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signup");
+  // По умолчанию открываем именно вход: раньше при нажатии «Войти»
+  // незаметно запускалась регистрация и повторная отправка кода на почту.
+  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
   const [authStep, setAuthStep] = useState<1 | 2 | 3>(1);
   const [authCode, setAuthCode] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [authSending, setAuthSending] = useState(false);
+  const [lastOtpRequest, setLastOtpRequest] = useState<{ email: string; at: number } | null>(null);
   const [subscriptionToast, setSubscriptionToast] = useState(false);
   const [subscriptionToastMessage, setSubscriptionToastMessage] = useState("");
   const [subscriptionSaving, setSubscriptionSaving] = useState(false);
@@ -1687,11 +1690,18 @@ export default function HomeScreen() {
     // Первый вход подтверждаем одноразовым кодом из письма. После этого
     // пользователь сам выбирает постоянный пароль для следующих входов.
     if (authMode === "signup" && authStep === 1) {
+      const elapsed = lastOtpRequest?.email === email ? Date.now() - lastOtpRequest.at : Number.POSITIVE_INFINITY;
+      if (elapsed < 60_000) {
+        const seconds = Math.ceil((60_000 - elapsed) / 1000);
+        setAuthMessage(`Код уже отправлен. Проверь почту или подожди ${seconds} сек. перед повторной отправкой.`);
+        return;
+      }
       setAuthSending(true);
       setAuthMessage("Отправляем код на почту…");
       const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
       setAuthSending(false);
       if (error) return setAuthMessage(error.message);
+      setLastOtpRequest({ email, at: Date.now() });
       setAuthStep(2);
       return setAuthMessage("Код отправлен. Проверь входящие и папку «Спам».");
     }
@@ -1729,9 +1739,34 @@ export default function HomeScreen() {
       const text = result.error.message.toLowerCase();
       return setAuthMessage(text.includes("invalid login") ? "Проверь почту и пароль." : result.error.message);
     }
+    // Не ждём фонового события авторизации: на телефоне при слабой сети
+    // оно могло приходить заметно позже и казалось, что кнопка «Войти» не работает.
+    if (result.data.user) {
+      const user = result.data.user;
+      const displayName = user.user_metadata?.display_name;
+      const name = typeof displayName === "string" && displayName ? displayName : user.email?.split("@")[0] ?? "Профиль";
+      setIsSignedIn(true);
+      setIsAnonymous(false);
+      setCurrentUserId(user.id);
+      setProfileName(name);
+      void loadManagement(user.id, name);
+      void loadSavedSearches(user.id);
+      void registerForPushNotifications(user.id);
+    }
     setAuthPassword("");
     setAuthOpen(false);
     setAuthMessage("");
+  }
+
+  function openAccount() {
+    if (!isSignedIn || isAnonymous) {
+      setAuthMode("signin");
+      setAuthStep(1);
+      setAuthCode("");
+      setAuthPassword("");
+      setAuthMessage("");
+    }
+    setAuthOpen(true);
   }
 
   return (
@@ -1755,7 +1790,7 @@ export default function HomeScreen() {
             <Text style={styles.chatsButtonText}>💬</Text>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
-          <Pressable onPress={() => setAuthOpen((value) => !value)} style={[styles.accountButton, compactLayout && styles.accountButtonCompact]}>
+          <Pressable onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact]}>
             <Text numberOfLines={1} style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
         </View>
