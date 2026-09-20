@@ -261,6 +261,8 @@ export default function HomeScreen() {
   const [authMessage, setAuthMessage] = useState("");
   const [authSending, setAuthSending] = useState(false);
   const [subscriptionToast, setSubscriptionToast] = useState(false);
+  const [subscriptionToastMessage, setSubscriptionToastMessage] = useState("");
+  const [subscriptionSaving, setSubscriptionSaving] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [listingLeftLetter, setListingLeftLetter] = useState("");
   const [listingDigits, setListingDigits] = useState("");
@@ -985,8 +987,12 @@ export default function HomeScreen() {
       const uniqueLoaded = [...uniqueListings.values()].sort((first, second) => (second.publishedAt ?? second.createdAt).localeCompare(first.publishedAt ?? first.createdAt));
       // Demo cards are useful only before the first database data arrives.
       // Mixing them into a real catalogue inflated the public count.
-      setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : catalogFallback);
-      if (Platform.OS !== "web" && uniqueLoaded.length > 0) void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(uniqueLoaded));
+      // Не меняем тысячу карточек прямо посреди касания/прокрутки: на слабых
+      // телефонах это перехватывало нажатия на несколько секунд.
+      InteractionManager.runAfterInteractions(() => {
+        setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : catalogFallback);
+        if (Platform.OS !== "web" && uniqueLoaded.length > 0) void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(uniqueLoaded));
+      });
       } catch {
         // Нет сети — это нормальный офлайн-режим: встроенные номера уже
         // отображены. Не пугать пользователя фоновым обновлением каталога.
@@ -1169,10 +1175,12 @@ export default function HomeScreen() {
 
   const seriesListingIds = useMemo(() => new Set(seriesGroupByListingId.keys()), [seriesGroupByListingId]);
 
+  const archivedPartnerSourceSet = useMemo(() => new Set(archivedPartnerSources), [archivedPartnerSources]);
+
   const plates = useMemo(
     () => {
       const filtered = catalog.filter((plate) => {
-        const isAvailable = !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl);
+        const isAvailable = !plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl);
         const matchesPattern = (value: string, pattern: string) => {
           const clean = pattern.trim().toUpperCase();
           if (!clean) return true;
@@ -1223,15 +1231,15 @@ export default function HomeScreen() {
       });
       return [...grouped.values()].flat();
     },
-    [catalog, archivedPartnerSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, similarityFilter, sort, freshOnly, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
+    [catalog, archivedPartnerSourceSet, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, similarityFilter, sort, freshOnly, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
-  const visiblePlates = activeTab === "favorites"
-    ? catalog.filter((plate) => (saved.includes(plate.id) || (plate.isSiteListing && likedListingIds.includes(plate.id))) && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)))
+  const visiblePlates = useMemo(() => activeTab === "favorites"
+    ? catalog.filter((plate) => (saved.includes(plate.id) || (plate.isSiteListing && likedListingIds.includes(plate.id))) && (!plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl)))
     : catalogOnly
-      ? [...catalog].filter((plate) => !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt))
-    : plates;
+      ? [...catalog].filter((plate) => !plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl)).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt))
+      : plates, [activeTab, archivedPartnerSourceSet, catalog, catalogOnly, likedListingIds, plates, saved]);
   // Мобильное приложение не должно строить тысячи тяжёлых карточек за один раз:
   // это блокирует прокрутку и нажатия. Все номера доступны через «Показать ещё».
   const renderedPlates = visiblePlates.slice(0, catalogDisplayLimit);
@@ -1320,6 +1328,7 @@ export default function HomeScreen() {
     setSaved((current) => {
       const limit = hasPlusSubscription ? 30 : 15;
       if (!current.includes(id) && current.length >= limit) {
+        setSubscriptionToastMessage("");
         setSubscriptionToast(true);
         return current;
       }
@@ -1340,6 +1349,7 @@ export default function HomeScreen() {
           priceLimit: null,
         };
         setSavedSearches((searches) => [alert, ...searches.filter((item) => item.id !== alert.id)]);
+        setSubscriptionToastMessage("");
         setSubscriptionToast(true);
       }
       if (current.includes(id)) setSavedSearches((searches) => searches.filter((item) => item.id !== `favorite-${id}`));
@@ -1365,6 +1375,13 @@ export default function HomeScreen() {
       setAuthOpen(true);
       return;
     }
+    if (subscriptionSaving) return;
+    // Отображаем реакцию сразу — раньше при медленном интернете кнопка
+    // выглядела неработающей, пока запрос к базе молча ждал ответа.
+    setSubscriptionSaving(true);
+    setSubscriptionToastMessage("Сохраняем уведомление…");
+    setSubscriptionToast(true);
+    try {
     const current: SavedSearch = {
       id: `${Date.now()}`,
       title: makeSearchTitle(),
@@ -1391,10 +1408,21 @@ export default function HomeScreen() {
       }, { onConflict: "owner_id,left_letter,right_letters,digits,region,region_code,vehicle_type,price_limit" })
       .select("id")
       .single();
-    if (error || !data) return;
+    setSubscriptionSaving(false);
+    if (error || !data) {
+      setSubscriptionToastMessage("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
+      setSubscriptionToast(true);
+      return;
+    }
     current.id = data.id;
     setSavedSearches((searches) => [current, ...searches.filter((item) => item.title !== current.title)].slice(0, hasPlusSubscription ? 30 : 15));
+    setSubscriptionToastMessage("✓ Уведомление включено");
     setSubscriptionToast(true);
+    } catch {
+      setSubscriptionSaving(false);
+      setSubscriptionToastMessage("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
+      setSubscriptionToast(true);
+    }
   }
 
   async function removeSavedSearch(searchId: string) {
@@ -1924,8 +1952,8 @@ export default function HomeScreen() {
       </View>}
 
       {hasSearchCriteria && <View style={styles.searchActions}>
-        <Pressable onPress={subscribeToCurrentSearch} style={styles.saveSearchButton}>
-          <Text style={styles.saveSearchText}>🔔 Сообщить, когда номер появится</Text>
+        <Pressable disabled={subscriptionSaving} onPress={() => { void subscribeToCurrentSearch(); }} style={[styles.saveSearchButton, subscriptionSaving && styles.saveSearchButtonDisabled]}>
+          <Text style={styles.saveSearchText}>{subscriptionSaving ? "🔔 Сохраняем уведомление…" : "🔔 Сообщить, когда номер появится"}</Text>
         </Pressable>
       </View>}
 
@@ -2456,7 +2484,7 @@ export default function HomeScreen() {
         </View>)}
       </View>
       {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={styles.toast}>
-        <Text style={styles.toastText}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено"}</Text>
+        <Text style={styles.toastText}>{subscriptionToastMessage || (hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено")}</Text>
       </Pressable>}
     </SafeAreaView>
   );
@@ -2620,6 +2648,7 @@ const styles = StyleSheet.create({
   searchResetButton: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#5143C2", borderRadius: 14, borderWidth: 2, justifyContent: "center", marginTop: 12, minHeight: 48, paddingHorizontal: 18, paddingVertical: 12 },
   searchResetButtonText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
   saveSearchButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, flex: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: 12, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.26, shadowRadius: 9 },
+  saveSearchButtonDisabled: { opacity: 0.72 },
   saveSearchText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   savedSearchesButton: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 11, justifyContent: "center", minHeight: 42, paddingHorizontal: 11 },
   savedSearchesText: { color: "#344054", fontSize: 12, fontWeight: "750" },
