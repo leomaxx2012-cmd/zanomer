@@ -57,3 +57,36 @@ create policy "Users mark own app notifications read"
   with check (owner_id = auth.uid());
 
 grant select, update on public.app_notifications to authenticated;
+
+-- Резервные уведомления для владельца и для сохранённых поисков. Они
+-- появятся при следующем запуске приложения, даже если push задержался.
+create or replace function public.create_listing_account_notifications()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if (tg_op = 'INSERT' and new.status = 'active')
+     or (tg_op = 'UPDATE' and old.status is distinct from 'active' and new.status = 'active') then
+    insert into public.app_notifications (owner_id, kind, listing_id, title, body)
+    values (new.owner_id, 'listing-approved', new.id, 'Объявление одобрено', new.plate_left || ' ' || new.plate_digits || ' ' || new.plate_right || ' опубликован в каталоге');
+
+    insert into public.app_notifications (owner_id, kind, listing_id, title, body)
+    select distinct a.owner_id, 'search-alert', new.id, 'Подходящий номер появился', new.plate_left || ' ' || new.plate_digits || ' ' || new.plate_right || ' · ' || new.region
+    from public.auto_search_alerts a
+    where a.enabled = true
+      and a.owner_id <> new.owner_id
+      and (coalesce(a.left_letter, '') = '' or new.plate_left ilike replace(a.left_letter, '*', '%'))
+      and (coalesce(a.right_letters, '') = '' or new.plate_right ilike replace(a.right_letters, '*', '%'))
+      and (coalesce(a.digits, '') = '' or new.plate_digits ilike replace(a.digits, '*', '%'))
+      and (coalesce(a.vehicle_type, '') = '' or a.vehicle_type = new.vehicle_type)
+      and (coalesce(a.price_limit, 0) = 0 or new.price_rub <= a.price_limit)
+      and (coalesce(a.region_code, '') = '' or new.region like '%· ' || any(string_to_array(a.region_code, ',')))
+      and (coalesce(a.region_code, '') <> '' or coalesce(a.region, 'Все') = 'Все' or new.region like a.region || '%');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists auto_listings_approval_notice on public.auto_listings;
+drop trigger if exists auto_listings_account_notifications on public.auto_listings;
+create trigger auto_listings_account_notifications
+  after insert or update of status on public.auto_listings
+  for each row execute function public.create_listing_account_notifications();
