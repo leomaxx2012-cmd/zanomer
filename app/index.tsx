@@ -1193,6 +1193,9 @@ export default function HomeScreen() {
         setProfileName(name);
         setAuthMessage("Вход подтверждён. Имя для объявлений можно изменить позже.");
         void loadManagement(user.id, name);
+        void loadSavedSearches(user.id);
+        void loadUnreadAppNotice(user.id);
+        void registerForPushNotifications(user.id);
         return;
       }
       setProfileName(name);
@@ -1254,7 +1257,24 @@ export default function HomeScreen() {
       .maybeSingle();
     if (!data) return;
     setInAppNotice(data as AppNotification);
-    void supabase.from("app_notifications").update({ read_at: new Date().toISOString() }).eq("id", data.id);
+  }
+
+  // Закрытое уведомление не должно появляться снова. Помечаем все повторы
+  // одного и того же события прочитанными: ранние версии сервера могли
+  // создать две одинаковые записи об одобрении.
+  async function dismissInAppNotice(openListing = false) {
+    const notice = inAppNotice;
+    setInAppNotice(null);
+    if (!notice || !supabase || !currentUserId) return;
+    const { error } = await supabase
+      .from("app_notifications")
+      .update({ read_at: new Date().toISOString() })
+      .eq("owner_id", currentUserId)
+      .eq("kind", notice.kind)
+      .eq("listing_id", notice.listing_id)
+      .is("read_at", null);
+    if (error) console.warn("Could not mark app notification as read", error.message);
+    if (openListing) void openListingFromNotification(notice.kind, notice.listing_id);
   }
 
   // Получатель узнаёт о новом сообщении, не обновляя вручную страницу.
@@ -2417,14 +2437,14 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={!!inAppNotice} transparent animationType="fade" onRequestClose={() => setInAppNotice(null)}>
+      <Modal visible={!!inAppNotice} transparent animationType="fade" onRequestClose={() => void dismissInAppNotice()}>
         <View style={styles.noticeOverlay}>
           <View style={styles.noticePanel}>
             <Text style={styles.noticeIcon}>🔔</Text>
             <Text style={styles.noticeTitle}>{inAppNotice?.title}</Text>
             <Text style={styles.noticeBody}>{inAppNotice?.body}</Text>
-            <Pressable onPress={() => { const notice = inAppNotice; setInAppNotice(null); if (notice) void openListingFromNotification(notice.kind, notice.listing_id); }} style={styles.noticeOpenButton}><Text style={styles.noticeOpenText}>Открыть объявление</Text></Pressable>
-            <Pressable onPress={() => setInAppNotice(null)} style={styles.noticeCloseButton}><Text style={styles.noticeCloseText}>Позже</Text></Pressable>
+            <Pressable onPress={() => void dismissInAppNotice(true)} style={styles.noticeOpenButton}><Text style={styles.noticeOpenText}>Открыть объявление</Text></Pressable>
+            <Pressable onPress={() => void dismissInAppNotice()} style={styles.noticeCloseButton}><Text style={styles.noticeCloseText}>Позже</Text></Pressable>
           </View>
         </View>
       </Modal>

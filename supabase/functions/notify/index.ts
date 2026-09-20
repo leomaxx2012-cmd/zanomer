@@ -91,10 +91,9 @@ Deno.serve(async (request) => {
     const { data: moderators } = await admin.from("auto_moderators").select("user_id");
     recipientIds = (moderators ?? []).map((item) => item.user_id); title = "Новая жалоба"; body = "Требуется проверка жалобы в ЗаНомером";
   } else return Response.json({ error: "Unknown notification" }, { status: 400, headers });
-  // Внутреннее уведомление — запасной вариант для случаев, когда Android
-  // временно не принимает push (например, из-за VPN). Оно появится при
-  // следующем входе владельца в приложение.
-  if (recipientIds.length && (kind === "listing-approved" || kind === "search-alert")) {
+  // Резервное сообщение о найденном номере. Одобрение сохраняет триггер БД:
+  // так не появляются два одинаковых окна после следующего запуска.
+  if (recipientIds.length && kind === "search-alert") {
     await admin.from("app_notifications").insert(recipientIds.map((owner_id) => ({
       owner_id,
       kind,
