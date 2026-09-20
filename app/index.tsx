@@ -270,6 +270,9 @@ export default function HomeScreen() {
   const [authMessage, setAuthMessage] = useState("");
   const [authSending, setAuthSending] = useState(false);
   const [lastOtpRequest, setLastOtpRequest] = useState<{ email: string; at: number } | null>(null);
+  // state меняется не мгновенно: ref не даёт двум быстрым касаниям кнопки
+  // отправить два одинаковых запроса к почтовому сервису.
+  const authRequestInFlightRef = useRef(false);
   const [subscriptionToast, setSubscriptionToast] = useState(false);
   const [subscriptionToastMessage, setSubscriptionToastMessage] = useState("");
   const [subscriptionSaving, setSubscriptionSaving] = useState(false);
@@ -1771,7 +1774,7 @@ export default function HomeScreen() {
     setAuthMessage("");
     const email = authEmail.trim().toLowerCase();
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) return setAuthMessage("Введи корректный email.");
-    if (authSending) return;
+    if (authSending || authRequestInFlightRef.current) return;
     Keyboard.dismiss();
 
     // Код можно использовать и для первой регистрации, и как запасной
@@ -1783,10 +1786,24 @@ export default function HomeScreen() {
         setAuthMessage(`Код уже отправлен. Проверь почту или подожди ${seconds} сек. перед повторной отправкой.`);
         return;
       }
+      authRequestInFlightRef.current = true;
       setAuthSending(true);
       setAuthMessage("Отправляем код на почту…");
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: authMode === "signup" } });
-      setAuthSending(false);
+      // На нестабильной сети SDK может ждать ответ бесконечно. У пользователя
+      // должна снова стать доступна кнопка, а не вечная надпись «Отправляем».
+      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Не удалось связаться с почтовым сервисом за 20 секунд. Проверь интернет и попробуй ещё раз.")), 20_000));
+      let error: { message: string } | null = null;
+      try {
+        ({ error } = await Promise.race([
+          supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: authMode === "signup" } }),
+          timeout,
+        ]));
+      } catch (requestError) {
+        error = { message: requestError instanceof Error ? requestError.message : "Не удалось отправить код. Попробуй ещё раз." };
+      } finally {
+        authRequestInFlightRef.current = false;
+        setAuthSending(false);
+      }
       if (error) return setAuthMessage(error.message);
       setLastOtpRequest({ email, at: Date.now() });
       setAuthStep(2);
