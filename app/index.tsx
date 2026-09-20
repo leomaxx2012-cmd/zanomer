@@ -19,6 +19,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
@@ -60,6 +61,7 @@ type PricePoint = {
 type ChatMessage = { id: string; listing_id?: string; sender_id: string; recipient_id: string; body: string; created_at: string };
 type PublicComment = { id: string; listing_id: string; author_id: string; author_name: string; body: string; created_at: string };
 type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessage };
+type DiscussionThread = { listingId: string; lastComment: PublicComment };
 type MessageReport = { id: string; reason: string; created_at: string; reported_user_id?: string; message?: { body?: string; sender_id?: string; listing_id?: string } | null };
 type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
 
@@ -218,6 +220,7 @@ export default function HomeScreen() {
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
   const latestPartnerListingRef = useRef("");
+  const handledNotificationRef = useRef("");
   const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
@@ -293,6 +296,7 @@ export default function HomeScreen() {
   const [chatRecipientId, setChatRecipientId] = useState("");
   const [chatsOpen, setChatsOpen] = useState(false);
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
+  const [discussionThreads, setDiscussionThreads] = useState<DiscussionThread[]>([]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [reportingMessage, setReportingMessage] = useState<ChatMessage | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -462,10 +466,12 @@ export default function HomeScreen() {
       vehicle: item.vehicle_type as Plate["vehicle"],
       seller: ownerName,
       createdAt: String(item.created_at).slice(0, 10),
+      publishedAt: item.created_at,
       tag: item.status === "moderation" ? "На проверке" : item.status === "archived" ? "Снято с продажи" : "Активно",
       isSiteListing: true,
       ownerId: item.owner_id,
       listingStatus: item.status,
+      photoUrl: item.photo_url ?? undefined,
     };
   }
 
@@ -474,7 +480,7 @@ export default function HomeScreen() {
     const client = supabase;
     const { data: own } = await client
       .from("auto_listings")
-      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url")
       .eq("owner_id", userId)
       .order("created_at", { ascending: false });
     setMyListings((own ?? []).map((item) => mapManagedListing(item, ownerName)));
@@ -487,7 +493,7 @@ export default function HomeScreen() {
     if (traffic?.[0]) setSiteTraffic(traffic[0] as SiteTrafficAnalytics);
     const { data: pending } = await client
       .from("auto_listings")
-      .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url")
       .eq("status", "moderation")
       .order("created_at", { ascending: true });
     setModerationListings((pending ?? []).map((item) => mapManagedListing(item, "Пользователь ЗаНомером")));
@@ -543,17 +549,25 @@ export default function HomeScreen() {
   }
 
   async function reviewListing(listing: Plate, status: "active" | "archived") {
-    if (!supabase) return;
+    if (!supabase) return false;
     const note = status === "active" ? "Одобрено модератором" : "Не прошло проверку";
     const { error } = await supabase.rpc("review_auto_listing", { listing: listing.id, new_status: status, note });
-    if (error) return setAuthMessage("Не удалось завершить модерацию. Проверь, что твой аккаунт добавлен в модераторы.");
+    if (error) {
+      setAuthMessage("Не удалось завершить модерацию. Проверь, что твой аккаунт добавлен в модераторы.");
+      return false;
+    }
     if (status === "active") {
       // The edge function validates the moderator and finds every matching
       // saved search before delivering push notifications.
       await supabase.functions.invoke("notify", { body: { kind: "search-alert", id: listing.id } });
+      // Владелец получает отдельное уведомление, даже если его номер не
+      // совпадает ни с одним сохранённым поиском.
+      await supabase.functions.invoke("notify", { body: { kind: "listing-approved", id: listing.id } });
     }
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
+    setAuthMessage(status === "active" ? "Объявление одобрено. Владельцу отправлено уведомление." : "Объявление отклонено.");
+    return true;
   }
 
   async function reviewMessageReport(report: MessageReport, status: "approved" | "rejected") {
@@ -609,6 +623,52 @@ export default function HomeScreen() {
     setChatOpen(true);
   }
 
+  async function openListingFromNotification(kind: string, id: string) {
+    if (!supabase || !id) return;
+    let listingId = id;
+    if (kind === "message") {
+      const { data } = await supabase.from("listing_messages").select("listing_id").eq("id", id).maybeSingle();
+      listingId = data?.listing_id ?? "";
+    } else if (kind === "comment") {
+      const { data } = await supabase.from("listing_public_comments").select("listing_id").eq("id", id).maybeSingle();
+      listingId = data?.listing_id ?? "";
+    }
+    if (!listingId) return;
+    let listing = catalog.find((item) => item.id === listingId);
+    if (!listing) {
+      const { data } = await supabase
+        .from("auto_listings")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url")
+        .eq("id", listingId)
+        .maybeSingle();
+      if (data) {
+        const { data: profile } = await supabase.from("auto_profiles").select("username").eq("id", data.owner_id).maybeSingle();
+        listing = mapManagedListing(data, profile?.username ?? "Пользователь ЗаНомером");
+      }
+    }
+    if (!listing) return;
+    setSelectedPlate(listing);
+    if (kind === "message") await openChat(listing);
+  }
+
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const handle = (data: Record<string, unknown>) => {
+      const kind = String(data.kind ?? "");
+      const id = String(data.id ?? "");
+      const key = `${kind}:${id}`;
+      if (!kind || !id || handledNotificationRef.current === key) return;
+      handledNotificationRef.current = key;
+      void openListingFromNotification(kind, id);
+      void Notifications.clearLastNotificationResponseAsync();
+    };
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => handle(response.notification.request.content.data));
+    void Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (response) handle(response.notification.request.content.data);
+    });
+    return () => subscription.remove();
+  }, [catalog, currentUserId]);
+
   async function loadChatThreads() {
     if (!supabase || !currentUserId) return;
     const { data, error } = await supabase
@@ -625,13 +685,31 @@ export default function HomeScreen() {
     setChatThreads([...threads.values()]);
   }
 
+  async function loadDiscussionThreads() {
+    if (!supabase || !currentUserId) return;
+    const { data: ownListings } = await supabase.from("auto_listings").select("id").eq("owner_id", currentUserId);
+    const ownListingIds = (ownListings ?? []).map((item) => item.id);
+    const [{ data: ownComments }, { data: listingComments }] = await Promise.all([
+      supabase.from("listing_public_comments").select("id, listing_id, author_id, author_name, body, created_at").eq("author_id", currentUserId).order("created_at", { ascending: false }).limit(100),
+      ownListingIds.length
+        ? supabase.from("listing_public_comments").select("id, listing_id, author_id, author_name, body, created_at").in("listing_id", ownListingIds).order("created_at", { ascending: false }).limit(100)
+        : Promise.resolve({ data: [] as PublicComment[] }),
+    ]);
+    const latest = new Map<string, PublicComment>();
+    [...(ownComments ?? []), ...(listingComments ?? [])].forEach((comment) => {
+      const current = latest.get(comment.listing_id);
+      if (!current || current.created_at < comment.created_at) latest.set(comment.listing_id, comment as PublicComment);
+    });
+    setDiscussionThreads([...latest.entries()].map(([listingId, lastComment]) => ({ listingId, lastComment })).sort((a, b) => b.lastComment.created_at.localeCompare(a.lastComment.created_at)));
+  }
+
   async function openChats() {
     if (!currentUserId) {
       setChatMessage("Список диалогов появится после первого сообщения.");
       setChatsOpen(true);
       return;
     }
-    await loadChatThreads();
+    await Promise.all([loadChatThreads(), loadDiscussionThreads()]);
     setUnreadChatCount(0);
     setChatsOpen(true);
   }
@@ -1768,10 +1846,9 @@ export default function HomeScreen() {
                     </View>}
                   </View>
                   <Text style={styles.managementTitle}>Очередь на проверку</Text>
-                  {moderationListings.length === 0 ? <Text style={styles.managementHint}>Сейчас нет объявлений на проверке.</Text> : moderationListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
-                    <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text></View>
-                    <View style={styles.reviewActions}><Pressable onPress={() => reviewListing(listing, "active")} style={styles.approveButton}><Text style={styles.approveButtonText}>Одобрить</Text></Pressable><Pressable onPress={() => reviewListing(listing, "archived")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable></View>
-                  </View>)}
+                  {moderationListings.length === 0 ? <Text style={styles.managementHint}>Сейчас нет объявлений на проверке.</Text> : moderationListings.map((listing) => <Pressable key={listing.id} onPress={() => setSelectedPlate(listing)} style={styles.managementCard}>
+                    <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementHint}>Нажми, чтобы проверить все данные и фото</Text></View>
+                  </Pressable>)}
                   <Text style={styles.managementTitle}>Жалобы на сообщения</Text>
                   {moderationReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationReports.map((report) => <View key={report.id} style={styles.managementCard}>
                     <View style={styles.reportReviewText}><Text style={styles.managementMeta}>Сообщение: {report.message?.body ?? "удалено"}</Text><Text style={styles.managementStatus}>Причина: {report.reason}</Text></View>
@@ -2240,6 +2317,14 @@ export default function HomeScreen() {
                 <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
                 <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate?.seller}</Text>
               </View>
+              {selectedPlate?.listingStatus === "moderation" && isModerator && <View style={styles.moderationReviewCard}>
+                <Text style={styles.moderationReviewTitle}>Проверка объявления</Text>
+                <Text style={styles.moderationReviewHint}>Проверь номер, регион, цену, описание и фото. После одобрения владелец получит уведомление.</Text>
+                <View style={styles.reviewActions}>
+                  <Pressable onPress={() => { void reviewListing(selectedPlate, "active").then((done) => { if (done) setSelectedPlate(null); }); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Одобрить</Text></Pressable>
+                  <Pressable onPress={() => { void reviewListing(selectedPlate, "archived").then((done) => { if (done) setSelectedPlate(null); }); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
+                </View>
+              </View>}
               {hasPlusSubscription ? <View style={styles.priceHistoryBlock}>
                 <View style={styles.priceHistoryHeader}>
                   <Text style={styles.priceHistoryTitle}>Изменение цены</Text>
@@ -2339,11 +2424,16 @@ export default function HomeScreen() {
         <Pressable style={styles.detailsOverlay} onPress={() => setChatsOpen(false)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.dialogsPanel}>
             <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Диалоги</Text><Pressable onPress={() => setChatsOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
-            <Text style={styles.dialogsHint}>Все сообщения по объявлениям в одном месте.</Text>
+            <Text style={styles.dialogsHint}>Чаты с продавцами и покупателями, а также комментарии к твоим объявлениям.</Text>
             <ScrollView contentContainerStyle={styles.dialogsList}>
-              {chatThreads.length === 0 ? <Text style={styles.dialogsEmpty}>Пока нет диалогов. Напиши продавцу из карточки объявления.</Text> : chatThreads.map((thread) => {
+              {chatThreads.length === 0 && discussionThreads.length === 0 ? <Text style={styles.dialogsEmpty}>Пока нет диалогов или комментариев. Открой карточку объявления, чтобы начать общение.</Text> : null}
+              {chatThreads.map((thread) => {
                 const listing = catalog.find((item) => item.id === thread.listingId);
-                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={async () => { setChatsOpen(false); if (listing) await openChat(listing); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы: " : "Новое: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
+                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={async () => { setChatsOpen(false); if (listing) await openChat(listing); else await openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы: " : "Новое: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
+              })}
+              {discussionThreads.map((thread) => {
+                const listing = catalog.find((item) => item.id === thread.listingId);
+                return <Pressable key={`comment-${thread.listingId}`} onPress={() => { setChatsOpen(false); if (listing) setSelectedPlate(listing); else void openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>💬</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Комментарий к объявлению"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastComment.author_id === currentUserId ? "Вы: " : `${thread.lastComment.author_name}: `}{thread.lastComment.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastComment.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
               })}
             </ScrollView>
           </Pressable>
@@ -2927,6 +3017,9 @@ const styles = StyleSheet.create({
   detailsClose: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
   detailsCloseText: { color: "#475467", fontSize: 25, lineHeight: 29 },
   detailsBlock: { borderTopColor: "#EAECF0", borderTopWidth: 1, marginTop: 18, paddingTop: 15 },
+  moderationReviewCard: { backgroundColor: "#FFF7E6", borderColor: "#FEDF89", borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 13 },
+  moderationReviewTitle: { color: "#93370D", fontSize: 15, fontWeight: "900" },
+  moderationReviewHint: { color: "#7A2E0E", fontSize: 12, lineHeight: 17, marginBottom: 11, marginTop: 5 },
   priceHistoryBlock: { backgroundColor: "#F7F6FF", borderColor: "#DDD8FF", borderRadius: 16, borderWidth: 1, marginTop: 18, padding: 14 },
   priceHistoryLocked: { backgroundColor: "#F8F7FF", borderColor: "#DDD8FF", borderRadius: 16, borderStyle: "dashed", borderWidth: 1, marginTop: 18, padding: 14 },
   priceHistoryUnlockButton: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#5143C2", borderRadius: 10, marginTop: 12, paddingHorizontal: 12, paddingVertical: 9 },
