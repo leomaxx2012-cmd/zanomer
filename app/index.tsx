@@ -64,6 +64,7 @@ type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessa
 type DiscussionThread = { listingId: string; lastComment: PublicComment };
 type MessageReport = { id: string; reason: string; created_at: string; reported_user_id?: string; message?: { body?: string; sender_id?: string; listing_id?: string } | null };
 type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
+type AppNotification = { id: string; kind: string; listing_id: string; title: string; body: string; created_at: string };
 
 type SavedSearch = {
   id: string;
@@ -215,7 +216,9 @@ export default function HomeScreen() {
   // Тяжёлая карточка содержит разметку номера и несколько действий. На
   // телефоне выводим меньшую первую страницу, чтобы прокрутка оставалась
   // отзывчивой даже при каталоге из тысяч объявлений.
-  const catalogPageSize = compactLayout ? 6 : 40;
+  // Рендер нескольких тяжёлых карточек сразу заметно тормозит недорогие
+  // Android-устройства. Остальные карточки открываются кнопкой «Показать ещё».
+  const catalogPageSize = compactLayout ? 4 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
@@ -225,7 +228,7 @@ export default function HomeScreen() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
-  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 6 : 40);
+  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 4 : 40);
   const [catalogOnly, setCatalogOnly] = useState(false);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
@@ -318,6 +321,7 @@ export default function HomeScreen() {
   const [testPaymentDone, setTestPaymentDone] = useState(false);
   const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(() => isPaymentInfoPage() || isRequisitesPage());
+  const [inAppNotice, setInAppNotice] = useState<AppNotification | null>(null);
 
   function openTestPayment(title: string, amount: string) {
     setTestPayment({ title, amount });
@@ -456,6 +460,19 @@ export default function HomeScreen() {
       });
   }, [currentUserId]);
 
+  // Не оставляем цифры посещаемости «замороженными» в открытой админ-панели.
+  // Запрашиваем только компактную статистику, не перезагружая каталог.
+  useEffect(() => {
+    if (!supabase || !isModerator || !managementOpen) return;
+    const refreshTraffic = async () => {
+      const { data } = await supabase.rpc("get_site_analytics");
+      if (data?.[0]) setSiteTraffic(data[0] as SiteTrafficAnalytics);
+    };
+    void refreshTraffic();
+    const timer = setInterval(() => void refreshTraffic(), 60_000);
+    return () => clearInterval(timer);
+  }, [isModerator, managementOpen]);
+
   function mapManagedListing(item: any, ownerName: string): Plate {
     return {
       id: item.id,
@@ -475,6 +492,7 @@ export default function HomeScreen() {
       ownerId: item.owner_id,
       listingStatus: item.status,
       photoUrl: item.photo_url ?? undefined,
+      sellerComment: item.seller_comment ?? undefined,
     };
   }
 
@@ -483,7 +501,7 @@ export default function HomeScreen() {
     const client = supabase;
     const { data: own } = await client
       .from("auto_listings")
-      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
       .eq("owner_id", userId)
       .order("created_at", { ascending: false });
     setMyListings((own ?? []).map((item) => mapManagedListing(item, ownerName)));
@@ -496,7 +514,7 @@ export default function HomeScreen() {
     if (traffic?.[0]) setSiteTraffic(traffic[0] as SiteTrafficAnalytics);
     const { data: pending } = await client
       .from("auto_listings")
-      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
       .eq("status", "moderation")
       .order("created_at", { ascending: true });
     setModerationListings((pending ?? []).map((item) => mapManagedListing(item, "Пользователь ЗаНомером")));
@@ -641,7 +659,7 @@ export default function HomeScreen() {
     if (!listing) {
       const { data } = await supabase
         .from("auto_listings")
-        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
         .eq("id", listingId)
         .maybeSingle();
       if (data) {
@@ -978,7 +996,7 @@ export default function HomeScreen() {
         .range(0, 999);
       const siteListingsRequest = client
         .from("auto_listings")
-        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url, seller_comment")
         .eq("status", "active")
         .order("created_at", { ascending: false });
 
@@ -1044,6 +1062,7 @@ export default function HomeScreen() {
         sellerRating: sellerReviews ? sellerReviews.total / sellerReviews.count : null,
         featuredUntil: item.featured_until,
         photoUrl: item.photo_url ?? undefined,
+        sellerComment: item.seller_comment ?? undefined,
       };
       });
       const partners: Plate[] = partnerData.map(toPartnerPlate);
@@ -1172,6 +1191,7 @@ export default function HomeScreen() {
       setProfileName(name);
       void loadManagement(user.id, name);
       void loadSavedSearches(user.id);
+      void loadUnreadAppNotice(user.id);
       // На Android приложение один раз спросит разрешение, а затем сохранит
       // токен устройства для уведомлений о подходящих номерах.
       void registerForPushNotifications(user.id);
@@ -1205,6 +1225,24 @@ export default function HomeScreen() {
       vehicle: item.vehicle_type,
       priceLimit: item.price_limit || null,
     })));
+  }
+
+  // Push может не дойти из-за ограничений Android, VPN или выключенного
+  // интернета. Поэтому важные события также храним в аккаунте и показываем
+  // при первом следующем входе в приложение.
+  async function loadUnreadAppNotice(ownerId: string) {
+    if (!supabase || !ownerId) return;
+    const { data } = await supabase
+      .from("app_notifications")
+      .select("id, kind, listing_id, title, body, created_at")
+      .eq("owner_id", ownerId)
+      .is("read_at", null)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return;
+    setInAppNotice(data as AppNotification);
+    void supabase.from("app_notifications").update({ read_at: new Date().toISOString() }).eq("id", data.id);
   }
 
   // Получатель узнаёт о новом сообщении, не обновляя вручную страницу.
@@ -1474,6 +1512,14 @@ export default function HomeScreen() {
       vehicle,
       priceLimit,
     };
+    const searchLimit = hasPlusSubscription ? 30 : 15;
+    const alreadySaved = savedSearches.some((search) => search.title === current.title);
+    if (!alreadySaved && savedSearches.length >= searchLimit) {
+      setSubscriptionSaving(false);
+      setSubscriptionToastMessage(`Лимит сохранённых поисков: ${searchLimit}. Удали ненужный поиск или подключи ЗаНомером Плюс.`);
+      setSubscriptionToast(true);
+      return;
+    }
     const { data, error } = await supabase.from("auto_search_alerts")
       .upsert({
         owner_id: currentUserId,
@@ -1496,7 +1542,7 @@ export default function HomeScreen() {
       return;
     }
     current.id = data.id;
-    setSavedSearches((searches) => [current, ...searches.filter((item) => item.title !== current.title)].slice(0, hasPlusSubscription ? 30 : 15));
+    setSavedSearches((searches) => [current, ...searches.filter((item) => item.title !== current.title)]);
     setSubscriptionToastMessage("✓ Уведомление включено");
     setSubscriptionToast(true);
     } catch {
@@ -1664,6 +1710,7 @@ export default function HomeScreen() {
         vehicle_type: entry.vehicle,
         price_rub: entry.priceValue,
         photo_url: photoUrl,
+        seller_comment: listingComment.trim() || null,
         status: isModerator ? "active" : "moderation",
       }).select("id, status").single();
       if (error) {
@@ -1871,14 +1918,7 @@ export default function HomeScreen() {
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
                   <View style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text></View>
                   {listing.listingStatus !== "archived" && <View style={styles.managementActions}>
-                    {editingPriceId === listing.id ? <>
-                      <TextInput value={editingPrice} onChangeText={setEditingPrice} keyboardType="numeric" placeholder="Цена, ₽" placeholderTextColor="#98A2B3" style={styles.managementPriceInput} />
-                      <Pressable onPress={() => { void updateMyListingPrice(listing); }} style={styles.savePriceButton}><Text style={styles.savePriceButtonText}>Сохранить</Text></Pressable>
-                      <Pressable onPress={() => { setEditingPriceId(null); setEditingPrice(""); }} style={styles.cancelPriceButton}><Text style={styles.cancelPriceButtonText}>Отмена</Text></Pressable>
-                    </> : <>
-                      <Pressable onPress={() => { setEditingPriceId(listing.id); setEditingPrice(String(listing.priceValue)); }} style={styles.editPriceButton}><Text style={styles.editPriceButtonText}>Изменить цену</Text></Pressable>
-                      <Pressable onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
-                    </>}
+                    <Pressable onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
                   </View>}
                 </View>)}
                 {isModerator && <>
@@ -2298,7 +2338,7 @@ export default function HomeScreen() {
                     </Pressable>}
                     {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text numberOfLines={1} style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
                     {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text numberOfLines={1} style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
-                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={[styles.cardAction, compactLayout && styles.cardShareActionCompact]}><Text numberOfLines={1} style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
+                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={[styles.cardAction, compactLayout && !!item.sourceUrl && styles.cardShareActionChannelCompact, compactLayout && !item.sourceUrl && styles.cardShareActionCompact]}><Text numberOfLines={1} style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
                     {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarityPickerPlate(item); }} style={[styles.similarButton, compactLayout && styles.similarButtonWideCompact]}>
                       <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
                     </Pressable>}
@@ -2365,6 +2405,18 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      <Modal visible={!!inAppNotice} transparent animationType="fade" onRequestClose={() => setInAppNotice(null)}>
+        <View style={styles.noticeOverlay}>
+          <View style={styles.noticePanel}>
+            <Text style={styles.noticeIcon}>🔔</Text>
+            <Text style={styles.noticeTitle}>{inAppNotice?.title}</Text>
+            <Text style={styles.noticeBody}>{inAppNotice?.body}</Text>
+            <Pressable onPress={() => { const notice = inAppNotice; setInAppNotice(null); if (notice) void openListingFromNotification(notice.kind, notice.listing_id); }} style={styles.noticeOpenButton}><Text style={styles.noticeOpenText}>Открыть объявление</Text></Pressable>
+            <Pressable onPress={() => setInAppNotice(null)} style={styles.noticeCloseButton}><Text style={styles.noticeCloseText}>Позже</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
+
       <Modal visible={!!selectedPlate} transparent animationType="slide" onRequestClose={() => setSelectedPlate(null)}>
         <Pressable style={styles.detailsOverlay} onPress={() => setSelectedPlate(null)}>
           <ScrollView contentContainerStyle={styles.detailsScroll}>
@@ -2388,6 +2440,8 @@ export default function HomeScreen() {
               {selectedPlate?.listingStatus === "moderation" && isModerator && <View style={styles.moderationReviewCard}>
                 <Text style={styles.moderationReviewTitle}>Проверка объявления</Text>
                 <Text style={styles.moderationReviewHint}>Проверь номер, регион, цену, описание и фото. После одобрения владелец получит уведомление.</Text>
+                <Text style={styles.moderationReviewDescriptionLabel}>Описание продавца</Text>
+                <Text style={styles.moderationReviewDescription}>{selectedPlate?.sellerComment?.trim() || "Описание не добавлено"}</Text>
                 <View style={styles.reviewActions}>
                   <Pressable onPress={() => { void reviewListing(selectedPlate, "active").then((done) => { if (done) setSelectedPlate(null); }); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Одобрить</Text></Pressable>
                   <Pressable onPress={() => { void reviewListing(selectedPlate, "archived").then((done) => { if (done) setSelectedPlate(null); }); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
@@ -3002,6 +3056,7 @@ const styles = StyleSheet.create({
   cardActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
   cardAction: { backgroundColor: "#5143C2", borderColor: "#4338A8", borderRadius: 11, borderWidth: 1, minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
   cardShareActionCompact: { alignItems: "center", minWidth: 122 },
+  cardShareActionChannelCompact: { alignItems: "center", width: "100%" },
   cardActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   cardActionLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
   cardActionLikedText: { color: "#C01048" },
@@ -3067,6 +3122,15 @@ const styles = StyleSheet.create({
   subscribeButton: { alignItems: "center", backgroundColor: "#ECFDF3", borderColor: "#ABEFC6", borderRadius: 13, borderWidth: 1, marginBottom: 84, paddingHorizontal: 13, paddingVertical: 13 },
   subscribeButtonText: { color: "#067647", fontSize: 13, fontWeight: "800", textAlign: "center" },
   detailsOverlay: { backgroundColor: "rgba(16,24,40,0.5)", flex: 1 },
+  noticeOverlay: { alignItems: "center", backgroundColor: "rgba(16,24,40,0.5)", flex: 1, justifyContent: "center", padding: 22 },
+  noticePanel: { alignItems: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 410, padding: 24, width: "100%" },
+  noticeIcon: { fontSize: 35 },
+  noticeTitle: { color: "#1D2939", fontSize: 21, fontWeight: "900", marginTop: 10, textAlign: "center" },
+  noticeBody: { color: "#667085", fontSize: 14, lineHeight: 20, marginTop: 9, textAlign: "center" },
+  noticeOpenButton: { alignItems: "center", alignSelf: "stretch", backgroundColor: "#155EEF", borderRadius: 12, marginTop: 20, paddingVertical: 13 },
+  noticeOpenText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
+  noticeCloseButton: { marginTop: 14, padding: 6 },
+  noticeCloseText: { color: "#667085", fontSize: 13, fontWeight: "800" },
   sellerProfileOverlay: { alignItems: "center", justifyContent: "center", padding: 16 },
   sellerProfileOverlayCompact: { backgroundColor: "#FFFFFF", padding: 0 },
   detailsScroll: { flexGrow: 1, justifyContent: "flex-end", padding: 14 },
@@ -3088,6 +3152,8 @@ const styles = StyleSheet.create({
   moderationReviewCard: { backgroundColor: "#FFF7E6", borderColor: "#FEDF89", borderRadius: 14, borderWidth: 1, marginTop: 14, padding: 13 },
   moderationReviewTitle: { color: "#93370D", fontSize: 15, fontWeight: "900" },
   moderationReviewHint: { color: "#7A2E0E", fontSize: 12, lineHeight: 17, marginBottom: 11, marginTop: 5 },
+  moderationReviewDescriptionLabel: { color: "#93370D", fontSize: 11, fontWeight: "900", marginTop: 2 },
+  moderationReviewDescription: { backgroundColor: "#FFFFFF", borderRadius: 9, color: "#475467", fontSize: 12, lineHeight: 17, marginTop: 5, padding: 9 },
   priceHistoryBlock: { backgroundColor: "#F7F6FF", borderColor: "#DDD8FF", borderRadius: 16, borderWidth: 1, marginTop: 18, padding: 14 },
   priceHistoryLocked: { backgroundColor: "#F8F7FF", borderColor: "#DDD8FF", borderRadius: 16, borderStyle: "dashed", borderWidth: 1, marginTop: 18, padding: 14 },
   priceHistoryUnlockButton: { alignItems: "center", alignSelf: "flex-start", backgroundColor: "#5143C2", borderRadius: 10, marginTop: 12, paddingHorizontal: 12, paddingVertical: 9 },

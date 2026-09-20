@@ -91,6 +91,18 @@ Deno.serve(async (request) => {
     const { data: moderators } = await admin.from("auto_moderators").select("user_id");
     recipientIds = (moderators ?? []).map((item) => item.user_id); title = "Новая жалоба"; body = "Требуется проверка жалобы в ЗаНомером";
   } else return Response.json({ error: "Unknown notification" }, { status: 400, headers });
+  // Внутреннее уведомление — запасной вариант для случаев, когда Android
+  // временно не принимает push (например, из-за VPN). Оно появится при
+  // следующем входе владельца в приложение.
+  if (recipientIds.length && (kind === "listing-approved" || kind === "search-alert")) {
+    await admin.from("app_notifications").insert(recipientIds.map((owner_id) => ({
+      owner_id,
+      kind,
+      listing_id: id,
+      title,
+      body,
+    })));
+  }
   const { data: tokens } = recipientIds.length ? await admin.from("auto_push_tokens").select("token").in("owner_id", recipientIds) : { data: [] };
   const messages = (tokens ?? []).map(({ token }) => ({ to: token, sound: "default", title, body, priority: "high", channelId: "matches", ttl: 3600, data: { kind, id } }));
   if (messages.length) await fetch("https://exp.host/--/api/v2/push/send", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(messages) });
