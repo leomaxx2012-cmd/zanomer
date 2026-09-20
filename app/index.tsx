@@ -223,6 +223,7 @@ export default function HomeScreen() {
   const catalogScrollRef = useRef<ScrollView>(null);
   const downloadedUpdateRef = useRef(false);
   const latestPartnerListingRef = useRef("");
+  const latestSiteListingRef = useRef("");
   const handledNotificationRef = useRef("");
   const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -995,7 +996,7 @@ export default function HomeScreen() {
         .range(0, 999);
       const siteListingsRequest = client
         .from("auto_listings")
-        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url, seller_comment")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, updated_at, status, featured_until, photo_url, seller_comment")
         .eq("status", "active")
         .order("created_at", { ascending: false });
 
@@ -1069,6 +1070,10 @@ export default function HomeScreen() {
         const timestamp = plate.publishedAt ?? plate.createdAt;
         return timestamp > latest ? timestamp : latest;
       }, latestPartnerListingRef.current);
+      latestSiteListingRef.current = data.reduce((latest, item) => {
+        const timestamp = String(item.updated_at ?? item.created_at ?? "");
+        return timestamp > latest ? timestamp : latest;
+      }, latestSiteListingRef.current);
 
       // Снимок из APK — надёжная база каталога офлайн. Сетевые данные лишь
       // обновляют его и добавляют свежие объявления, но не могут его уменьшить.
@@ -1117,18 +1122,20 @@ export default function HomeScreen() {
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       if (state === "active") void loadCatalog();
     });
-    // Каждую минуту передаём только один свежий timestamp. Полный каталог
+    // Каждую минуту передаём только свежие timestamp. Полный каталог
     // скачивается лишь если на сервере действительно появилось что-то новое.
+    // Важно проверять и пользовательские карточки: одобрение меняет status,
+    // а не дату публикации партнёрского объявления.
     async function checkForCatalogUpdates() {
       if (loadingCatalog) return;
-      const { data } = await client
-        .from("partner_listings")
-        .select("created_at")
-        .eq("status", "active")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      const latest = data?.[0]?.created_at;
-      if (latest && (!latestPartnerListingRef.current || latest > latestPartnerListingRef.current)) void loadCatalog();
+      const [{ data: partnerRows }, { data: siteRows }] = await Promise.all([
+        client.from("partner_listings").select("created_at").eq("status", "active").order("created_at", { ascending: false }).limit(1),
+        client.from("auto_listings").select("updated_at, created_at").eq("status", "active").order("updated_at", { ascending: false }).limit(1),
+      ]);
+      const latestPartner = partnerRows?.[0]?.created_at;
+      const latestSite = siteRows?.[0] ? String(siteRows[0].updated_at ?? siteRows[0].created_at) : "";
+      if ((latestPartner && (!latestPartnerListingRef.current || latestPartner > latestPartnerListingRef.current))
+        || (latestSite && (!latestSiteListingRef.current || latestSite > latestSiteListingRef.current))) void loadCatalog();
     }
     const refreshTimer = setInterval(() => void checkForCatalogUpdates(), 60_000);
     // Realtime даёт мгновенное обновление, если оно разрешено на стороне
@@ -1136,6 +1143,7 @@ export default function HomeScreen() {
     const updatesChannel = client
       .channel("zanomer-partner-listings")
       .on("postgres_changes", { event: "*", schema: "public", table: "partner_listings" }, () => void loadCatalog())
+      .on("postgres_changes", { event: "*", schema: "public", table: "auto_listings" }, () => void loadCatalog())
       .subscribe();
     return () => {
       initialCatalogTask.cancel();
@@ -1200,7 +1208,12 @@ export default function HomeScreen() {
     // интернетом getUser() может временно вернуть пустой ответ, хотя
     // действующая сессия уже сохранена в AsyncStorage.
     void supabase.auth.getSession().then(({ data }) => setProfile(data.session?.user ?? null));
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => setProfile(session?.user ?? null));
+    const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      // При кратком обрыве сети или VPN Supabase иногда присылает пустую
+      // сессию во время TOKEN_REFRESHED. Это не выход пользователя.
+      if (!session?.user && event !== "SIGNED_OUT") return;
+      void setProfile(session?.user ?? null);
+    });
     return () => subscription.subscription.unsubscribe();
   }, []);
 
