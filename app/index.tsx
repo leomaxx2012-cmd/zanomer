@@ -578,12 +578,11 @@ export default function HomeScreen() {
       return false;
     }
     if (status === "active") {
-      // The edge function validates the moderator and finds every matching
-      // saved search before delivering push notifications.
-      await supabase.functions.invoke("notify", { body: { kind: "search-alert", id: listing.id } });
-      // Владелец получает отдельное уведомление, даже если его номер не
-      // совпадает ни с одним сохранённым поиском.
-      await supabase.functions.invoke("notify", { body: { kind: "listing-approved", id: listing.id } });
+      // Одобрение не должно ждать сеть: даже при недоступной службе push
+      // карточка уже одобрена, а постоянное уведомление создаёт триггер БД.
+      // Отправку push запускаем отдельно, чтобы кнопка не выглядела зависшей.
+      void supabase.functions.invoke("notify", { body: { kind: "search-alert", id: listing.id } });
+      void supabase.functions.invoke("notify", { body: { kind: "listing-approved", id: listing.id } });
     }
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
