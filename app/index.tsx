@@ -260,7 +260,7 @@ export default function HomeScreen() {
   const [authPassword, setAuthPassword] = useState("");
   // По умолчанию открываем именно вход: раньше при нажатии «Войти»
   // незаметно запускалась регистрация и повторная отправка кода на почту.
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authMode, setAuthMode] = useState<"signin" | "signup" | "otp">("signin");
   const [authStep, setAuthStep] = useState<1 | 2 | 3>(1);
   const [authCode, setAuthCode] = useState("");
   const [authMessage, setAuthMessage] = useState("");
@@ -1687,9 +1687,9 @@ export default function HomeScreen() {
     if (authSending) return;
     Keyboard.dismiss();
 
-    // Первый вход подтверждаем одноразовым кодом из письма. После этого
-    // пользователь сам выбирает постоянный пароль для следующих входов.
-    if (authMode === "signup" && authStep === 1) {
+    // Код можно использовать и для первой регистрации, и как запасной
+    // способ входа, если пароль сейчас недоступен.
+    if ((authMode === "signup" || authMode === "otp") && authStep === 1) {
       const elapsed = lastOtpRequest?.email === email ? Date.now() - lastOtpRequest.at : Number.POSITIVE_INFINITY;
       if (elapsed < 60_000) {
         const seconds = Math.ceil((60_000 - elapsed) / 1000);
@@ -1698,14 +1698,14 @@ export default function HomeScreen() {
       }
       setAuthSending(true);
       setAuthMessage("Отправляем код на почту…");
-      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: true } });
+      const { error } = await supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: authMode === "signup" } });
       setAuthSending(false);
       if (error) return setAuthMessage(error.message);
       setLastOtpRequest({ email, at: Date.now() });
       setAuthStep(2);
       return setAuthMessage("Код отправлен. Проверь входящие и папку «Спам».");
     }
-    if (authMode === "signup" && authStep === 2) {
+    if ((authMode === "signup" || authMode === "otp") && authStep === 2) {
       const token = authCode.trim();
       if (token.length < 6) return setAuthMessage("Введи код из письма.");
       setAuthSending(true);
@@ -1714,6 +1714,11 @@ export default function HomeScreen() {
       setAuthSending(false);
       if (error) return setAuthMessage("Код не подошёл или срок его действия истёк. Запроси новый код.");
       setAuthCode("");
+      if (authMode === "otp") {
+        setAuthOpen(false);
+        setAuthMessage("");
+        return;
+      }
       setAuthStep(3);
       return setAuthMessage("Почта подтверждена. Теперь придумай пароль для следующих входов.");
     }
@@ -1803,7 +1808,7 @@ export default function HomeScreen() {
           <ScrollView contentContainerStyle={styles.authScroll} keyboardShouldPersistTaps="handled">
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.authPanel}>
           <View style={styles.authHeader}>
-            <Text style={styles.authTitle}>{isSignedIn && !(authMode === "signup" && authStep === 3) ? "Твой профиль" : authMode === "signup" && authStep === 3 ? "Придумай пароль" : authMode === "signup" ? "Регистрация в ЗаНомером" : "Вход в ЗаНомером"}</Text>
+            <Text style={styles.authTitle}>{isSignedIn && !(authMode === "signup" && authStep === 3) ? "Твой профиль" : authMode === "signup" && authStep === 3 ? "Придумай пароль" : authMode === "signup" ? "Регистрация в ЗаНомером" : authMode === "otp" ? "Вход по коду" : "Вход в ЗаНомером"}</Text>
             <Pressable
               accessibilityLabel="Закрыть"
               onPress={() => { setAuthOpen(false); setAuthMessage(""); }}
@@ -1895,17 +1900,19 @@ export default function HomeScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.authHint}>{supabase ? authMode === "signup" ? `Шаг ${authStep} из 3` : "Введи почту и пароль от аккаунта" : "Укажи имя — оно будет видно в твоих объявлениях."}</Text>
-              {supabase && authMode === "signup" && authStep === 1 && <TextInput value={authEmail} onChangeText={setAuthEmail} placeholder="Твоя почта" placeholderTextColor="#98A2B3" style={styles.authInput} autoCapitalize="none" keyboardType="email-address" />}
-              {supabase && authMode === "signup" && authStep === 2 && <TextInput value={authCode} onChangeText={setAuthCode} placeholder="Код из письма" placeholderTextColor="#98A2B3" style={styles.authInput} keyboardType="number-pad" autoCapitalize="none" />}
+              <Text style={styles.authHint}>{supabase ? authMode === "signup" ? `Шаг ${authStep} из 3` : authMode === "otp" ? (authStep === 1 ? "Укажи почту — пришлём одноразовый код." : "Введи код из письма.") : "Введи почту и пароль от аккаунта" : "Укажи имя — оно будет видно в твоих объявлениях."}</Text>
+              {supabase && (authMode === "signup" || authMode === "otp") && authStep === 1 && <TextInput value={authEmail} onChangeText={setAuthEmail} placeholder="Твоя почта" placeholderTextColor="#98A2B3" style={styles.authInput} autoCapitalize="none" keyboardType="email-address" />}
+              {supabase && (authMode === "signup" || authMode === "otp") && authStep === 2 && <TextInput value={authCode} onChangeText={setAuthCode} placeholder="Код из письма" placeholderTextColor="#98A2B3" style={styles.authInput} keyboardType="number-pad" autoCapitalize="none" />}
               {supabase && authMode === "signup" && authStep === 3 && <TextInput value={profileDraft} onChangeText={setProfileDraft} placeholder="Имя для объявлений (необязательно)" placeholderTextColor="#98A2B3" style={styles.authInput} />}
               {supabase && authMode === "signup" && authStep === 3 && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Придумай пароль (минимум 6 символов)" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
               {supabase && authMode === "signin" && <TextInput value={authEmail} onChangeText={setAuthEmail} placeholder="Почта" placeholderTextColor="#98A2B3" style={styles.authInput} autoCapitalize="none" keyboardType="email-address" />}
               {supabase && authMode === "signin" && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Пароль" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
               {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
               <View style={styles.authRow}>
-                {supabase && authMode !== "signup" && <Pressable onPress={() => { setAuthMode("signup"); setAuthStep(1); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Создать аккаунт</Text></Pressable>}
+                {supabase && authMode === "signin" && <Pressable onPress={() => { setAuthMode("signup"); setAuthStep(1); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Создать аккаунт</Text></Pressable>}
+                {supabase && authMode === "signin" && <Pressable onPress={() => { setAuthMode("otp"); setAuthStep(1); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Войти по коду</Text></Pressable>}
                 {supabase && authMode === "signup" && authStep < 3 && <Pressable onPress={() => { setAuthMode("signin"); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Уже есть аккаунт</Text></Pressable>}
+                {supabase && authMode === "otp" && <Pressable onPress={() => { setAuthMode("signin"); setAuthStep(1); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Войти с паролем</Text></Pressable>}
                 <Pressable disabled={authSending} onPress={() => { void submitAuth(); }} style={[styles.authSubmit, authSending && styles.authSubmitDisabled]}><Text style={styles.authSubmitText}>{authSending ? "Подожди…" : !supabase ? "Далее" : authMode === "signin" ? "Войти" : authStep === 1 ? "Получить код" : authStep === 2 ? "Подтвердить код" : "Сохранить пароль"}</Text></Pressable>
               </View>
             </>
