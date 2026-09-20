@@ -1637,15 +1637,23 @@ export default function HomeScreen() {
       }
       let photoUrl: string | null = null;
       if (listingPhotoUri) {
-        const response = await fetch(listingPhotoUri);
-        const image = await response.blob();
-        const path = `${userData.user.id}/${Date.now()}.jpg`;
-        const upload = await supabase.storage.from("listing-photos").upload(path, image, { contentType: "image/jpeg", upsert: false });
-        if (upload.error) {
-          setListingMessage("Фото не загрузилось. Выполни listing-photos.sql в Supabase или опубликуй без фото.");
+        try {
+          // В Android React Native Blob передаётся в Supabase нестабильно:
+          // он выглядит валидным, но запрос к Storage завершается ошибкой.
+          // ArrayBuffer работает одинаково для фото из галереи и камеры.
+          const response = await fetch(listingPhotoUri);
+          if (!response.ok) throw new Error("Не удалось прочитать выбранное фото.");
+          const image = await response.arrayBuffer();
+          if (!image.byteLength) throw new Error("Фото получилось пустым.");
+          const path = `${userData.user.id}/${Date.now()}.jpg`;
+          const upload = await supabase.storage.from("listing-photos").upload(path, image, { contentType: "image/jpeg", upsert: false });
+          if (upload.error) throw upload.error;
+          photoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : "Неизвестная ошибка загрузки.";
+          setListingMessage(`Фото не загрузилось: ${detail}`);
           return;
         }
-        photoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
       }
       const { data: insertedListing, error } = await supabase.from("auto_listings").insert({
         owner_id: userData.user.id,
