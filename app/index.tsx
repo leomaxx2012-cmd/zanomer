@@ -1782,6 +1782,24 @@ export default function HomeScreen() {
     setAuthOpen(true);
   }
 
+  function signOutFromProfile() {
+    // Выход не должен зависеть от сети: при VPN signOut мог ждать ответ
+    // Supabase, а кнопка «Выйти» визуально ничего не делала.
+    void supabase?.auth.signOut().catch(() => {
+      // Локальная сессия уже очищена ниже; сервер завершит её при следующем запросе.
+    });
+    setProfileName("");
+    setIsSignedIn(false);
+    setIsAnonymous(false);
+    setCurrentUserId("");
+    setAuthMode("signin");
+    setAuthStep(1);
+    setAuthEmail("");
+    setAuthPassword("");
+    setAuthCode("");
+    setAuthOpen(false);
+  }
+
   return (
     <SafeAreaView style={styles.page}>
       <View pointerEvents="none" style={styles.backgroundGlowTop} />
@@ -1904,7 +1922,7 @@ export default function HomeScreen() {
                   </View>)}
                 </>}
               </View>}
-              <Pressable onPress={async () => { if (supabase) await supabase.auth.signOut(); setProfileName(""); setIsSignedIn(false); setIsAnonymous(false); setAuthMode("signup"); setAuthStep(1); setAuthEmail(""); setAuthPassword(""); setAuthCode(""); setAuthOpen(false); }}><Text style={styles.logoutText}>Выйти из профиля</Text></Pressable>
+              <Pressable onPress={signOutFromProfile} hitSlop={12}><Text style={styles.logoutText}>Выйти из профиля</Text></Pressable>
             </>
           ) : (
             <>
