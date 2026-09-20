@@ -81,7 +81,7 @@ Deno.serve(async (request) => {
     recipientIds = (moderators ?? []).map((item) => item.user_id); title = "Новая жалоба"; body = "Требуется проверка жалобы в ЗаНомером";
   } else return Response.json({ error: "Unknown notification" }, { status: 400, headers });
   const { data: tokens } = recipientIds.length ? await admin.from("auto_push_tokens").select("token").in("owner_id", recipientIds) : { data: [] };
-  const messages = (tokens ?? []).map(({ token }) => ({ to: token, sound: "default", title, body, data: { kind, id } }));
+  const messages = (tokens ?? []).map(({ token }) => ({ to: token, sound: "default", title, body, priority: "high", channelId: "matches", ttl: 3600, data: { kind, id } }));
   if (messages.length) await fetch("https://exp.host/--/api/v2/push/send", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(messages) });
   return Response.json({ sent: messages.length }, { headers });
 });

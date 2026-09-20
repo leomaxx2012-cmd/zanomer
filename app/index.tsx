@@ -1090,7 +1090,10 @@ export default function HomeScreen() {
       void registerForPushNotifications(user.id);
     }
 
-    void supabase.auth.getUser().then(({ data }) => setProfile(data.user));
+    // Не проверяем вход только через сеть: при старте с VPN или слабым
+    // интернетом getUser() может временно вернуть пустой ответ, хотя
+    // действующая сессия уже сохранена в AsyncStorage.
+    void supabase.auth.getSession().then(({ data }) => setProfile(data.session?.user ?? null));
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => setProfile(session?.user ?? null));
     return () => subscription.subscription.unsubscribe();
   }, []);
@@ -1564,28 +1567,6 @@ export default function HomeScreen() {
       : "✓ Объявление принято: проверим номер, регион, цену и повторные публикации. После одобрения оно появится в разделе «Купить».");
   }
 
-  async function requestAuthCode() {
-    if (!supabase) return;
-    const email = authEmail.trim().toLowerCase();
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return setAuthMessage("Введи корректный email.");
-    if (authSending) return;
-    Keyboard.dismiss();
-    setAuthSending(true);
-    setAuthMessage("Отправляем код…");
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        shouldCreateUser: true,
-        data: authMode === "signup" ? { display_name: profileDraft.trim() } : undefined,
-      },
-    });
-    setAuthSending(false);
-    if (error) return setAuthMessage(`Не удалось отправить код: ${error.message}`);
-    setAuthCode("");
-    setAuthStep(3);
-    setAuthMessage("Код отправлен. Проверь «Входящие» и папку «Спам».");
-  }
-
   async function submitAuth() {
     if (!supabase) {
       if (profileDraft.trim()) { setProfileName(profileDraft.trim()); setAuthOpen(false); }
@@ -1597,18 +1578,31 @@ export default function HomeScreen() {
       setAuthStep(2);
       return;
     }
-    if (authStep === 2) {
-      await requestAuthCode();
+    if (authStep !== 2) return;
+    const email = authEmail.trim().toLowerCase();
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return setAuthMessage("Введи корректный email.");
+    if (authPassword.length < 6) return setAuthMessage("Пароль должен быть не короче 6 символов.");
+    if (authSending) return;
+    Keyboard.dismiss();
+    setAuthSending(true);
+    setAuthMessage(authMode === "signup" ? "Создаём аккаунт…" : "Входим…");
+    const result = authMode === "signup"
+      ? await supabase.auth.signUp({ email, password: authPassword, options: { data: { display_name: profileDraft.trim() } } })
+      : await supabase.auth.signInWithPassword({ email, password: authPassword });
+    setAuthSending(false);
+    if (result.error) {
+      const text = result.error.message.toLowerCase();
+      return setAuthMessage(text.includes("invalid login") ? "Проверь почту и пароль." : result.error.message);
+    }
+    setAuthPassword("");
+    if (!result.data.session) {
+      setAuthMessage("Аккаунт создан. Подтверди письмо на почте, затем войди по почте и паролю.");
+      setAuthMode("signin");
+      setAuthStep(2);
       return;
     }
-    if (authStep === 3) {
-      if (!/^\d{6,8}$/.test(authCode)) return setAuthMessage("Введи код из письма полностью.");
-      const { error } = await supabase.auth.verifyOtp({ email: authEmail.trim(), token: authCode, type: "email" });
-      if (error) return setAuthMessage("Код не подошёл или срок его действия истёк. Запроси новый код.");
-      setAuthCode("");
-      setAuthOpen(false);
-      return;
-    }
+    setAuthOpen(false);
+    setAuthMessage("");
   }
 
   return (
@@ -1657,7 +1651,7 @@ export default function HomeScreen() {
           </View>
           {isSignedIn ? (
             <>
-              <Text style={styles.authHint}>Регистрация подтверждена. Для будущих входов можешь задать пароль.</Text>
+              <Text style={styles.authHint}>Ты уже вошёл. Пароль нужен только если хочешь изменить его для будущих входов.</Text>
               <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Придумай пароль (минимум 6 символов)" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry />
               <Pressable onPress={async () => {
                 if (!supabase) return;
@@ -1738,15 +1732,14 @@ export default function HomeScreen() {
             </>
           ) : (
             <>
-              <Text style={styles.authHint}>{supabase ? authMode === "signup" ? `Шаг ${authStep} из 3` : authStep === 3 ? "Введи код из письма" : "Введи email — отправим код для входа" : "Укажи имя — оно будет видно в твоих объявлениях."}</Text>
+              <Text style={styles.authHint}>{supabase ? authMode === "signup" ? `Шаг ${authStep} из 2` : "Войди по почте и паролю" : "Укажи имя — оно будет видно в твоих объявлениях."}</Text>
               {authMode === "signup" && authStep === 1 && <TextInput value={profileDraft} onChangeText={setProfileDraft} placeholder="Имя для объявлений" placeholderTextColor="#98A2B3" style={styles.authInput} />}
               {supabase && authStep === 2 && <TextInput value={authEmail} onChangeText={setAuthEmail} placeholder="Email" placeholderTextColor="#98A2B3" style={styles.authInput} autoCapitalize="none" keyboardType="email-address" />}
-              {supabase && authStep === 3 && <TextInput value={authCode} onChangeText={(value) => setAuthCode(value.replace(/\D/g, "").slice(0, 8))} placeholder="Код из письма" placeholderTextColor="#98A2B3" style={styles.authInput} keyboardType="number-pad" maxLength={8} />}
+              {supabase && authStep === 2 && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Пароль (минимум 6 символов)" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
               {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
               <View style={styles.authRow}>
-                {supabase && authStep !== 3 && <Pressable onPress={() => { setAuthMode((value) => value === "signup" ? "signin" : "signup"); setAuthStep(authMode === "signup" ? 2 : 1); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>{authMode === "signup" ? "Уже есть аккаунт" : "Зарегистрироваться"}</Text></Pressable>}
-                {supabase && authStep === 3 && <Pressable onPress={() => { setAuthStep(2); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Отправить новый код</Text></Pressable>}
-                <Pressable disabled={authSending} onPress={() => { void submitAuth(); }} style={[styles.authSubmit, authSending && styles.authSubmitDisabled]}><Text style={styles.authSubmitText}>{authSending ? "Отправляем…" : supabase ? authStep === 3 ? "Подтвердить код" : authStep === 2 ? "Получить код" : "Далее" : "Далее"}</Text></Pressable>
+                {supabase && <Pressable onPress={() => { setAuthMode((value) => value === "signup" ? "signin" : "signup"); setAuthStep(authMode === "signup" ? 2 : 1); setAuthPassword(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>{authMode === "signup" ? "Уже есть аккаунт" : "Зарегистрироваться"}</Text></Pressable>}
+                <Pressable disabled={authSending} onPress={() => { void submitAuth(); }} style={[styles.authSubmit, authSending && styles.authSubmitDisabled]}><Text style={styles.authSubmitText}>{authSending ? (authMode === "signup" ? "Создаём…" : "Входим…") : supabase ? authStep === 2 ? (authMode === "signup" ? "Создать аккаунт" : "Войти") : "Далее" : "Далее"}</Text></Pressable>
               </View>
             </>
           )}

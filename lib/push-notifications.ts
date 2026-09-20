@@ -56,7 +56,7 @@ export async function showChatNotification(plate: string) {
   const permission = await Notifications.getPermissionsAsync();
   if (permission.status !== "granted") return;
   await Notifications.scheduleNotificationAsync({
-    content: { title: "Новое сообщение по объявлению", body: `По номеру ${plate} пришло новое сообщение`, sound: "default" },
+    content: { title: "Новое сообщение по объявлению", body: `По номеру ${plate} пришло новое сообщение`, sound: "default", data: { kind: "message" }, ...(Platform.OS === "android" ? { channelId: "matches" } : {}) },
     trigger: null,
   });
 }
