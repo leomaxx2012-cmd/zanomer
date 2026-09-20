@@ -229,6 +229,7 @@ export default function HomeScreen() {
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
+  const [catalogSlowMessage, setCatalogSlowMessage] = useState("");
   const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 4 : 40);
   const [catalogOnly, setCatalogOnly] = useState(false);
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
@@ -931,7 +932,13 @@ export default function HomeScreen() {
       loadingCatalog = true;
       setCatalogRefreshing(true);
       setCatalogLoadError("");
+      setCatalogSlowMessage("");
       let requestTimeout: ReturnType<typeof setTimeout> | undefined;
+      // Не прячем задержку: пользователь сразу понимает, что касание принято,
+      // а приложение ждёт сеть, а не зависло.
+      const slowNoticeTimeout = setTimeout(() => {
+        setCatalogSlowMessage("Каталог загружается дольше обычного. Сохранённые номера уже доступны.");
+      }, 3_000);
       // Индикатор — только короткое подтверждение запуска. Длительный запрос
       // не должен создавать впечатление, что приложение зависло.
       const refreshIndicatorTimeout = setTimeout(() => setCatalogRefreshing(false), 8_000);
@@ -956,7 +963,10 @@ export default function HomeScreen() {
           .order("created_at", { ascending: false })
           .range(start, start + partnerPageSize - 1);
 
-        const expectedCount = Math.max(rows.length, totalCount ?? rows.length);
+        // Полный каталог уже находится в снимке APK и локальном кэше. Сеть
+        // запрашивает только свежую страницу, иначе несколько тысяч строк
+        // занимали JS-поток и задерживали все кнопки.
+        const expectedCount = rows.length;
         const pageStarts: number[] = [];
         for (let start = rows.length; start < expectedCount; start += partnerPageSize) pageStarts.push(start);
         // 4–5 страниц каталога не ждут друг друга по очереди. Это особенно
@@ -993,10 +1003,9 @@ export default function HomeScreen() {
         .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until", { count: "exact" })
         .eq("status", "active")
         .order("created_at", { ascending: false })
-        // Первая страница должна быть достаточно большой, чтобы приложение
-        // не оставалось на 120 карточках, если фоновая догрузка задержалась.
-        // Supabase поддерживает выдачу 1 000 строк за запрос.
-        .range(0, 999);
+        // Берём только последние изменения. Остальная проверенная база уже
+        // есть офлайн и не должна скачиваться заново при каждом открытии.
+        .range(0, 119);
       const siteListingsRequest = client
         .from("auto_listings")
         .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, updated_at, status, featured_until, photo_url, seller_comment")
@@ -1106,6 +1115,7 @@ export default function HomeScreen() {
         setCatalogLoadError("");
       } finally {
         if (requestTimeout) clearTimeout(requestTimeout);
+        clearTimeout(slowNoticeTimeout);
         clearTimeout(refreshIndicatorTimeout);
         setCatalogLoading(false);
         setCatalogRefreshing(false);
@@ -2048,6 +2058,7 @@ export default function HomeScreen() {
       {activeTab === "buy" && catalogOnly && catalogRefreshing && <View style={styles.catalogUpdateNotice} accessibilityLiveRegion="polite">
         <Text style={styles.catalogUpdateNoticeText}>↻ Каталог обновляется…</Text>
       </View>}
+      {activeTab === "buy" && !!catalogSlowMessage && <Text accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{catalogSlowMessage}</Text>}
 
       {activeTab === "buy" && !catalogOnly && <Pressable
         onPress={() => {
@@ -3015,6 +3026,7 @@ const styles = StyleSheet.create({
   catalogOnlyToolbar: { alignItems: "center", alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 16, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, maxWidth: 1100, padding: 11, width: "100%" },
   catalogUpdateNotice: { alignSelf: "center", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 10, borderWidth: 1, marginTop: 8, maxWidth: 1100, paddingHorizontal: 12, paddingVertical: 7, width: "100%" },
   catalogUpdateNoticeText: { color: "#155EEF", fontSize: 12, fontWeight: "800", textAlign: "center" },
+  catalogSlowNotice: { alignSelf: "center", color: "#B42318", fontSize: 13, fontWeight: "800", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
   catalogOnlyBack: { backgroundColor: "#F0EEFF", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
   catalogOnlyBackText: { color: "#5143C2", fontSize: 13, fontWeight: "900" },
   catalogOnlyTitle: { color: "#24213E", flex: 1, fontSize: 15, fontWeight: "900", marginHorizontal: 10, textAlign: "center" },
