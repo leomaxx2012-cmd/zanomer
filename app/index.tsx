@@ -617,10 +617,13 @@ export default function HomeScreen() {
       // Отправку push запускаем отдельно, чтобы кнопка не выглядела зависшей.
       void supabase.functions.invoke("notify", { body: { kind: "search-alert", id: listing.id } });
       void supabase.functions.invoke("notify", { body: { kind: "listing-approved", id: listing.id } });
+    } else {
+      // Отклонение тоже сообщаем владельцу отдельным системным push.
+      void supabase.functions.invoke("notify", { body: { kind: "listing-rejected", id: listing.id } });
     }
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
-    setAuthMessage(status === "active" ? "Объявление одобрено. Владельцу отправлено уведомление." : "Объявление отклонено.");
+    setAuthMessage(status === "active" ? "Объявление одобрено. Владельцу отправлено уведомление." : "Объявление отклонено. Владельцу отправлено уведомление.");
     return true;
   }
 

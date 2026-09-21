@@ -105,6 +105,17 @@ Deno.serve(async (request) => {
     recipientIds = [listing.owner_id];
     title = "Объявление одобрено";
     body = `${listing.plate_left} ${listing.plate_digits} ${listing.plate_right} опубликован в каталоге`;
+  } else if (kind === "listing-rejected") {
+    const { data: listing } = await admin
+      .from("auto_listings")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, status")
+      .eq("id", id)
+      .single();
+    const { data: moderator } = await admin.from("auto_moderators").select("user_id").eq("user_id", user.id).maybeSingle();
+    if (!listing || listing.status !== "archived" || !moderator) return Response.json({ error: "Forbidden" }, { status: 403, headers });
+    recipientIds = [listing.owner_id];
+    title = "Объявление отклонено";
+    body = `${listing.plate_left} ${listing.plate_digits} ${listing.plate_right} не прошло проверку модератором`;
   } else if (kind === "report" || kind === "comment-report") {
     const table = kind === "report" ? "listing_message_reports" : "listing_public_comment_reports";
     const { data: report } = await admin.from(table).select("reporter_id").eq("id", id).single();
