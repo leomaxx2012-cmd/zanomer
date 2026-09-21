@@ -1757,9 +1757,13 @@ export default function HomeScreen() {
       sellerComment: listingComment.trim(),
     };
     if (supabase) {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) {
-        setAuthMessage("Войди или зарегистрируйся, чтобы опубликовать объявление.");
+      // getUser() проверяет пользователя через сеть. При VPN или кратком
+      // сбое он может вернуть пустой результат, хотя токен входа уже есть
+      // локально. Берём сохранённую сессию и не показываем ложный выход.
+      const { data: sessionData } = await supabase.auth.getSession();
+      const signedInUser = sessionData.session?.user;
+      if (!signedInUser?.id) {
+        setAuthMessage("Сессия входа действительно закончилась. Войди снова, чтобы опубликовать объявление.");
         setAuthOpen(true);
         return;
       }
@@ -1773,7 +1777,7 @@ export default function HomeScreen() {
           if (!response.ok) throw new Error("Не удалось прочитать выбранное фото.");
           const image = await response.arrayBuffer();
           if (!image.byteLength) throw new Error("Фото получилось пустым.");
-          const path = `${userData.user.id}/${Date.now()}.jpg`;
+          const path = `${signedInUser.id}/${Date.now()}.jpg`;
           const upload = await supabase.storage.from("listing-photos").upload(path, image, { contentType: "image/jpeg", upsert: false });
           if (upload.error) throw upload.error;
           photoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
@@ -1784,7 +1788,7 @@ export default function HomeScreen() {
         }
       }
       const { data: insertedListing, error } = await supabase.from("auto_listings").insert({
-        owner_id: userData.user.id,
+        owner_id: signedInUser.id,
         plate_left: entry.leftLetter,
         plate_digits: entry.digits,
         plate_right: entry.rightLetters,
