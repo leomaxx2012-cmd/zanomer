@@ -2729,7 +2729,7 @@ export default function HomeScreen() {
               <Text style={styles.legalText}>Услуги оказываются онлайн: физическая доставка товара не производится. Подписка и продвижение активируются автоматически после подтверждения платежа. Пользователь получает результат в личном кабинете и на карточке объявления.</Text>
               <Text style={styles.legalText}>После подключения оплата будет производиться через ПСБ. ЗаНомером не продаёт государственные номера и не является стороной сделки между продавцом и покупателем объявления.</Text>
               <Text style={styles.legalHeading}>Политика обработки персональных данных</Text>
-              <Text style={styles.legalText}>Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: адрес электронной почты, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Платёжные реквизиты карт сервис не хранит — их обрабатывает ПСБ. По вопросам обработки данных и безопасности можно написать на zakaz@zanomerom.ru или позвонить по телефону ниже.</Text>
+              <Text style={styles.legalText}>Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: адрес электронной почты, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Платёжные реквизиты карт сервис не хранит — их обрабатывает ПСБ. По вопросам обработки данных и безопасности можно написать на zanomerom@mail.ru или позвонить по телефону ниже.</Text>
               <Text style={styles.legalHeading}>Способы оплаты</Text>
               <Text style={styles.legalText}>После подключения доступны оплата банковскими картами платёжных систем, поддерживаемых ПСБ, и другие способы, которые ПСБ покажет на странице оплаты. Платёж проводится на защищённой странице банка.</Text>
               <Text style={styles.legalHeading}>Реквизиты продавца услуг</Text>
@@ -2742,7 +2742,7 @@ export default function HomeScreen() {
                 <Text style={styles.requisitesRow}>Банк: ПАО «Банк ПСБ», г. Ярославль</Text>
                 <Text style={styles.requisitesRow}>БИК: 044525555</Text>
                 <Text style={styles.requisitesRow}>Корреспондентский счёт: 30101 810 4 0000 0000555</Text>
-                <Pressable onPress={() => { void Linking.openURL("mailto:zakaz@zanomerom.ru"); }}><Text style={styles.requisitesPhone}>zakaz@zanomerom.ru</Text></Pressable>
+                <Pressable onPress={() => { void Linking.openURL("mailto:zanomerom@mail.ru"); }}><Text style={styles.requisitesPhone}>zanomerom@mail.ru</Text></Pressable>
                 <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
               </View>
               <Text style={styles.legalFootnote}>Все разделы доступны по кнопке ⓘ в шапке сайта. Перед отправкой заявки ПСБ останется добавить фактический/почтовый адрес ИП для обращений покупателей.</Text>
