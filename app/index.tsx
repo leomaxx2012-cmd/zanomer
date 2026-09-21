@@ -171,6 +171,13 @@ function normalizePlateDigits(value: string, maxLength: number, allowWildcard = 
   return value.replace(allowWildcard ? /[^0-9*]/g : /\D/g, "").slice(0, maxLength);
 }
 
+// Код региона — самостоятельное значение. Нельзя искать его через endsWith:
+// иначе выбранный код «90» ошибочно найдёт «190».
+function extractRegionCodes(value: string) {
+  const codePart = value.split("·").slice(1).join("·");
+  return codePart.split(/[,/\s]+/).filter((code) => /^\d{2,3}$/.test(code));
+}
+
 function belongsToSameSeries(first: Plate, second: Plate) {
   const sameSeller = first.seller.trim().toLocaleLowerCase("ru-RU") === second.seller.trim().toLocaleLowerCase("ru-RU");
   if (first.id === second.id || !sameSeller || first.vehicle !== second.vehicle) return false;
@@ -1368,7 +1375,8 @@ export default function HomeScreen() {
         // Отдельно отмеченные коды могут относиться к разным регионам.
         // В этом режиме фильтруем именно по кодам, а не по последнему открытому названию региона.
         const regionMatches = selectedRegionCodes.length > 0 || region === "Все" || plate.region.startsWith(region);
-        const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plate.region.endsWith(code));
+        const plateRegionCodes = extractRegionCodes(plate.region);
+        const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plateRegionCodes.includes(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
         const groupMatches = !similarFiltersOpen || seriesListingIds.has(plate.id);
         const specialMatches = specialFilters.every((filter) => {
