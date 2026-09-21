@@ -145,7 +145,15 @@ function isRequisitesPage() {
 }
 function isPaymentInfoPage() {
   if (typeof window === "undefined" || !window.location) return false;
-  return new URLSearchParams(window.location.search).get("page") === "payment-info";
+  return ["payment-info", "offer", "refund", "delivery", "privacy"].includes(new URLSearchParams(window.location.search).get("page") ?? "");
+}
+function legalPageUrl(page: "offer" | "refund" | "delivery" | "privacy" | "requisites") {
+  if (typeof window !== "undefined" && window.location) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", page);
+    return url.toString();
+  }
+  return `https://zanomer.vercel.app/?page=${page}`;
 }
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
@@ -2706,6 +2714,14 @@ export default function HomeScreen() {
             </View>
             <ScrollView style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках.</Text>
+              <Text style={styles.legalHeading}>Документы и информация</Text>
+              <View style={styles.legalLinks}>
+                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("offer")); }}><Text style={styles.legalLink}>Публичная оферта</Text></Pressable>
+                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("refund")); }}><Text style={styles.legalLink}>Возврат средств</Text></Pressable>
+                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("delivery")); }}><Text style={styles.legalLink}>Оказание услуг</Text></Pressable>
+                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("privacy")); }}><Text style={styles.legalLink}>Политика обработки данных</Text></Pressable>
+                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("requisites")); }}><Text style={styles.legalLink}>Реквизиты и контакты</Text></Pressable>
+              </View>
               <Text style={styles.legalHeading}>Платные услуги</Text>
               <View style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Подписка ЗаНомером Плюс — 199 ₽ в месяц</Text>
@@ -2731,13 +2747,17 @@ export default function HomeScreen() {
               <Text style={styles.legalHeading}>Политика обработки персональных данных</Text>
               <Text style={styles.legalText}>Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: адрес электронной почты, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Платёжные реквизиты карт сервис не хранит — их обрабатывает ПСБ. По вопросам обработки данных и безопасности можно написать на zanomerom@mail.ru или позвонить по телефону ниже.</Text>
               <Text style={styles.legalHeading}>Способы оплаты</Text>
-              <Text style={styles.legalText}>После подключения доступны оплата банковскими картами платёжных систем, поддерживаемых ПСБ, и другие способы, которые ПСБ покажет на странице оплаты. Платёж проводится на защищённой странице банка.</Text>
+              <Text style={styles.legalText}>После подключения доступны оплата банковскими картами и через СБП в способах, поддерживаемых ПСБ. Платёж проводится на защищённой странице банка.</Text>
+              <View style={styles.paymentMethods}><Text style={styles.paymentMethod}>БАНКОВСКИЕ КАРТЫ</Text><Text style={styles.paymentMethod}>СБП</Text><Text style={styles.paymentMethod}>ПСБ</Text></View>
+              <Text style={styles.legalHeading}>Экспортные ограничения</Text>
+              <Text style={styles.legalText}>Не применяются: сервис оказывает цифровые услуги пользователям на территории Российской Федерации и не осуществляет экспорт товаров.</Text>
               <Text style={styles.legalHeading}>Реквизиты продавца услуг</Text>
               <View style={styles.requisitesCard}>
                 <Text style={styles.requisitesName}>ИП Леонович Александр Леонидович</Text>
                 <Text style={styles.requisitesRow}>ИНН: 504406730552</Text>
                 <Text style={styles.requisitesRow}>ОГРНИП: 319508100089501</Text>
                 <Text style={styles.requisitesRow}>КПП: не применяется для ИП</Text>
+                <Text style={styles.requisitesRow}>Адрес: 141570, МО, Солнечногорский район, пгт Менделеево, ул. Левобережная, д. 1, кв. 69</Text>
                 <Text style={styles.requisitesRow}>Расчётный счёт: 40802 810 5 0000 0054446</Text>
                 <Text style={styles.requisitesRow}>Банк: ПАО «Банк ПСБ», г. Ярославль</Text>
                 <Text style={styles.requisitesRow}>БИК: 044525555</Text>
@@ -3177,6 +3197,10 @@ const styles = StyleSheet.create({
   requisitesPhone: { color: "#155EEF", fontSize: 15, fontWeight: "900", marginTop: 13, textDecorationLine: "underline" },
   legalLead: { color: "#475467", fontSize: 14, lineHeight: 20, marginTop: 16 },
   legalHeading: { color: "#24213E", fontSize: 17, fontWeight: "900", marginTop: 20 },
+  legalLinks: { backgroundColor: "#F7F5FF", borderColor: "#DED8FF", borderRadius: 14, borderWidth: 1, gap: 10, marginTop: 10, padding: 14 },
+  legalLink: { color: "#4536B8", fontSize: 15, fontWeight: "800", textDecorationLine: "underline" },
+  paymentMethods: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
+  paymentMethod: { backgroundColor: "#F2F4F7", borderColor: "#D0D5DD", borderRadius: 8, borderWidth: 1, color: "#344054", fontSize: 12, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 7 },
   legalCard: { backgroundColor: "#F8F7FF", borderColor: "#E2DEF7", borderRadius: 14, borderWidth: 1, marginTop: 10, padding: 13 },
   legalCardTitle: { color: "#352F67", fontSize: 14, fontWeight: "900", lineHeight: 20 },
   legalText: { color: "#475467", fontSize: 13, lineHeight: 19, marginTop: 8 },
