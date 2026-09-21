@@ -1,4 +1,6 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+// npm-импорт поставляется вместе с Edge Runtime. Внешний esm.sh может
+// сорвать запуск функции ещё до обработки CORS-запроса (BOOT_ERROR).
+import { createClient } from "npm:@supabase/supabase-js@2";
 
 const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 
