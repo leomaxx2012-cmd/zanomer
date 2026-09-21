@@ -1241,7 +1241,7 @@ export default function HomeScreen() {
         void loadManagement(user.id, name);
         void loadSavedSearches(user.id);
         void loadUnreadAppNotice(user.id);
-        void registerForPushNotifications(user.id);
+        if (!user.is_anonymous) void registerForPushNotifications(user.id);
         return;
       }
       setProfileName(name);
@@ -1904,7 +1904,7 @@ export default function HomeScreen() {
       setProfileName(name);
       void loadManagement(user.id, name);
       void loadSavedSearches(user.id);
-      void registerForPushNotifications(user.id);
+      if (!user.is_anonymous) void registerForPushNotifications(user.id);
     }
     setAuthPassword("");
     setAuthOpen(false);

@@ -40,8 +40,27 @@ Deno.serve(async (request) => {
   const userClient = createClient(url, anon, { global: { headers: { Authorization: auth } } });
   const { data: { user } } = await userClient.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401, headers });
-  const { kind, id } = await request.json();
+  const payload = await request.json();
+  const { kind, id } = payload;
   const admin = createClient(url, service);
+  if (kind === "register-push-token") {
+    const token = String(payload.token ?? "");
+    if (!/^(?:ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/.test(token)) {
+      return Response.json({ error: "Invalid push token" }, { status: 400, headers });
+    }
+    // У одного телефона один токен. При входе переносим именно его с
+    // анонимной сессии на аккаунт пользователя, сохраняя прочие устройства.
+    await admin.from("auto_push_tokens").delete().eq("token", token);
+    const { error } = await admin.from("auto_push_tokens").upsert({
+      token,
+      owner_id: user.id,
+      platform: "android",
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "token" });
+    return error
+      ? Response.json({ error: "Could not save push token" }, { status: 500, headers })
+      : Response.json({ registered: true }, { headers });
+  }
   let recipientIds: string[] = [], title = "ЗаНомером", body = "Новое уведомление";
   if (kind === "message") {
     const { data: message } = await admin.from("listing_messages").select("sender_id, recipient_id, listing_id").eq("id", id).single();
@@ -104,6 +123,16 @@ Deno.serve(async (request) => {
   }
   const { data: tokens } = recipientIds.length ? await admin.from("auto_push_tokens").select("token").in("owner_id", recipientIds) : { data: [] };
   const messages = (tokens ?? []).map(({ token }) => ({ to: token, sound: "default", title, body, priority: "high", channelId: "matches", ttl: 3600, data: { kind, id } }));
-  if (messages.length) await fetch("https://exp.host/--/api/v2/push/send", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(messages) });
-  return Response.json({ sent: messages.length }, { headers });
+  let failed = 0;
+  if (messages.length) {
+    const response = await fetch("https://exp.host/--/api/v2/push/send", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(messages) });
+    const result = await response.json().catch(() => ({}));
+    const tickets = Array.isArray(result?.data) ? result.data : [];
+    const invalidTokens = tickets
+      .map((ticket: { status?: string; details?: { error?: string } }, index: number) => ticket.status === "error" && ticket.details?.error === "DeviceNotRegistered" ? messages[index]?.to : null)
+      .filter(Boolean);
+    failed = tickets.filter((ticket: { status?: string }) => ticket.status === "error").length;
+    if (invalidTokens.length) await admin.from("auto_push_tokens").delete().in("token", invalidTokens);
+  }
+  return Response.json({ sent: messages.length, failed }, { headers });
 });

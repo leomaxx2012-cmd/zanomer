@@ -51,12 +51,13 @@ export async function registerForPushNotifications(userId: string) {
   // У одного аккаунта может быть несколько телефонов. Не удаляем их токены
   // при входе на другом устройстве: каждый действующий телефон должен
   // получать уведомление, как в прежних рабочих версиях приложения.
-  const { error } = await supabase.from("auto_push_tokens").upsert({
-    token,
-    owner_id: userId,
-    platform: Platform.OS,
-    updated_at: new Date().toISOString(),
-  }, { onConflict: "token" });
+  // Токен мог быть создан до входа, когда телефон использовался как гость.
+  // Обычный upsert блокируется RLS: гость и вошедший пользователь — разные
+  // аккаунты. Edge Function безопасно переносит только этот токен на текущий
+  // подтверждённый аккаунт, не удаляя токены его других телефонов.
+  const { error } = await supabase.functions.invoke("notify", {
+    body: { kind: "register-push-token", token },
+  });
   return error ? { ok: false, reason: "storage" as const } : { ok: true, token };
 }
 
