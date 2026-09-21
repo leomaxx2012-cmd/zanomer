@@ -93,6 +93,7 @@ type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
 type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
+type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites";
 
 const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
   firstTen: "Первая десятка",
@@ -155,6 +156,18 @@ function legalPageUrl(page: "offer" | "refund" | "delivery" | "privacy" | "requi
   }
   return `https://zanomer.vercel.app/?page=${page}`;
 }
+function legalDocumentFromUrl(): LegalDocument {
+  if (typeof window === "undefined" || !window.location) return "overview";
+  const page = new URLSearchParams(window.location.search).get("page");
+  return ["offer", "refund", "delivery", "privacy", "requisites"].includes(page ?? "") ? page as LegalDocument : "overview";
+}
+const legalDocumentDetails: Record<Exclude<LegalDocument, "overview">, { title: string; body: string }> = {
+  offer: { title: "Публичная оферта", body: "Оплачивая подписку или продвижение объявления, пользователь принимает условия публичной оферты. Исполнитель предоставляет цифровые услуги доступа к функциям сервиса и продвижения объявления. Договор считается заключённым после успешной оплаты. Стоимость, состав услуги и срок её действия показываются до нажатия кнопки оплаты." },
+  refund: { title: "Возврат средств", body: "Подписку можно отменить до следующего списания. Если оплаченная услуга не была активирована по технической ошибке, обратитесь в течение 14 дней: мы проверим обращение и при подтверждении ошибки вернём деньги тем же способом оплаты." },
+  delivery: { title: "Оказание услуг", body: "Услуги оказываются онлайн; физическая доставка товара не производится. Подписка и продвижение активируются автоматически после подтверждения платежа. Результат доступен в личном кабинете и на карточке объявления." },
+  privacy: { title: "Политика обработки персональных данных", body: "Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: e-mail, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Платёжные данные карт хранит и обрабатывает ПСБ." },
+  requisites: { title: "Реквизиты и контакты", body: "ИП Леонович Александр Леонидович, ИНН 504406730552, ОГРНИП 319508100089501. Контактный e-mail: zanomerom@mail.ru." },
+};
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
 const latinPlateLetters: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
@@ -341,6 +354,7 @@ export default function HomeScreen() {
   const [testPaymentDone, setTestPaymentDone] = useState(false);
   const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(() => isPaymentInfoPage() || isRequisitesPage());
+  const [legalDocument, setLegalDocument] = useState<LegalDocument>(() => legalDocumentFromUrl());
   const [inAppNotice, setInAppNotice] = useState<AppNotification | null>(null);
 
   function openTestPayment(title: string, amount: string) {
@@ -661,6 +675,10 @@ export default function HomeScreen() {
     setChatMessages(messages);
     setChatRecipientId(listing.ownerId === activeUserId ? messages.filter((item) => item.sender_id !== activeUserId).at(-1)?.sender_id ?? "" : listing.ownerId ?? "");
     setChatOpen(true);
+  }
+  function openLegalDocument(document: Exclude<LegalDocument, "overview">) {
+    setLegalDocument(document);
+    if (typeof window !== "undefined" && window.history) window.history.replaceState(null, "", legalPageUrl(document));
   }
 
   async function openListingFromNotification(kind: string, id: string) {
@@ -1936,7 +1954,7 @@ export default function HomeScreen() {
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => setPaymentInfoOpen(true)} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
+          <Pressable onPress={() => { setLegalDocument("overview"); setPaymentInfoOpen(true); }} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
             <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
           </Pressable>
           <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
@@ -2717,18 +2735,19 @@ export default function HomeScreen() {
           <Pressable accessibilityLabel="Закрыть информацию" style={StyleSheet.absoluteFill} onPress={() => setPaymentInfoOpen(false)} />
           <View style={styles.legalPanel}>
             <View style={styles.detailsHeader}>
-              <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>Информация</Text></View>
+              <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>{legalDocument === "overview" ? "Информация" : legalDocumentDetails[legalDocument].title}</Text></View>
               <Pressable onPress={() => setPaymentInfoOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
             <ScrollView style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках.</Text>
+              {legalDocument !== "overview" && <View style={styles.openedLegalDocument}><Text style={styles.openedLegalTitle}>{legalDocumentDetails[legalDocument].title}</Text><Text style={styles.legalText}>{legalDocumentDetails[legalDocument].body}</Text><Pressable onPress={() => { setLegalDocument("overview"); }}><Text style={styles.legalLink}>← Все документы</Text></Pressable></View>}
               <Text style={styles.legalHeading}>Документы и информация</Text>
               <View style={styles.legalLinks}>
-                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("offer")); }}><Text style={styles.legalLink}>Публичная оферта</Text></Pressable>
-                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("refund")); }}><Text style={styles.legalLink}>Возврат средств</Text></Pressable>
-                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("delivery")); }}><Text style={styles.legalLink}>Оказание услуг</Text></Pressable>
-                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("privacy")); }}><Text style={styles.legalLink}>Политика обработки данных</Text></Pressable>
-                <Pressable onPress={() => { void Linking.openURL(legalPageUrl("requisites")); }}><Text style={styles.legalLink}>Реквизиты и контакты</Text></Pressable>
+                <Pressable onPress={() => openLegalDocument("offer")}><Text style={styles.legalLink}>Публичная оферта</Text></Pressable>
+                <Pressable onPress={() => openLegalDocument("refund")}><Text style={styles.legalLink}>Возврат средств</Text></Pressable>
+                <Pressable onPress={() => openLegalDocument("delivery")}><Text style={styles.legalLink}>Оказание услуг</Text></Pressable>
+                <Pressable onPress={() => openLegalDocument("privacy")}><Text style={styles.legalLink}>Политика обработки данных</Text></Pressable>
+                <Pressable onPress={() => openLegalDocument("requisites")}><Text style={styles.legalLink}>Реквизиты и контакты</Text></Pressable>
               </View>
               <Text style={styles.legalHeading}>Платные услуги</Text>
               <View style={styles.legalCard}>
@@ -3207,6 +3226,8 @@ const styles = StyleSheet.create({
   legalHeading: { color: "#24213E", fontSize: 17, fontWeight: "900", marginTop: 20 },
   legalLinks: { backgroundColor: "#F7F5FF", borderColor: "#DED8FF", borderRadius: 14, borderWidth: 1, gap: 10, marginTop: 10, padding: 14 },
   legalLink: { color: "#4536B8", fontSize: 15, fontWeight: "800", textDecorationLine: "underline" },
+  openedLegalDocument: { backgroundColor: "#FFFFFF", borderColor: "#CFC7FF", borderRadius: 14, borderWidth: 1, gap: 10, marginTop: 12, padding: 15 },
+  openedLegalTitle: { color: "#24213E", fontSize: 18, fontWeight: "900" },
   paymentMethods: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   paymentMethod: { backgroundColor: "#F2F4F7", borderColor: "#D0D5DD", borderRadius: 8, borderWidth: 1, color: "#344054", fontSize: 12, fontWeight: "900", overflow: "hidden", paddingHorizontal: 10, paddingVertical: 7 },
   legalCard: { backgroundColor: "#F8F7FF", borderColor: "#E2DEF7", borderRadius: 14, borderWidth: 1, marginTop: 10, padding: 13 },
