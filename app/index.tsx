@@ -351,7 +351,6 @@ export default function HomeScreen() {
   const [reportingPublicComment, setReportingPublicComment] = useState<PublicComment | null>(null);
   const [regionPickerGroup, setRegionPickerGroup] = useState<string | null>(null);
   const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
-  const [testPaymentDone, setTestPaymentDone] = useState(false);
   const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(() => isPaymentInfoPage() || isRequisitesPage());
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(() => legalDocumentFromUrl());
@@ -359,7 +358,6 @@ export default function HomeScreen() {
 
   function openTestPayment(title: string, amount: string) {
     setTestPayment({ title, amount });
-    setTestPaymentDone(false);
   }
 
   function resetSearchAndFilters() {
@@ -2343,7 +2341,7 @@ export default function HomeScreen() {
           <Text style={styles.premiumItem}>◉ Ранний доступ к объявлениям — на 15 минут раньше</Text>
           <Text style={styles.premiumItem}>◉ График изменения цены номера</Text>
           <Text style={styles.premiumItem}>◉ До 30 сохранённых поисков и избранных номеров</Text>
-          <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Попробовать оплату в тестовом режиме</Text></Pressable>
+          <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Перейти к оплате</Text></Pressable>
         </View>
       </View>}
 
@@ -2724,15 +2722,13 @@ export default function HomeScreen() {
         <Pressable style={styles.detailsOverlay} onPress={() => setTestPayment(null)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.paymentPanel}>
             <View style={styles.detailsHeader}>
-              <View><Text style={styles.paymentKicker}>ТЕСТОВЫЙ РЕЖИМ</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
+              <View><Text style={styles.paymentKicker}>ОПЛАТА</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
               <Pressable onPress={() => setTestPayment(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
-            {testPaymentDone ? <View style={styles.paymentSuccess}><Text style={styles.paymentSuccessIcon}>✓</Text><Text style={styles.paymentSuccessTitle}>Тест прошёл успешно</Text><Text style={styles.paymentHint}>Деньги не списывались. При подключении ПСБ здесь появится настоящая безопасная оплата.</Text></View> : <>
-              <Text style={styles.paymentItem}>{testPayment?.title}</Text>
-              <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
-              <Text style={styles.paymentHint}>Это имитация платежа: карту вводить не нужно, деньги не списываются и услуга пока не активируется.</Text>
-              <Pressable onPress={() => { if (testPayment?.title.includes("Подписка")) setHasPlusSubscription(true); setTestPaymentDone(true); }} style={styles.paymentButton}><Text style={styles.paymentButtonText}>Подтвердить тест</Text></Pressable>
-            </>}
+            <Text style={styles.paymentItem}>{testPayment?.title}</Text>
+            <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
+            <Text style={styles.paymentHint}>Оплата через ПСБ пока не подключена. До подтверждения платежа подписка, график цен, расширенные лимиты и «Горячие предложения» остаются закрытыми.</Text>
+            <Pressable onPress={() => setTestPayment(null)} style={styles.paymentButton}><Text style={styles.paymentButtonText}>Понятно</Text></Pressable>
           </Pressable>
         </Pressable>
       </Modal>
