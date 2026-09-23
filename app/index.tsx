@@ -743,7 +743,7 @@ export default function HomeScreen() {
       const key = `${item.listing_id}:${partnerId}`;
       if (!threads.has(key)) threads.set(key, { listingId: item.listing_id, partnerId, lastMessage: item });
     });
-    setChatThreads([...threads.values()]);
+    setChatThreads([...threads.values()].sort((a, b) => b.lastMessage.created_at.localeCompare(a.lastMessage.created_at)));
   }
 
   async function loadDiscussionThreads() {
@@ -2647,17 +2647,17 @@ export default function HomeScreen() {
         <Pressable style={styles.detailsOverlay} onPress={() => setChatsOpen(false)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.dialogsPanel}>
             <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Диалоги</Text><Pressable onPress={() => setChatsOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
-            <Text style={styles.dialogsHint}>Чаты с продавцами и покупателями, а также комментарии к твоим объявлениям.</Text>
+            <Text style={styles.dialogsHint}>Выбери сообщение: откроется личный чат или карточка с нужным комментарием.</Text>
             <ScrollView contentContainerStyle={styles.dialogsList}>
               {chatThreads.length === 0 && discussionThreads.length === 0 ? <Text style={styles.dialogsEmpty}>Пока нет диалогов или комментариев. Открой карточку объявления, чтобы начать общение.</Text> : null}
-              {chatThreads.map((thread) => {
+              {chatThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Личные чаты</Text><Text style={styles.dialogsSectionHint}>Переписки с продавцами и покупателями</Text>{chatThreads.map((thread) => {
                 const listing = catalog.find((item) => item.id === thread.listingId);
-                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={async () => { setChatsOpen(false); if (listing) await openChat(listing); else await openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы: " : "Новое: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
-              })}
-              {discussionThreads.map((thread) => {
+                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={async () => { setChatsOpen(false); if (listing) await openChat(listing); else await openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы написали: " : "Вам написали: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
+              })}</View>}
+              {discussionThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Комментарии</Text><Text style={styles.dialogsSectionHint}>Комментарии под твоими и просмотренными объявлениями</Text>{discussionThreads.map((thread) => {
                 const listing = catalog.find((item) => item.id === thread.listingId);
-                return <Pressable key={`comment-${thread.listingId}`} onPress={() => { setChatsOpen(false); if (listing) setSelectedPlate(listing); else void openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>💬</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Комментарий к объявлению"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastComment.author_id === currentUserId ? "Вы: " : `${thread.lastComment.author_name}: `}{thread.lastComment.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastComment.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
-              })}
+                return <Pressable key={`comment-${thread.listingId}`} onPress={() => { setChatsOpen(false); if (listing) setSelectedPlate(listing); else void openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={[styles.dialogMark, styles.commentDialogMark]}><Text style={styles.dialogMarkText}>💬</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Комментарий к объявлению"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastComment.author_id === currentUserId ? "Вы написали: " : `${thread.lastComment.author_name}: `}{thread.lastComment.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastComment.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
+              })}</View>}
             </ScrollView>
           </Pressable>
         </Pressable>
@@ -3403,9 +3403,13 @@ const styles = StyleSheet.create({
   dialogsTitle: { color: "#101828", fontSize: 20, fontWeight: "900" },
   dialogsHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 6 },
   dialogsList: { gap: 9, paddingTop: 16 },
+  dialogsSection: { gap: 9 },
+  dialogsSectionTitle: { color: "#344054", fontSize: 16, fontWeight: "900", marginTop: 5 },
+  dialogsSectionHint: { color: "#98A2B3", fontSize: 12, marginBottom: 2 },
   dialogsEmpty: { color: "#667085", fontSize: 14, lineHeight: 21, paddingVertical: 30, textAlign: "center" },
   dialogCard: { alignItems: "center", backgroundColor: "#F8F7FC", borderColor: "#E7E3F4", borderRadius: 17, borderWidth: 1, flexDirection: "row", padding: 11 },
   dialogMark: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 15, height: 39, justifyContent: "center", width: 39 },
+  commentDialogMark: { backgroundColor: "#1570EF" },
   dialogMarkText: { color: "#FFFFFF", fontSize: 17, fontWeight: "900" },
   dialogBody: { flex: 1, marginHorizontal: 10, minWidth: 0 },
   dialogPlate: { color: "#101828", fontSize: 14, fontWeight: "900" },
