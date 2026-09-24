@@ -2221,37 +2221,50 @@ export default function HomeScreen() {
         <Text style={styles.searchResetButtonText}>↺ Сбросить поиск и фильтры</Text>
       </Pressable>
 
-      {platePicker && <View style={[styles.platePickerPanel, platePicker === "region" && styles.regionPickerPanel, platePicker === "region" && windowWidth >= 1600 && styles.regionPickerPanelDesktop]}>
+      {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
+        <View style={styles.regionPickerOverlay}>
+          <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
+          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
+            <View style={styles.platePickerTopRow}>
+              <Text style={styles.platePickerTitle}>Выбери регион</Text>
+              <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+            </View>
+            <View style={styles.regionPickerContent}>
+              <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Сначала выбери название региона, затем отметь один или несколько кодов."}</Text>
+              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
+              {!regionPickerGroup ? <>
+                <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{catalog.length}</Text></Pressable>
+                {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, region === item.title && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === item.title && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, region === item.title && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
+              </> : <>
+                <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
+                <Pressable onPress={() => { setRegion(regionPickerGroup); setRegionCode(""); }} style={[styles.pickerOption, styles.regionPickerOption, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{region === regionPickerGroup && selectedRegionCodes.length === 0 ? "✓" : "□"}</Text></Pressable>
+                {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
+                  const selected = selectedRegionCodes.includes(item.value);
+                  return <Pressable key={item.value} onPress={() => {
+                    setRegion(regionPickerGroup);
+                    setRegionCode((current) => {
+                      const codes = current.split(",").map((code) => code.trim()).filter(Boolean);
+                      return (codes.includes(item.value) ? codes.filter((code) => code !== item.value) : [...codes, item.value]).join(",");
+                    });
+                  }} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Регион {item.value}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
+                })}
+              </>}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>}
+
+      {platePicker && platePicker !== "region" && <View style={styles.platePickerPanel}>
         <View style={styles.platePickerTopRow}>
-          <Text style={styles.platePickerTitle}>{platePicker === "region" ? "Выбери регион" : platePicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
+          <Text style={styles.platePickerTitle}>{platePicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
           <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
         </View>
-        {platePicker === "region" ? <View style={styles.regionPickerContent}>
-          <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Сначала выбери название региона, затем отметь один или несколько кодов."}</Text>
-          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
-          {!regionPickerGroup ? <>
-            <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{catalog.length}</Text></Pressable>
-            {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, region === item.title && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === item.title && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, region === item.title && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
-          </> : <>
-            <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
-            <Pressable onPress={() => { setRegion(regionPickerGroup); setRegionCode(""); }} style={[styles.pickerOption, styles.regionPickerOption, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{region === regionPickerGroup && selectedRegionCodes.length === 0 ? "✓" : "□"}</Text></Pressable>
-            {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
-              const selected = selectedRegionCodes.includes(item.value);
-              return <Pressable key={item.value} onPress={() => {
-                setRegion(regionPickerGroup);
-                setRegionCode((current) => {
-                  const codes = current.split(",").map((code) => code.trim()).filter(Boolean);
-                  return (codes.includes(item.value) ? codes.filter((code) => code !== item.value) : [...codes, item.value]).join(",");
-                });
-              }} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Регион {item.value}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
-            })}
-          </>}
-          </ScrollView>
-        </View> : <View style={styles.pickerGrid}>
+        <View style={styles.pickerGrid}>
           {(platePicker === "digits" ? allowedDigits : allowedLetters).map((item) => <Pressable key={item} onPress={() => choosePlatePart(item)} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{item}</Text></Pressable>)}
           <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar]}><Text style={styles.pickerOptionText}>*</Text></Pressable>
           <Pressable onPress={erasePlatePart} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
-        </View>}
+        </View>
       </View>}
 
       {hasSearchCriteria && <View style={styles.searchActions}>
@@ -3079,6 +3092,8 @@ const styles = StyleSheet.create({
   platePickerPanel: { backgroundColor: "#FFFFFF", borderColor: "#B2CCFF", borderRadius: 16, borderWidth: 1, marginTop: 10, padding: 12, shadowColor: "#155EEF", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 12 },
   regionPickerPanel: { alignSelf: "flex-end", borderColor: "#D8D1FF", maxWidth: "100%", shadowColor: "#5143C2", width: 380, zIndex: 20 },
   regionPickerPanelDesktop: { left: "100%", marginLeft: 185, marginTop: 0, position: "absolute", top: -308, zIndex: 50 },
+  regionPickerOverlay: { alignItems: "center", backgroundColor: "rgba(16, 24, 40, 0.26)", flex: 1, justifyContent: "center", padding: 18 },
+  regionPickerModalPanel: { alignSelf: "center", marginTop: 0, width: "100%" },
   platePickerTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
   platePickerTitle: { color: "#101828", fontSize: 14, fontWeight: "900" },
   platePickerClose: { color: "#155EEF", fontSize: 13, fontWeight: "800" },
