@@ -729,6 +729,25 @@ export default function HomeScreen() {
     if (kind === "message") await openChat(listing);
   }
 
+  async function openChatThread(listingId: string) {
+    if (!supabase || !listingId) return;
+    let listing = catalog.find((item) => item.id === listingId);
+    if (!listing) {
+      const { data } = await supabase
+        .from("auto_listings")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
+        .eq("id", listingId)
+        .maybeSingle();
+      if (data) {
+        const { data: profile } = await supabase.from("auto_profiles").select("username").eq("id", data.owner_id).maybeSingle();
+        listing = mapManagedListing(data, profile?.username ?? "Пользователь ЗаНомером");
+      }
+    }
+    if (!listing) return setChatMessage("Объявление для этого диалога больше недоступно.");
+    setSelectedPlate(listing);
+    await openChat(listing);
+  }
+
   useEffect(() => {
     if (Platform.OS === "web") return;
     const handle = (data: Record<string, unknown>) => {
@@ -2558,7 +2577,7 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      <Modal visible={!!selectedPlate} transparent animationType="slide" onRequestClose={() => setSelectedPlate(null)}>
+      <Modal visible={!!selectedPlate && !chatOpen} transparent animationType="slide" onRequestClose={() => setSelectedPlate(null)}>
         <Pressable style={styles.detailsOverlay} onPress={() => setSelectedPlate(null)}>
           <ScrollView contentContainerStyle={styles.detailsScroll}>
             <Pressable onPress={(event) => event.stopPropagation()} style={styles.detailsPanel}>
@@ -2692,7 +2711,7 @@ export default function HomeScreen() {
               {chatThreads.length === 0 && discussionThreads.length === 0 ? <Text style={styles.dialogsEmpty}>Пока нет диалогов или комментариев. Открой карточку объявления, чтобы начать общение.</Text> : null}
               {chatThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Личные чаты</Text><Text style={styles.dialogsSectionHint}>Переписки с продавцами и покупателями</Text>{chatThreads.map((thread) => {
                 const listing = catalog.find((item) => item.id === thread.listingId);
-                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={async () => { setChatsOpen(false); if (listing) await openChat(listing); else await openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы написали: " : "Вам написали: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
+                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={() => { setChatsOpen(false); void openChatThread(thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы написали: " : "Вам написали: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
               })}</View>}
               {discussionThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Комментарии</Text><Text style={styles.dialogsSectionHint}>Комментарии под твоими и просмотренными объявлениями</Text>{discussionThreads.map((thread) => {
                 const listing = catalog.find((item) => item.id === thread.listingId);
