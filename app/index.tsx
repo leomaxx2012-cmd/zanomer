@@ -239,7 +239,7 @@ const bundledCatalog = bundledCatalogData as Plate[];
 const catalogFallback = bundledCatalog.length > 0 ? bundledCatalog : initialPlates;
 
 export default function HomeScreen() {
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const compactLayout = windowWidth < 430;
   // Тяжёлая карточка содержит разметку номера и несколько действий. На
   // телефоне выводим меньшую первую страницу, чтобы прокрутка оставалась
@@ -2768,7 +2768,7 @@ export default function HomeScreen() {
       <Modal visible={paymentInfoOpen} transparent animationType="slide" onRequestClose={closePaymentInfo}>
         <View style={[styles.detailsOverlay, styles.sellerProfileOverlay]}>
           <Pressable accessibilityLabel="Закрыть информацию" style={StyleSheet.absoluteFill} onPress={closePaymentInfo} />
-          <View style={styles.legalPanel}>
+          <View style={[styles.legalPanel, { height: Math.max(360, Math.min(windowHeight - 32, windowHeight * 0.88)) }]}>
             <View style={styles.detailsHeader}>
               <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>{legalDocument === "overview" ? "Информация" : legalDocumentDetails[legalDocument].title}</Text></View>
               <Pressable onPress={closePaymentInfo} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
@@ -3247,9 +3247,9 @@ const styles = StyleSheet.create({
   comingSoonButton: { alignItems: "center", backgroundColor: "#344054", borderRadius: 11, marginTop: 17, paddingVertical: 12 },
   comingSoonButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   paymentPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 470, padding: 22, width: "92%" },
-  legalScroll: { flex: 1, minHeight: 0 },
+  legalScroll: { flex: 1, flexShrink: 1, minHeight: 0 },
   legalScrollContent: { paddingBottom: 24 },
-  legalPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, height: "88%", maxWidth: 620, padding: 22, width: "92%" },
+  legalPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 620, padding: 22, width: "92%" },
   paymentKicker: { color: "#7F56D9", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
   paymentTitle: { color: "#101828", fontSize: 23, fontWeight: "900", marginTop: 3 },
   requisitesPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderRadius: 24, maxWidth: 540, padding: 22, width: "92%" },
