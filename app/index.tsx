@@ -806,9 +806,11 @@ export default function HomeScreen() {
       setChatsOpen(true);
       return;
     }
-    await Promise.all([loadChatThreads(), loadDiscussionThreads()]);
-    setUnreadChatCount(0);
+    // Окно должно открываться сразу: при медленной базе ожидание запросов
+    // раньше делало кнопку визуально нерабочей.
     setChatsOpen(true);
+    setUnreadChatCount(0);
+    void Promise.all([loadChatThreads(), loadDiscussionThreads()]);
   }
 
   async function sendReport() {
@@ -2049,11 +2051,11 @@ export default function HomeScreen() {
                 setAuthMessage("Пароль сохранён.");
               }} style={styles.authSubmit}><Text style={styles.authSubmitText}>Сохранить пароль</Text></Pressable>
               {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
-              <Pressable onPress={async () => {
-                if (!supabase) return;
-                const { data } = await supabase.auth.getUser();
-                await loadManagement(data.user?.id, profileName);
+              <Pressable onPress={() => {
+                // Не ждём сеть перед показом раздела — иначе при задержке
+                // Supabase кнопка выглядит так, будто ничего не произошло.
                 setManagementOpen((value) => !value);
+                void loadManagement(currentUserId, profileName);
               }} style={styles.managementButton}>
                 <Text style={styles.managementButtonText}>{managementOpen ? "Скрыть мои объявления" : "Мои объявления и модерация"}</Text>
               </Pressable>
@@ -2097,7 +2099,7 @@ export default function HomeScreen() {
                     </View>}
                   </View>
                   <Text style={styles.managementTitle}>Очередь на проверку</Text>
-                  {moderationListings.length === 0 ? <Text style={styles.managementHint}>Сейчас нет объявлений на проверке.</Text> : moderationListings.map((listing) => <Pressable key={listing.id} onPress={() => setSelectedPlate(listing)} style={styles.managementCard}>
+                  {moderationListings.length === 0 ? <Text style={styles.managementHint}>Сейчас нет объявлений на проверке.</Text> : moderationListings.map((listing) => <Pressable key={listing.id} onPress={() => { setAuthOpen(false); setSelectedPlate(listing); }} style={styles.managementCard}>
                     <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementHint}>Нажми, чтобы проверить все данные и фото</Text></View>
                   </Pressable>)}
                   <Text style={styles.managementTitle}>Жалобы на сообщения</Text>
