@@ -309,7 +309,7 @@ export default function HomeScreen() {
   const [listingLeftLetter, setListingLeftLetter] = useState("");
   const [listingDigits, setListingDigits] = useState("");
   const [listingRightLetters, setListingRightLetters] = useState("");
-  const [listingRegion, setListingRegion] = useState("Москва · 77");
+  const [listingRegion, setListingRegion] = useState("");
   const [listingPrice, setListingPrice] = useState("");
   const [listingComment, setListingComment] = useState("");
   const [listingPhotoUri, setListingPhotoUri] = useState("");
@@ -1498,6 +1498,9 @@ export default function HomeScreen() {
     title: `${code.value} (${group.title})`,
     count: code.count,
   }))), [regionGroups]);
+  const popularListingRegions = useMemo(() => [...availableRegions]
+    .sort((first, second) => second.count - first.count || Number(first.value) - Number(second.value))
+    .slice(0, 14), [availableRegions]);
   const catalogAnalytics = useMemo(() => {
     const active = catalog.filter((plate) => !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl));
     const now = Date.now();
@@ -1726,13 +1729,19 @@ export default function HomeScreen() {
     if (!result.canceled) setListingPhotoUri(result.assets[0]?.uri ?? "");
   }
 
+  function listingRegionLabel(regionCode: string) {
+    const knownRegion = regionGroups.find((group) => group.codes.some((item) => item.value === regionCode));
+    return `${knownRegion?.title ?? "Регион"} · ${regionCode}`;
+  }
+
   async function addListing() {
     const priceValue = Number(listingPrice.replace(/\D/g, ""));
     if (!profileName || !listingLeftLetter || listingDigits.length !== 3 || listingRightLetters.length !== 2 || !priceValue || !listingConfirmed) {
       setListingMessage("Заполни номер и цену, а затем подтверди, что объявление размещает владелец.");
       return;
     }
-    const normalizedRegion = listingRegion.trim();
+    const normalizedRegionCode = listingRegion.replace(/\D/g, "").slice(0, 3);
+    const normalizedRegion = listingRegionLabel(normalizedRegionCode);
     const normalizedPlate = `${listingLeftLetter.toUpperCase()} ${listingDigits} ${listingRightLetters.toUpperCase()}`;
     const hasForbiddenContact = /(https?:\/\/|www\.|t\.me\/|telegram|whatsapp|\+?\d[\d\s()\-]{8,}|[\w.+-]+@[\w-]+\.[\w.-]+)/i.test(listingComment);
     const duplicate = catalog.some((item) => item.isSiteListing && item.seller === profileName && item.value === normalizedPlate && item.region.toLowerCase() === normalizedRegion.toLowerCase());
@@ -1740,8 +1749,8 @@ export default function HomeScreen() {
       setListingMessage("В номере можно использовать только разрешённые буквы российского госномера.");
       return;
     }
-    if (!/^\d{1,3}$/.test(normalizedRegion.split("·").at(-1)?.trim() ?? "")) {
-      setListingMessage("Укажи регион в формате «Москва · 77» или выбери его из списка.");
+    if (!/^\d{1,3}$/.test(normalizedRegionCode)) {
+      setListingMessage("Введи код региона: от 1 до 3 цифр, например 77 или 999.");
       return;
     }
     if (priceValue < 1000 || priceValue > 50_000_000) {
@@ -1825,7 +1834,7 @@ export default function HomeScreen() {
       }
     }
     setAddOpen(false);
-    setListingLeftLetter(""); setListingDigits(""); setListingRightLetters(""); setListingPrice("");
+    setListingLeftLetter(""); setListingDigits(""); setListingRightLetters(""); setListingRegion(""); setListingPrice("");
     setListingComment("");
     setListingPhotoUri("");
     setListingConfirmed(false);
@@ -2304,13 +2313,14 @@ export default function HomeScreen() {
                 </View>
               </View>}
               <View style={styles.listingRegionRow}>
-                <TextInput value={listingRegion} onFocus={() => setListingPicker("region")} onChangeText={setListingRegion} placeholder="Регион, например Москва · 77" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.listingRegionInput]} />
-                <Pressable onPress={() => setListingPicker(listingPicker === "region" ? null : "region")} style={styles.listingRegionButton}><Text style={styles.listingRegionButtonText}>Выбрать</Text></Pressable>
+                <TextInput value={listingRegion} onFocus={() => setListingPicker("region")} onChangeText={(value) => setListingRegion(value.replace(/\D/g, "").slice(0, 3))} placeholder="Код региона, например 77" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.listingRegionInput]} keyboardType="number-pad" maxLength={3} />
+                <Pressable onPress={() => setListingPicker(listingPicker === "region" ? null : "region")} style={styles.listingRegionButton}><Text style={styles.listingRegionButtonText}>Коды</Text></Pressable>
               </View>
               {listingPicker === "region" && <View style={styles.listingRegionPicker}>
-                <Text style={styles.listingPickerTitle}>Доступные регионы</Text>
+                <Text style={styles.listingPickerTitle}>Частые коды регионов</Text>
+                <Text style={styles.listingRegionHint}>Можно просто ввести любой код — даже если его ещё нет в каталоге.</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listingRegionOptions}>
-                  {availableRegions.filter((item) => item.value).map((item) => <Pressable key={item.value} onPress={() => { setListingRegion(`${item.title.replace(/^\d+ \((.+)\)$/, "$1")} · ${item.value}`); setListingPicker(null); }} style={styles.listingRegionOption}><Text style={styles.listingRegionOptionText}>{item.title}</Text></Pressable>)}
+                  {popularListingRegions.map((item) => <Pressable key={item.value} onPress={() => { setListingRegion(item.value); setListingPicker(null); }} style={styles.listingRegionOption}><Text style={styles.listingRegionOptionText}>{item.value}</Text><Text style={styles.listingRegionOptionHint}>{item.title.replace(/^\d+ \((.+)\)$/, "$1")}</Text></Pressable>)}
                 </ScrollView>
               </View>}
               <TextInput value={listingPrice} onChangeText={setListingPrice} placeholder="Цена в рублях" placeholderTextColor="#98A2B3" style={styles.addInput} keyboardType="number-pad" />
@@ -3063,9 +3073,11 @@ const styles = StyleSheet.create({
   listingRegionButton: { backgroundColor: "#F0EEFF", borderColor: "#D8D1FF", borderRadius: 10, borderWidth: 1, marginTop: 9, paddingHorizontal: 11, paddingVertical: 11 },
   listingRegionButtonText: { color: "#5143C2", fontSize: 12, fontWeight: "900" },
   listingRegionPicker: { backgroundColor: "#F7F6FF", borderColor: "#D8D1FF", borderRadius: 13, borderWidth: 1, marginTop: 8, padding: 11 },
+  listingRegionHint: { color: "#667085", fontSize: 12, lineHeight: 17, marginTop: 5 },
   listingRegionOptions: { gap: 7, paddingTop: 9 },
-  listingRegionOption: { backgroundColor: "#FFFFFF", borderColor: "#D8D1FF", borderRadius: 9, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 8 },
+  listingRegionOption: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D8D1FF", borderRadius: 9, borderWidth: 1, minWidth: 48, paddingHorizontal: 10, paddingVertical: 8 },
   listingRegionOptionText: { color: "#5143C2", fontSize: 12, fontWeight: "800" },
+  listingRegionOptionHint: { color: "#667085", fontSize: 10, marginTop: 2 },
   contactHint: { color: "#667085", fontSize: 12, lineHeight: 17, marginTop: 13 },
   confirmRow: { alignItems: "flex-start", flexDirection: "row", gap: 9, marginTop: 13 },
   confirmBox: { alignItems: "center", borderColor: "#98A2B3", borderRadius: 5, borderWidth: 1.5, height: 20, justifyContent: "center", marginTop: 1, width: 20 },
