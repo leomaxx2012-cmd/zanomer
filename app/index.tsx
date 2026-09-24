@@ -682,6 +682,25 @@ export default function HomeScreen() {
     if (typeof window !== "undefined" && window.history) window.history.replaceState(null, "", legalPageUrl(document));
   }
 
+  function clearLegalPageFromUrl() {
+    if (typeof window === "undefined" || !window.history || !window.location) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("page");
+    window.history.replaceState(null, "", url.toString());
+  }
+
+  function openPaymentInfo() {
+    setLegalDocument("overview");
+    clearLegalPageFromUrl();
+    setPaymentInfoOpen(true);
+  }
+
+  function closePaymentInfo() {
+    setPaymentInfoOpen(false);
+    setLegalDocument("overview");
+    clearLegalPageFromUrl();
+  }
+
   async function openListingFromNotification(kind: string, id: string) {
     if (!supabase || !id) return;
     let listingId = id;
@@ -1959,7 +1978,7 @@ export default function HomeScreen() {
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
         <View style={styles.headerActions}>
-          <Pressable onPress={() => { setLegalDocument("overview"); setPaymentInfoOpen(true); }} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
+          <Pressable onPress={openPaymentInfo} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
             <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
           </Pressable>
           <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
@@ -2733,17 +2752,17 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
-      <Modal visible={paymentInfoOpen} transparent animationType="slide" onRequestClose={() => setPaymentInfoOpen(false)}>
+      <Modal visible={paymentInfoOpen} transparent animationType="slide" onRequestClose={closePaymentInfo}>
         <View style={[styles.detailsOverlay, styles.sellerProfileOverlay]}>
-          <Pressable accessibilityLabel="Закрыть информацию" style={StyleSheet.absoluteFill} onPress={() => setPaymentInfoOpen(false)} />
+          <Pressable accessibilityLabel="Закрыть информацию" style={StyleSheet.absoluteFill} onPress={closePaymentInfo} />
           <View style={styles.legalPanel}>
             <View style={styles.detailsHeader}>
               <View><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>{legalDocument === "overview" ? "Информация" : legalDocumentDetails[legalDocument].title}</Text></View>
-              <Pressable onPress={() => setPaymentInfoOpen(false)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
+              <Pressable onPress={closePaymentInfo} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
             <ScrollView style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках.</Text>
-              {legalDocument !== "overview" && <View style={styles.openedLegalDocument}><Text style={styles.openedLegalTitle}>{legalDocumentDetails[legalDocument].title}</Text><Text style={styles.legalText}>{legalDocumentDetails[legalDocument].body}</Text><Pressable onPress={() => { setLegalDocument("overview"); }}><Text style={styles.legalLink}>← Все документы</Text></Pressable></View>}
+              {legalDocument !== "overview" && <View style={styles.openedLegalDocument}><Text style={styles.openedLegalTitle}>{legalDocumentDetails[legalDocument].title}</Text><Text style={styles.legalText}>{legalDocumentDetails[legalDocument].body}</Text><Pressable onPress={() => { setLegalDocument("overview"); clearLegalPageFromUrl(); }}><Text style={styles.legalLink}>← Все документы</Text></Pressable></View>}
               <Text style={styles.legalHeading}>Документы и информация</Text>
               <View style={styles.legalLinks}>
                 <Pressable onPress={() => openLegalDocument("offer")}><Text style={styles.legalLink}>Публичная оферта</Text></Pressable>
