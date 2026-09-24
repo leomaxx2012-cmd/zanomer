@@ -2410,7 +2410,7 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
-        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo.value}`}</Text>}
+        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
       {!!catalogLoadError && activeTab === "buy" && !catalogOnly && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
@@ -2537,7 +2537,7 @@ export default function HomeScreen() {
               ["digits", "Одинаковые цифры", `Такие же цифры: ${similarityPickerPlate?.digits ?? ""}`],
               ["letters", "Одинаковые буквы", `Такие же буквы: ${similarityPickerPlate?.leftLetter ?? ""}${similarityPickerPlate?.rightLetters ?? ""}`],
               ["region", "Одинаковый регион", `Такой же код региона: ${similarityPickerPlate?.region.split(" · ")[1] ?? ""}`],
-            ] as [SimilarityFilter, string, string][]).map(([kind, title, hint]) => <Pressable key={kind} onPress={() => { setSimilarityFilter(kind); setSimilarToId(similarityPickerPlate.id); setSimilarityPickerPlate(null); }} style={styles.similarityOption}>
+            ] as [SimilarityFilter, string, string][]).map(([kind, title, hint]) => <Pressable key={kind} onPress={() => { if (!similarityPickerPlate) return; setSimilarityFilter(kind); setSimilarToId(similarityPickerPlate.id); setSimilarityPickerPlate(null); }} style={styles.similarityOption}>
               <Text style={styles.similarityOptionTitle}>{title}</Text><Text style={styles.similarityOptionHint}>{hint}</Text>
             </Pressable>)}
           </Pressable>
@@ -2937,7 +2937,7 @@ const styles = StyleSheet.create({
   authSubmitDisabled: { backgroundColor: "#84ADFF" },
   authSubmitText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   authSwitch: { alignItems: "center", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, flexGrow: 1, justifyContent: "center", minHeight: 40, paddingHorizontal: 10, paddingVertical: 10 },
-  authSwitchText: { color: "#475467", fontSize: 12, fontWeight: "750" },
+  authSwitchText: { color: "#475467", fontSize: 12, fontWeight: "700" },
   authMessage: { color: "#B42318", fontSize: 12, lineHeight: 17, marginTop: 8 },
   managementButton: { alignItems: "center", backgroundColor: "#F0EEFF", borderColor: "#D8D1FF", borderRadius: 10, borderWidth: 1, marginTop: 10, paddingVertical: 10 },
   managementButtonText: { color: "#5143C2", fontSize: 13, fontWeight: "900" },
@@ -2989,7 +2989,7 @@ const styles = StyleSheet.create({
   rejectButtonText: { color: "#C01048", fontSize: 11, fontWeight: "900" },
   banButton: { alignItems: "center", backgroundColor: "#7A271A", borderRadius: 10, marginTop: 8, paddingHorizontal: 10, paddingVertical: 9 },
   banButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
-  logoutText: { color: "#D92D20", fontSize: 13, fontWeight: "750", marginTop: 9 },
+  logoutText: { color: "#D92D20", fontSize: 13, fontWeight: "700", marginTop: 9 },
   searchArea: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E2DEF7", borderRadius: 28, borderWidth: 1, maxWidth: 760, marginTop: 20, padding: 19, position: "relative", shadowColor: "#5A4FB2", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.12, shadowRadius: 24, width: "100%" },
   searchHeading: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: 14, minWidth: 0 },
   searchHeadingText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
@@ -3046,11 +3046,11 @@ const styles = StyleSheet.create({
   saveSearchButtonDisabled: { opacity: 0.72 },
   saveSearchText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   savedSearchesButton: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 11, justifyContent: "center", minHeight: 42, paddingHorizontal: 11 },
-  savedSearchesText: { color: "#344054", fontSize: 12, fontWeight: "750" },
+  savedSearchesText: { color: "#344054", fontSize: 12, fontWeight: "700" },
   featuredSection: { marginTop: 18 },
   featuredHeading: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between", marginBottom: 9 },
   featuredTitle: { color: "#101828", fontSize: 15, fontWeight: "800" },
-  featuredHint: { color: "#98A2B3", fontSize: 11, fontWeight: "650" },
+  featuredHint: { color: "#98A2B3", fontSize: 11, fontWeight: "600" },
   featuredList: { gap: 10, paddingRight: 4 },
   featuredCard: { backgroundColor: "#101828", borderRadius: 15, minWidth: 146, padding: 13 },
   featuredPlate: { color: "#FFFFFF", fontSize: 17, fontWeight: "900" },
@@ -3067,7 +3067,7 @@ const styles = StyleSheet.create({
   savedSearchesEmpty: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 6, textAlign: "center" },
   savedSearchRow: { alignItems: "center", borderTopColor: "#E2E8F0", borderTopWidth: 1, flexDirection: "row", gap: 8, marginTop: 9, paddingTop: 9 },
   savedSearchApply: { flex: 1 },
-  savedSearchName: { color: "#155EEF", fontSize: 14, fontWeight: "750" },
+  savedSearchName: { color: "#155EEF", fontSize: 14, fontWeight: "700" },
   savedSearchHint: { color: "#667085", fontSize: 11, marginTop: 2 },
   savedSearchRemove: { color: "#98A2B3", fontSize: 27, lineHeight: 27 },
   addPanel: { backgroundColor: "#F8FAFC", borderColor: "#B2CCFF", borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 14 },
@@ -3111,16 +3111,16 @@ const styles = StyleSheet.create({
   commentInput: { minHeight: 82, textAlignVertical: "top" },
   addPanelActions: { flexDirection: "row", gap: 9, justifyContent: "flex-end", marginTop: 12 },
   cancelButton: { alignItems: "center", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, justifyContent: "center", paddingHorizontal: 13, paddingVertical: 10 },
-  cancelText: { color: "#475467", fontSize: 13, fontWeight: "750" },
+  cancelText: { color: "#475467", fontSize: 13, fontWeight: "700" },
   publishButton: { alignItems: "center", backgroundColor: "#155EEF", borderRadius: 10, justifyContent: "center", paddingHorizontal: 14, paddingVertical: 10 },
   publishText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
-  sectionTitle: { color: "#101828", fontSize: 16, fontWeight: "750", marginTop: 22 },
+  sectionTitle: { color: "#101828", fontSize: 16, fontWeight: "700", marginTop: 22 },
   filterPanelTitleRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  closeFiltersText: { color: "#667085", fontSize: 12, fontWeight: "750", marginTop: 22 },
+  closeFiltersText: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 22 },
   filters: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
   filter: { backgroundColor: "#F2F4F7", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9 },
   filterActive: { backgroundColor: "#155EEF" },
-  filterText: { color: "#475467", fontSize: 13, fontWeight: "650" },
+  filterText: { color: "#475467", fontSize: 13, fontWeight: "600" },
   filterTextActive: { color: "#FFFFFF" },
   platePickerPanel: { backgroundColor: "#FFFFFF", borderColor: "#B2CCFF", borderRadius: 16, borderWidth: 1, marginTop: 10, padding: 12, shadowColor: "#155EEF", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 12 },
   regionPickerPanel: { alignSelf: "flex-end", borderColor: "#D8D1FF", maxWidth: "100%", shadowColor: "#5143C2", width: 380, zIndex: 20 },
@@ -3215,7 +3215,7 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1, minWidth: 0 },
   cardInfoCompact: { flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: "100%" },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
-  tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "850", minWidth: 0 },
+  tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "800", minWidth: 0 },
   cardRegionRow: { alignItems: "flex-start", flexDirection: "row", gap: 8, justifyContent: "space-between" },
   cardRegionName: { flex: 1, minWidth: 0 },
   cardPublishedTop: { color: "#7A738F", flexShrink: 0, fontSize: 10, lineHeight: 16, marginTop: 4, fontWeight: "700", textAlign: "right" },
@@ -3303,9 +3303,10 @@ const styles = StyleSheet.create({
   legalCard: { backgroundColor: "#F8F7FF", borderColor: "#E2DEF7", borderRadius: 14, borderWidth: 1, marginTop: 10, padding: 13 },
   legalCardTitle: { color: "#352F67", fontSize: 14, fontWeight: "900", lineHeight: 20 },
   legalText: { color: "#475467", fontSize: 13, lineHeight: 19, marginTop: 8 },
+  legalFootnote: { color: "#667085", fontSize: 12, lineHeight: 17, marginTop: 18 },
   legalRequisitesButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 12, marginBottom: 3, marginTop: 20, paddingVertical: 12 },
   legalRequisitesButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
-  paymentItem: { color: "#344054", fontSize: 15, fontWeight: "750", marginTop: 22 },
+  paymentItem: { color: "#344054", fontSize: 15, fontWeight: "700", marginTop: 22 },
   paymentAmount: { color: "#155EEF", fontSize: 29, fontWeight: "900", marginTop: 7 },
   paymentHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 15 },
   paymentButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, marginTop: 20, paddingVertical: 13 },
@@ -3398,7 +3399,7 @@ const styles = StyleSheet.create({
   publicCommentSendText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
   publicCommentMessage: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 7 },
   detailsLabel: { color: "#667085", fontSize: 12, fontWeight: "700", marginTop: 9 },
-  detailsValue: { color: "#101828", fontSize: 15, fontWeight: "750", marginTop: 3 },
+  detailsValue: { color: "#101828", fontSize: 15, fontWeight: "700", marginTop: 3 },
   sellerProfilePanel: { backgroundColor: "#FFFFFF", borderRadius: 24, height: "78%", maxWidth: 560, padding: 20, width: "100%" },
   sellerProfilePanelCompact: { borderRadius: 0, flex: 1, height: undefined, maxWidth: undefined, paddingBottom: 22, paddingHorizontal: 20, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 18 : 24, width: "100%" },
   sellerProfileHeading: { flex: 1, minWidth: 0, marginRight: 12 },
@@ -3503,5 +3504,5 @@ const styles = StyleSheet.create({
   toast: { alignSelf: "center", backgroundColor: "#067647", borderRadius: 14, bottom: 82, paddingHorizontal: 18, paddingVertical: 12, position: "absolute" },
   toastText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   addButton: { backgroundColor: "#155EEF", borderRadius: 17, bottom: 18, left: 20, paddingVertical: 16, position: "absolute", right: 20, shadowColor: "#155EEF", shadowOpacity: 0.24, shadowRadius: 10 },
-  addText: { color: "#FFFFFF", fontSize: 16, fontWeight: "750", textAlign: "center" },
+  addText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700", textAlign: "center" },
 });
