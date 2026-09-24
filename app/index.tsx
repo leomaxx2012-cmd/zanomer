@@ -2222,7 +2222,7 @@ export default function HomeScreen() {
       </Pressable>
 
       {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
-        <View style={styles.regionPickerOverlay}>
+        <View style={[styles.regionPickerOverlay, { paddingTop: compactLayout ? 210 : 150 }]}>
           <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
           <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
             <View style={styles.platePickerTopRow}>
@@ -3092,8 +3092,8 @@ const styles = StyleSheet.create({
   platePickerPanel: { backgroundColor: "#FFFFFF", borderColor: "#B2CCFF", borderRadius: 16, borderWidth: 1, marginTop: 10, padding: 12, shadowColor: "#155EEF", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.12, shadowRadius: 12 },
   regionPickerPanel: { alignSelf: "flex-end", borderColor: "#D8D1FF", maxWidth: "100%", shadowColor: "#5143C2", width: 380, zIndex: 20 },
   regionPickerPanelDesktop: { left: "100%", marginLeft: 185, marginTop: 0, position: "absolute", top: -308, zIndex: 50 },
-  regionPickerOverlay: { alignItems: "center", backgroundColor: "rgba(16, 24, 40, 0.26)", flex: 1, justifyContent: "center", padding: 18 },
-  regionPickerModalPanel: { alignSelf: "center", marginTop: 0, width: "100%" },
+  regionPickerOverlay: { alignItems: "flex-end", backgroundColor: "transparent", flex: 1, justifyContent: "flex-start", paddingHorizontal: 16 },
+  regionPickerModalPanel: { alignSelf: "flex-end", marginTop: 0 },
   platePickerTopRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: 10 },
   platePickerTitle: { color: "#101828", fontSize: 14, fontWeight: "900" },
   platePickerClose: { color: "#155EEF", fontSize: 13, fontWeight: "800" },
