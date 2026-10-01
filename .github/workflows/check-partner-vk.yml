@@ -1,9 +1,10 @@
-name: Check permitted VK source
+name: Sync permitted VK listings
 
 on:
   workflow_dispatch:
   schedule:
-    # 03:30 Moscow time (00:30 UTC): one polite public-page availability check.
+    # 03:30 Moscow time (00:30 UTC): exactly one public request to the
+    # owner-approved VK community. Telegram is handled by its own workflow.
     - cron: "30 0 * * *"
 
 jobs:
@@ -16,4 +17,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node scripts/check-partner-vk-source.mjs
+          cache: npm
+      - run: npm install
+      - run: node scripts/sync-partner-vk-listings.mjs
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
