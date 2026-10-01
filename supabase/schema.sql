@@ -4,11 +4,16 @@
 create table if not exists public.auto_listings (
   id uuid primary key default gen_random_uuid(),
   owner_id uuid references auth.users(id) on delete cascade not null,
-  plate_left text not null check (char_length(plate_left) = 1),
-  plate_digits text not null check (plate_digits ~ '^[0-9]{3}$'),
-  plate_right text not null check (char_length(plate_right) = 2),
+  plate_left text not null,
+  plate_digits text not null,
+  plate_right text not null,
   region text not null,
   vehicle_type text not null default 'car' check (vehicle_type in ('car', 'motorcycle', 'truck')),
+  constraint auto_listings_plate_format_check check (
+    (vehicle_type = 'car' and char_length(plate_left) = 1 and plate_digits ~ '^[0-9]{3}$' and char_length(plate_right) = 2)
+    or (vehicle_type = 'motorcycle' and plate_left = '' and plate_digits ~ '^[0-9]{4}$' and char_length(plate_right) = 2)
+    or (vehicle_type = 'truck' and char_length(plate_left) = 2 and plate_digits ~ '^[0-9]{4}$' and plate_right = '')
+  ),
   price_rub integer not null check (price_rub > 0),
   featured_until timestamptz,
   status text not null default 'active' check (status in ('active', 'archived', 'moderation')),

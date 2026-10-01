@@ -43,8 +43,8 @@ const decodeHtml = (value) => value.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]
 
 function classifyTag(left, digits, right) {
   if (/^(\d)\1\1$/.test(digits)) return "Одинаковые цифры";
-  if (digits[0] === digits[2]) return "Зеркальный";
-  if (right[0] === right[1] || left === right[0]) return "Одинаковые буквы";
+  if (digits.length === 3 && digits[0] === digits[2]) return "Зеркальный";
+  if ((right.length === 2 && right[0] === right[1]) || (left.length === 1 && left === right[0])) return "Одинаковые буквы";
   if (digits === "001" || digits === "007") return "Нули";
   return "Красивый номер";
 }
@@ -100,12 +100,12 @@ async function notifySearchAlerts(rows) {
   return messages.length;
 }
 
-function createRow({ postId, postedAt, rawLeft, digits, rawRight, regionCode, rawPrice }) {
+function createRow({ postId, postedAt, rawLeft = "", digits, rawRight = "", regionCode, rawPrice, vehicle = "car" }) {
   const region = normaliseRegionCode(regionCode);
   const name = REGION_NAMES.get(region);
   const price = Number(rawPrice.replace(/[^\d]/g, ""));
   if (!name || !Number.isSafeInteger(price) || price < 5_000 || price > 50_000_000) return null;
-  const left = normalizeLetter(rawLeft);
+  const left = [...rawLeft].map(normalizeLetter).join("");
   const right = [...rawRight].map(normalizeLetter).join("");
   const compactId = String(postId).replace(/[^\d_-]/g, "");
   return {
@@ -114,7 +114,7 @@ function createRow({ postId, postedAt, rawLeft, digits, rawRight, regionCode, ra
     plate_digits: digits,
     plate_right: right,
     region: `${name} · ${region}`,
-    vehicle_type: "car",
+    vehicle_type: vehicle,
     price_rub: price,
     tag: classifyTag(left, digits, right),
     source_name: SOURCE.name,
@@ -132,6 +132,18 @@ function parseRows(text, postId, postedAt) {
   for (const match of text.matchAll(pattern)) {
     const [, rawLeft, digits, rawRight, regionCode, rawPrice] = match;
     const row = createRow({ postId, postedAt, rawLeft, digits, rawRight, regionCode, rawPrice });
+    if (row) rows.push(row);
+  }
+  const motorcycle = /(\d{4})\s?([АВЕКМНОРСТУХA-Z]{2})\s?(\d{2,3})[\s\S]{0,120}?(?:💰|цена\s*[:—-]?)\s*(\d[\d\s,]*)/gim;
+  for (const match of text.matchAll(motorcycle)) {
+    const [, digits, rawRight, regionCode, rawPrice] = match;
+    const row = createRow({ postId, postedAt, digits, rawRight, regionCode, rawPrice, vehicle: "motorcycle" });
+    if (row) rows.push(row);
+  }
+  const trailer = /([АВЕКМНОРСТУХA-Z]{2})\s?(\d{4})\s?(\d{2,3})[\s\S]{0,120}?(?:💰|цена\s*[:—-]?)\s*(\d[\d\s,]*)/gim;
+  for (const match of text.matchAll(trailer)) {
+    const [, rawLeft, digits, regionCode, rawPrice] = match;
+    const row = createRow({ postId, postedAt, rawLeft, digits, regionCode, rawPrice, vehicle: "truck" });
     if (row) rows.push(row);
   }
   return [...new Map(rows.map((row) => [row.id, row])).values()];

@@ -22,7 +22,7 @@ $$;
 -- публиковать один и тот же номер как отдельные предложения.
 drop index if exists public.auto_listings_unique_pending_or_active_plate_idx;
 create unique index if not exists auto_listings_unique_pending_or_active_plate_idx
-  on public.auto_listings (owner_id, plate_left, plate_digits, plate_right, region)
+  on public.auto_listings (owner_id, plate_left, plate_digits, plate_right, region, vehicle_type)
   where status in ('active', 'moderation');
 
 drop policy if exists "Users add only their listings" on public.auto_listings;

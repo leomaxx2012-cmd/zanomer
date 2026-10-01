@@ -104,6 +104,17 @@ const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
 const CATALOG_CACHE_KEY = "zanomer.catalog.v1";
 const allowedLetters = ["А", "В", "Е", "К", "М", "Н", "О", "Р", "С", "Т", "У", "Х"];
 const allowedDigits = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+type VehicleType = Plate["vehicle"];
+
+const plateFormat = (vehicle: VehicleType) => vehicle === "motorcycle"
+  ? { left: 0, digits: 4, right: 2, digitsPlaceholder: "1234", description: "4 цифры · 2 буквы" }
+  : vehicle === "truck"
+    ? { left: 2, digits: 4, right: 0, digitsPlaceholder: "1234", description: "2 буквы · 4 цифры" }
+    : { left: 1, digits: 3, right: 2, digitsPlaceholder: "111", description: "1 буква · 3 цифры · 2 буквы" };
+
+function formatPlateValue(left: string, digits: string, right: string, vehicle: VehicleType) {
+  return vehicle === "motorcycle" ? `${digits} ${right}`.trim() : vehicle === "truck" ? `${left} ${digits}`.trim() : `${left} ${digits} ${right}`.trim();
+}
 
 function TrailerIcon({ active = false }: { active?: boolean }) {
   return <View accessibilityLabel="Прицеп" style={[styles.trailerIcon, active && styles.trailerIconActive]}>
@@ -306,6 +317,7 @@ export default function HomeScreen() {
   const [subscriptionToastMessage, setSubscriptionToastMessage] = useState("");
   const [subscriptionSaving, setSubscriptionSaving] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
+  const [listingVehicle, setListingVehicle] = useState<Plate["vehicle"]>("car");
   const [listingLeftLetter, setListingLeftLetter] = useState("");
   const [listingDigits, setListingDigits] = useState("");
   const [listingRightLetters, setListingRightLetters] = useState("");
@@ -508,7 +520,7 @@ export default function HomeScreen() {
   function mapManagedListing(item: any, ownerName: string): Plate {
     return {
       id: item.id,
-      value: `${item.plate_left} ${item.plate_digits} ${item.plate_right}`,
+      value: formatPlateValue(item.plate_left, item.plate_digits, item.plate_right, item.vehicle_type as Plate["vehicle"]),
       leftLetter: item.plate_left,
       rightLetters: item.plate_right,
       digits: item.plate_digits,
@@ -1055,7 +1067,7 @@ export default function HomeScreen() {
 
       const toPartnerPlate = (item: Record<string, any>): Plate => ({
         id: item.id,
-        value: `${item.plate_left} ${item.plate_digits} ${item.plate_right}`,
+        value: formatPlateValue(item.plate_left, item.plate_digits, item.plate_right, item.vehicle_type as Plate["vehicle"]),
         leftLetter: item.plate_left,
         rightLetters: item.plate_right,
         digits: item.plate_digits,
@@ -1130,7 +1142,7 @@ export default function HomeScreen() {
         const sellerReviews = ratings.get(item.owner_id);
         return {
         id: item.id,
-        value: `${item.plate_left} ${item.plate_digits} ${item.plate_right}`,
+        value: formatPlateValue(item.plate_left, item.plate_digits, item.plate_right, item.vehicle_type as Plate["vehicle"]),
         leftLetter: item.plate_left,
         rightLetters: item.plate_right,
         digits: item.plate_digits,
@@ -1694,17 +1706,18 @@ export default function HomeScreen() {
   }
 
   function choosePlatePart(value: string) {
+    const format = plateFormat(vehicle);
     if (platePicker === "left") {
-      setLeftLetter(value);
-      setPlatePicker(null);
+      setLeftLetter((current) => format.left <= 1 || current.length >= format.left ? value : `${current}${value}`);
+      if (format.left <= 1) setPlatePicker(null);
       return;
     }
     if (platePicker === "right") {
-      setRightLetters((current) => current.length >= 2 ? value : `${current}${value}`);
+      setRightLetters((current) => current.length >= format.right ? value : `${current}${value}`);
       return;
     }
     if (platePicker === "digits") {
-      setDigits((current) => current.length >= 3 ? value : `${current}${value}`);
+      setDigits((current) => current.length >= format.digits ? value : `${current}${value}`);
     }
   }
 
@@ -1715,17 +1728,18 @@ export default function HomeScreen() {
   }
 
   function chooseListingPart(value: string) {
+    const format = plateFormat(listingVehicle);
     if (listingPicker === "left") {
-      setListingLeftLetter(value);
-      setListingPicker(null);
+      setListingLeftLetter((current) => format.left <= 1 || current.length >= format.left ? value : `${current}${value}`);
+      if (format.left <= 1) setListingPicker(null);
       return;
     }
     if (listingPicker === "right") {
-      setListingRightLetters((current) => current.length >= 2 ? value : `${current}${value}`);
+      setListingRightLetters((current) => current.length >= format.right ? value : `${current}${value}`);
       return;
     }
     if (listingPicker === "digits") {
-      setListingDigits((current) => current.length >= 3 ? value : `${current}${value}`);
+      setListingDigits((current) => current.length >= format.digits ? value : `${current}${value}`);
     }
   }
 
@@ -1755,18 +1769,30 @@ export default function HomeScreen() {
     return `${knownRegion?.title ?? "Регион"} · ${regionCode}`;
   }
 
+  function chooseListingVehicle(next: Plate["vehicle"]) {
+    setListingVehicle(next);
+    setListingLeftLetter("");
+    setListingDigits("");
+    setListingRightLetters("");
+    setListingPicker(null);
+  }
+
   async function addListing() {
     const priceValue = Number(listingPrice.replace(/\D/g, ""));
-    if (!profileName || !listingLeftLetter || listingDigits.length !== 3 || listingRightLetters.length !== 2 || !priceValue || !listingConfirmed) {
-      setListingMessage("Заполни номер и цену, а затем подтверди, что объявление размещает владелец.");
+    const format = plateFormat(listingVehicle);
+    const left = listingLeftLetter.toUpperCase();
+    const right = listingRightLetters.toUpperCase();
+    const formatIsFilled = left.length === format.left && listingDigits.length === format.digits && right.length === format.right;
+    if (!profileName || !formatIsFilled || !priceValue || !listingConfirmed) {
+      setListingMessage(`Введи номер формата «${format.description}», цену и подтверди объявление.`);
       return;
     }
     const normalizedRegionCode = listingRegion.replace(/\D/g, "").slice(0, 3);
     const normalizedRegion = listingRegionLabel(normalizedRegionCode);
-    const normalizedPlate = `${listingLeftLetter.toUpperCase()} ${listingDigits} ${listingRightLetters.toUpperCase()}`;
+    const normalizedPlate = formatPlateValue(left, listingDigits, right, listingVehicle);
     const hasForbiddenContact = /(https?:\/\/|www\.|t\.me\/|telegram|whatsapp|\+?\d[\d\s()\-]{8,}|[\w.+-]+@[\w-]+\.[\w.-]+)/i.test(listingComment);
-    const duplicate = catalog.some((item) => item.isSiteListing && item.seller === profileName && item.value === normalizedPlate && item.region.toLowerCase() === normalizedRegion.toLowerCase());
-    if (!allowedLetters.includes(listingLeftLetter.toUpperCase()) || !allowedLetters.includes(listingRightLetters[0]?.toUpperCase()) || !allowedLetters.includes(listingRightLetters[1]?.toUpperCase())) {
+    const duplicate = catalog.some((item) => item.isSiteListing && item.seller === profileName && item.vehicle === listingVehicle && item.value === normalizedPlate && item.region.toLowerCase() === normalizedRegion.toLowerCase());
+    if (![...left, ...right].every((letter) => allowedLetters.includes(letter))) {
       setListingMessage("В номере можно использовать только разрешённые буквы российского госномера.");
       return;
     }
@@ -1789,13 +1815,13 @@ export default function HomeScreen() {
     const entry: Plate = {
       id: `${Date.now()}`,
       value: normalizedPlate,
-      leftLetter: listingLeftLetter.toUpperCase(),
-      rightLetters: listingRightLetters.toUpperCase(),
+      leftLetter: left,
+      rightLetters: right,
       digits: listingDigits,
       region: normalizedRegion,
       price: `${priceValue.toLocaleString("ru-RU")} ₽`,
       priceValue,
-      vehicle: "car",
+      vehicle: listingVehicle,
       seller: profileName,
       createdAt: new Date().toISOString().slice(0, 10),
       tag: "На проверке",
@@ -1855,7 +1881,7 @@ export default function HomeScreen() {
       }
     }
     setAddOpen(false);
-    setListingLeftLetter(""); setListingDigits(""); setListingRightLetters(""); setListingRegion(""); setListingPrice("");
+    setListingVehicle("car"); setListingLeftLetter(""); setListingDigits(""); setListingRightLetters(""); setListingRegion(""); setListingPrice("");
     setListingComment("");
     setListingPhotoUri("");
     setListingConfirmed(false);
@@ -2227,18 +2253,16 @@ export default function HomeScreen() {
           ["motorcycle", "🏍️", "Мото"],
           ["truck", "🚛", "Прицеп"],
         ] as const).map(([type, icon, label]) => (
-          <Pressable key={type} onPress={() => setVehicle(type)} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
+          <Pressable key={type} onPress={() => { setVehicle(type); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
             <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
             <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
       </View>
-      <View style={styles.plateSearch}>
-        <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, 1))} onFocus={() => setPlatePicker("left")} placeholder="А" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={1} />
-        <View style={styles.plateDivider} />
-        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, 3))} onFocus={() => setPlatePicker("digits")} placeholder="111" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={3} />
-        <View style={styles.plateDivider} />
-        <TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
+      <View style={[styles.plateSearch, vehicle === "motorcycle" && styles.plateSearchMotorcycle, vehicle === "truck" && styles.plateSearchTrailer]}>
+        {vehicle !== "motorcycle" && <><TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, plateFormat(vehicle).left))} onFocus={() => setPlatePicker("left")} placeholder={vehicle === "truck" ? "АА" : "А"} placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={plateFormat(vehicle).left} /><View style={styles.plateDivider} /></>}
+        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, plateFormat(vehicle).digits))} onFocus={() => setPlatePicker("digits")} placeholder={plateFormat(vehicle).digitsPlaceholder} placeholderTextColor="#B8C0CC" style={[styles.plateInput, vehicle === "motorcycle" && styles.plateInputMotorcycle]} keyboardType="default" maxLength={plateFormat(vehicle).digits} />
+        {vehicle !== "truck" && <><View style={styles.plateDivider} /><TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={[styles.plateInput, vehicle === "motorcycle" && styles.plateInputMotorcycle]} autoCapitalize="characters" maxLength={2} /></>}
         <View style={styles.plateDivider} />
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text
@@ -2318,10 +2342,13 @@ export default function HomeScreen() {
           <View style={styles.addPanel}>
             <Text style={styles.addPanelTitle}>Новое объявление</Text>
             {!profileName ? <Text style={styles.addPanelHint}>Сначала войди через кнопку «Войти» сверху.</Text> : <>
+              <Text style={styles.listingTypeLabel}>Тип номера</Text>
+              <View style={styles.listingVehicleTabs}>{([ ["car", "🚗", "Авто"], ["motorcycle", "🏍️", "Мото"], ["truck", "🚛", "Прицеп"] ] as const).map(([type, icon, label]) => <Pressable key={type} onPress={() => chooseListingVehicle(type)} style={[styles.listingVehicleTab, listingVehicle === type && styles.listingVehicleTabActive]}><Text style={[styles.listingVehicleTabText, listingVehicle === type && styles.listingVehicleTabTextActive]}>{icon} {label}</Text></Pressable>)}</View>
+              <Text style={styles.listingFormatHint}>{listingVehicle === "motorcycle" ? "Мото: 4 цифры сверху и 2 буквы снизу." : listingVehicle === "truck" ? "Прицеп: 2 буквы и 4 цифры." : "Авто: 1 буква, 3 цифры, 2 буквы."}</Text>
               <View style={styles.addPlateRow}>
-                <TextInput value={listingLeftLetter} onFocus={() => setListingPicker("left")} onChangeText={(value) => setListingLeftLetter(normalizePlateLetters(value, 1, false))} placeholder="А" placeholderTextColor="#98A2B3" style={styles.addSmallInput} autoCapitalize="characters" maxLength={1} />
-                <TextInput value={listingDigits} onFocus={() => setListingPicker("digits")} onChangeText={(value) => setListingDigits(normalizePlateDigits(value, 3, false))} placeholder="777" placeholderTextColor="#98A2B3" style={styles.addDigitsInput} keyboardType="number-pad" maxLength={3} />
-                <TextInput value={listingRightLetters} onFocus={() => setListingPicker("right")} onChangeText={(value) => setListingRightLetters(normalizePlateLetters(value, 2, false))} placeholder="АА" placeholderTextColor="#98A2B3" style={styles.addLettersInput} autoCapitalize="characters" maxLength={2} />
+                {listingVehicle !== "motorcycle" && <TextInput value={listingLeftLetter} onFocus={() => setListingPicker("left")} onChangeText={(value) => setListingLeftLetter(normalizePlateLetters(value, plateFormat(listingVehicle).left, false))} placeholder={listingVehicle === "truck" ? "АА" : "А"} placeholderTextColor="#98A2B3" style={[styles.addSmallInput, listingVehicle === "truck" && styles.addLettersInput]} autoCapitalize="characters" maxLength={plateFormat(listingVehicle).left} />}
+                <TextInput value={listingDigits} onFocus={() => setListingPicker("digits")} onChangeText={(value) => setListingDigits(normalizePlateDigits(value, plateFormat(listingVehicle).digits, false))} placeholder={plateFormat(listingVehicle).digitsPlaceholder} placeholderTextColor="#98A2B3" style={styles.addDigitsInput} keyboardType="number-pad" maxLength={plateFormat(listingVehicle).digits} />
+                {listingVehicle !== "truck" && <TextInput value={listingRightLetters} onFocus={() => setListingPicker("right")} onChangeText={(value) => setListingRightLetters(normalizePlateLetters(value, 2, false))} placeholder="АА" placeholderTextColor="#98A2B3" style={styles.addLettersInput} autoCapitalize="characters" maxLength={2} />}
               </View>
               {listingPicker && listingPicker !== "region" && <View style={styles.listingPickerPanel}>
                 <View style={styles.listingPickerHeader}>
@@ -2479,7 +2506,7 @@ export default function HomeScreen() {
             <View style={styles.card}>
               <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
-                  <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} />
+                  <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} vehicle={item.vehicle} />
                 </Pressable>
                   <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
@@ -2591,7 +2618,7 @@ export default function HomeScreen() {
                 <Pressable onPress={() => setSelectedPlate(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
               </View>
               <View style={styles.detailsPlatePreview}>
-                <PlateFace leftLetter={selectedPlate?.leftLetter} digits={selectedPlate?.digits} rightLetters={selectedPlate?.rightLetters} region={selectedPlate?.region.split(" · ")[1] ?? ""} />
+                <PlateFace leftLetter={selectedPlate?.leftLetter} digits={selectedPlate?.digits} rightLetters={selectedPlate?.rightLetters} region={selectedPlate?.region.split(" · ")[1] ?? ""} vehicle={selectedPlate?.vehicle} />
               </View>
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
               <View style={styles.detailsBlock}>
@@ -3019,7 +3046,10 @@ const styles = StyleSheet.create({
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", minHeight: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
+  plateSearchMotorcycle: { alignSelf: "center", maxWidth: 450, minHeight: 100 },
+  plateSearchTrailer: { alignSelf: "center", maxWidth: 620 },
   plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", textAlignVertical: "center", letterSpacing: 1, minWidth: 0, textAlign: "center" },
+  plateInputMotorcycle: { fontSize: 32 },
   plateDivider: { backgroundColor: "#252525", alignSelf: "stretch", width: 2 },
   quickFiltersTitle: { color: "#344054", fontSize: 14, fontWeight: "900", marginTop: 16 },
   quickFilters: { flexDirection: "row", flexWrap: "wrap", gap: 9, paddingBottom: 3, paddingTop: 9, width: "100%" },
@@ -3073,6 +3103,13 @@ const styles = StyleSheet.create({
   addPanel: { backgroundColor: "#F8FAFC", borderColor: "#B2CCFF", borderRadius: 16, borderWidth: 1, marginTop: 12, padding: 14 },
   addPanelTitle: { color: "#101828", fontSize: 17, fontWeight: "800" },
   addPanelHint: { color: "#667085", fontSize: 13, lineHeight: 18, marginTop: 7 },
+  listingTypeLabel: { color: "#344054", fontSize: 12, fontWeight: "800", marginTop: 12 },
+  listingVehicleTabs: { flexDirection: "row", gap: 7, marginTop: 7 },
+  listingVehicleTab: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 9, borderWidth: 1, flex: 1, paddingHorizontal: 6, paddingVertical: 9 },
+  listingVehicleTabActive: { backgroundColor: "#5143C2", borderColor: "#5143C2" },
+  listingVehicleTabText: { color: "#344054", fontSize: 12, fontWeight: "800" },
+  listingVehicleTabTextActive: { color: "#FFFFFF" },
+  listingFormatHint: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 6 },
   addPlateRow: { flexDirection: "row", gap: 7, marginTop: 11 },
   addSmallInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", fontSize: 18, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 10, textAlign: "center", width: 55 },
   addDigitsInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", flex: 1, fontSize: 18, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 10, textAlign: "center" },
