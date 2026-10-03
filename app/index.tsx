@@ -1316,7 +1316,28 @@ export default function HomeScreen() {
       if (!session?.user && event !== "SIGNED_OUT") return;
       void setProfile(session?.user ?? null);
     });
-    return () => subscription.subscription.unsubscribe();
+    // При переходе между Wi‑Fi и мобильной сетью SDK не всегда сам сразу
+    // обновляет токен. Пробуем восстановить уже сохранённую сессию, но не
+    // разлогиниваем пользователя, если сеть всё ещё недоступна.
+    const restoreSavedSession = () => {
+      void supabase.auth.getSession().then(async ({ data }) => {
+        if (!data.session) return;
+        const { data: refreshed } = await supabase.auth.refreshSession();
+        if (refreshed.session?.user) void setProfile(refreshed.session.user);
+      }).catch(() => {
+        // Сохранённая сессия остаётся действующей до следующей удачной связи.
+      });
+    };
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") restoreSavedSession();
+    });
+    const onlineHandler = () => restoreSavedSession();
+    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("online", onlineHandler);
+    return () => {
+      subscription.subscription.unsubscribe();
+      appStateSubscription.remove();
+      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("online", onlineHandler);
+    };
   }, []);
 
   async function loadSavedSearches(ownerId: string) {
