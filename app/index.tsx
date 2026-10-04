@@ -712,6 +712,25 @@ export default function HomeScreen() {
     setChatRecipientId(listing.ownerId === activeUserId ? messages.filter((item) => item.sender_id !== activeUserId).at(-1)?.sender_id ?? "" : listing.ownerId ?? "");
     setChatOpen(true);
   }
+
+  useEffect(() => {
+    if (!supabase || !currentUserId) {
+      setHasPlusSubscription(false);
+      return;
+    }
+    const loadPlusSubscription = async () => {
+      const { data } = await supabase
+        .from("service_payments")
+        .select("paid_at")
+        .eq("service_code", "plus_month")
+        .eq("status", "succeeded")
+        .order("paid_at", { ascending: false })
+        .limit(1);
+      const paidAt = data?.[0]?.paid_at ? new Date(data[0].paid_at).getTime() : 0;
+      setHasPlusSubscription(paidAt > Date.now() - 30 * 24 * 60 * 60 * 1000);
+    };
+    void loadPlusSubscription();
+  }, [currentUserId]);
   function openLegalDocument(document: Exclude<LegalDocument, "overview">) {
     setLegalDocument(document);
     if (typeof window !== "undefined" && window.history) window.history.replaceState(null, "", legalPageUrl(document));
