@@ -93,7 +93,7 @@ type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
 type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
-type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites";
+type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites" | "plus" | "highlight" | "hot";
 
 const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
   firstTen: "Первая десятка",
@@ -157,28 +157,36 @@ function isRequisitesPage() {
 }
 function isPaymentInfoPage() {
   if (typeof window === "undefined" || !window.location) return false;
-  return ["payment-info", "offer", "refund", "delivery", "privacy"].includes(new URLSearchParams(window.location.search).get("page") ?? "");
+  return ["payment-info", "offer", "refund", "delivery", "privacy", "plus", "highlight", "hot"].includes(new URLSearchParams(window.location.search).get("page") ?? "");
 }
-function legalPageUrl(page: "offer" | "refund" | "delivery" | "privacy" | "requisites") {
+function legalPageUrl(page: Exclude<LegalDocument, "overview">) {
   if (typeof window !== "undefined" && window.location) {
     const url = new URL(window.location.href);
     url.searchParams.set("page", page);
     return url.toString();
   }
-  return `https://zanomer.vercel.app/?page=${page}`;
+  return `https://zanomerom.ru/?page=${page}`;
 }
 function legalDocumentFromUrl(): LegalDocument {
   if (typeof window === "undefined" || !window.location) return "overview";
   const page = new URLSearchParams(window.location.search).get("page");
-  return ["offer", "refund", "delivery", "privacy", "requisites"].includes(page ?? "") ? page as LegalDocument : "overview";
+  return ["offer", "refund", "delivery", "privacy", "requisites", "plus", "highlight", "hot"].includes(page ?? "") ? page as LegalDocument : "overview";
 }
 const legalDocumentDetails: Record<Exclude<LegalDocument, "overview">, { title: string; body: string }> = {
   offer: { title: "Публичная оферта", body: "ЗаНомером оказывает только цифровые услуги: доступ к дополнительным функциям сервиса и продвижение объявления. Оплата не является оплатой государственного регистрационного знака, автомобиля или иной сделки между пользователями. Договор на услугу заключается после успешной оплаты; её стоимость, состав и срок действия показываются до нажатия кнопки оплаты." },
-  refund: { title: "Возврат средств", body: "Подписку можно отменить до следующего списания. Если оплаченная услуга не была активирована по технической ошибке, обратитесь в течение 14 дней: мы проверим обращение и при подтверждении ошибки вернём деньги тем же способом оплаты." },
-  delivery: { title: "Оказание услуг", body: "Услуги оказываются онлайн; физическая доставка товаров не производится. Подписка и продвижение активируются автоматически после подтверждения платежа. ЗаНомером не получает и не хранит деньги по сделке между продавцом и покупателем объявления." },
+  refund: { title: "Возврат средств", body: "Для отказа от услуги или проверки ошибочного платежа напишите на zanomerom@mail.ru: укажите аккаунт, услугу, дату и идентификатор платежа, но не данные банковской карты. Возврат рассматривается с учётом фактически оказанной услуги и применимых требований законодательства. При подтверждении возврата деньги возвращаются исходным способом оплаты; срок зачисления зависит от банка. Права потребителя, предусмотренные законом, сохраняются. Оплата разовая: автоматического продления и повторных списаний нет." },
+  delivery: { title: "Оказание услуг", body: "Услуги оказываются онлайн в аккаунте, с которого сделана оплата; физической доставки нет. После подтверждения платежа подписка включается автоматически. Покупка продвижения зачисляет размещение на баланс: откройте профиль → Мои объявления → своё активное объявление → Выделить в горячие предложения. Срок продвижения начинается при применении к объявлению. Если статус не обновился, вернитесь на сайт и обратитесь на zanomerom@mail.ru с идентификатором платежа. ЗаНомером не принимает деньги по сделкам между пользователями." },
   privacy: { title: "Политика обработки персональных данных", body: "Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: e-mail, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Данные банковских карт сервис не хранит: их обрабатывает выбранный платёжный партнёр на защищённой странице оплаты." },
   requisites: { title: "Реквизиты и контакты", body: "ИП Леонович Александр Леонидович, ИНН 504406730552, ОГРНИП 319508100089501. Контактный e-mail: zanomerom@mail.ru." },
+  plus: { title: "ЗаНомером Плюс — 199 ₽", body: "Разовая оплата за 30 календарных дней. Подписка автоматически включается после подтверждения платежа в аккаунте покупателя. Лимиты сохранённых поисков и избранных номеров увеличиваются с 15 до 30; доступен график изменения цены при наличии истории. Сохранённые поиски помогают получать уведомления о подходящих объявлениях. Автоматических повторных списаний нет. Повторная покупка продлевает действующий срок. Это доступ к функциям сервиса, а не покупка госномера." },
+  highlight: { title: "Выделение на 48 часов — 129 ₽", body: "Одна покупка даёт одно выделение собственного активного объявления. После подтверждения оплаты размещение появляется на балансе профиля. Откройте Мои объявления, выберите своё прошедшее модерацию объявление и нажмите Выделить в горячие предложения. После применения оно получает выделение и показывается в блоке Горячие предложения в течение 48 часов. Срок отсчитывается от применения, а не покупки. Продвижение не гарантирует продажу, просмотры или отклики и не оплачивает сам госномер." },
+  hot: { title: "Горячее предложение — 399 ₽", body: "Одна покупка даёт одно постоянное горячее размещение собственного активного объявления. После подтверждения платежа размещение зачисляется на баланс. В профиле откройте Мои объявления, выберите своё прошедшее модерацию объявление и примените горячее размещение. Оно показывается в Горячих предложениях без фиксированного срока окончания, пока объявление активно и сервис работает. После снятия объявления с публикации показ прекращается. Продвижение не гарантирует продажу или количество откликов; деньги за госномер сервис не принимает." },
 };
+const paidServiceCheckout = {
+  plus: { title: "Подписка ЗаНомером Плюс на месяц", amount: "199 ₽", code: "plus_month" },
+  highlight: { title: "Выделение объявления на 48 часов", amount: "129 ₽", code: "highlight_48h" },
+  hot: { title: "Горячее предложение", amount: "399 ₽", code: "hot_listing" },
+} as const;
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
 const latinPlateLetters: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
@@ -2965,6 +2973,12 @@ export default function HomeScreen() {
             <ScrollView style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках. Площадка не продаёт номера и не принимает оплату за них.</Text>
               {legalDocument !== "overview" && <View style={styles.openedLegalDocument}><Text style={styles.openedLegalTitle}>{legalDocumentDetails[legalDocument].title}</Text><Text style={styles.legalText}>{legalDocumentDetails[legalDocument].body}</Text><Pressable onPress={() => { setLegalDocument("overview"); clearLegalPageFromUrl(); }}><Text style={styles.legalLink}>← Все документы</Text></Pressable></View>}
+              {(legalDocument === "plus" || legalDocument === "highlight" || legalDocument === "hot") && <View style={styles.legalCard}>
+                <Text style={styles.legalCardTitle}>Получение и оплата услуги</Text>
+                <Text style={styles.legalText}>Для покупки нужен аккаунт. Перед оплатой ознакомьтесь с офертой, порядком оказания услуги и возврата ниже. Услуга начисляется после подтверждения платежа, а не просто после возвращения на сайт.</Text>
+                <Pressable style={styles.comingSoonButton} onPress={() => { const service = paidServiceCheckout[legalDocument]; closePaymentInfo(); openTestPayment(service.title, service.amount, service.code); }}><Text style={styles.comingSoonButtonText}>Перейти к оплате · {paidServiceCheckout[legalDocument].amount}</Text></Pressable>
+                <Text style={styles.legalText}>Поддержка: zanomerom@mail.ru · +7 (495) 268-01-43.</Text>
+              </View>}
               <Text style={styles.legalHeading}>Документы и информация</Text>
               <View style={styles.legalLinks}>
                 <Pressable onPress={() => openLegalDocument("offer")}><Text style={styles.legalLink}>Публичная оферта</Text></Pressable>
@@ -2973,19 +2987,23 @@ export default function HomeScreen() {
                 <Pressable onPress={() => openLegalDocument("privacy")}><Text style={styles.legalLink}>Политика обработки данных</Text></Pressable>
                 <Pressable onPress={() => openLegalDocument("requisites")}><Text style={styles.legalLink}>Реквизиты и контакты</Text></Pressable>
               </View>
+              {legalDocument === "overview" && <>
               <Text style={styles.legalHeading}>Платные услуги</Text>
-              <View style={styles.legalCard}>
+              <Pressable accessibilityRole="link" onPress={() => openLegalDocument("plus")} style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Подписка ЗаНомером Плюс — 199 ₽ в месяц</Text>
-                <Text style={styles.legalText}>Даёт расширенные возможности сервиса и уведомления о сохранённых поисках. Подписка действует 30 календарных дней с момента оплаты.</Text>
-              </View>
-              <View style={styles.legalCard}>
+                <Text style={styles.legalText}>30 дней доступа к дополнительным функциям. Разовая оплата, без автоматических списаний.</Text>
+                <Text style={styles.legalLink}>Подробнее →</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" onPress={() => openLegalDocument("highlight")} style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Выделение объявления — 129 ₽</Text>
-                <Text style={styles.legalText}>Объявление отображается в блоке «Горячие предложения» и получает визуальное выделение на 48 часов.</Text>
-              </View>
-              <View style={styles.legalCard}>
+                <Text style={styles.legalText}>Одно размещение на балансе профиля. Примените к своему активному объявлению на 48 часов.</Text>
+                <Text style={styles.legalLink}>Подробнее →</Text>
+              </Pressable>
+              <Pressable accessibilityRole="link" onPress={() => openLegalDocument("hot")} style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Горячее предложение навсегда — 399 ₽</Text>
-                <Text style={styles.legalText}>Объявление постоянно отображается в блоке «Горячие предложения», пока активно на площадке.</Text>
-              </View>
+                <Text style={styles.legalText}>Одно постоянное размещение для своего объявления, пока оно активно и сервис работает.</Text>
+                <Text style={styles.legalLink}>Подробнее →</Text>
+              </Pressable>
               <Text style={styles.legalHeading}>Как работает сервис</Text>
               <Text style={styles.legalText}>ЗаНомером предоставляет площадку для публикации и поиска объявлений. Продавец самостоятельно размещает объявление и отвечает за его содержание. Покупатель связывается с продавцом напрямую в личном чате. Сервис не участвует в выборе, передаче, регистрации или оплате государственного регистрационного знака.</Text>
               <Text style={styles.legalHeading}>Что именно оплачивается</Text>
@@ -2993,13 +3011,13 @@ export default function HomeScreen() {
               <Text style={styles.legalHeading}>Порядок сделки между пользователями</Text>
               <Text style={styles.legalText}>Условия сделки, проверку документов, передачу и расчёты продавец и покупатель согласуют самостоятельно вне сервиса. ЗаНомером не является агентом, комиссионером, продавцом номера или гарантом исполнения такой сделки. Споры о сделке между пользователями не относятся к платным услугам сервиса.</Text>
               <Text style={styles.legalHeading}>Как получается услуга</Text>
-              <Text style={styles.legalText}>После успешной оплаты услуга активируется автоматически в личном кабинете. Подписка открывает график изменения цены и увеличивает лимит сохранённых поисков и избранных номеров с 15 до 30. Подписка и продвижение относятся только к работе сервиса и не являются оплатой самого номера.</Text>
+              <Text style={styles.legalText}>{legalDocumentDetails.delivery.body}</Text>
               <Text style={styles.legalHeading}>Публичная оферта</Text>
               <Text style={styles.legalText}>Оплачивая подписку или продвижение объявления, пользователь принимает условия настоящей публичной оферты. Исполнитель предоставляет цифровые услуги доступа к функциям сервиса и продвижения объявления. Договор считается заключённым после успешной оплаты. Стоимость, состав услуги и срок её действия показываются до нажатия кнопки оплаты.</Text>
               <Text style={styles.legalHeading}>Условия использования и возврат</Text>
-              <Text style={styles.legalText}>Перед оплатой пользователь видит название услуги, её стоимость и срок. Отменить подписку можно до следующего списания. Если платная услуга не была активирована по технической ошибке, обратитесь по телефону, указанному в реквизитах, в течение 14 дней — мы проверим обращение и при подтверждении ошибки вернём деньги тем же способом оплаты.</Text>
+              <Text style={styles.legalText}>{legalDocumentDetails.refund.body}</Text>
               <Text style={styles.legalHeading}>Оказание услуги и доставка</Text>
-              <Text style={styles.legalText}>Услуги оказываются онлайн: физическая доставка товара не производится. Подписка и продвижение активируются автоматически после подтверждения платежа. Пользователь получает результат в личном кабинете и на карточке объявления.</Text>
+              <Text style={styles.legalText}>{legalDocumentDetails.delivery.body}</Text>
               <Text style={styles.legalText}>ЗаНомером не продаёт государственные номера, не является стороной сделки между продавцом и покупателем объявления и не принимает деньги за номер.</Text>
               <Text style={styles.legalHeading}>Политика обработки персональных данных</Text>
               <Text style={styles.legalText}>Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: адрес электронной почты, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Платёжные реквизиты карт сервис не хранит — их обрабатывает платёжный партнёр. По вопросам обработки данных и безопасности можно написать на zanomerom@mail.ru или позвонить по телефону ниже.</Text>
@@ -3023,6 +3041,7 @@ export default function HomeScreen() {
                 <Pressable onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.requisitesPhone}>+7 (495) 268-01-43</Text></Pressable>
               </View>
               <Text style={styles.legalFootnote}>Все разделы доступны по кнопке ⓘ в шапке сайта. Приём платежей будет подключён только для указанных цифровых услуг сервиса.</Text>
+              </>}
             </ScrollView>
           </View>
         </View>
