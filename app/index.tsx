@@ -362,14 +362,37 @@ export default function HomeScreen() {
   const [commentAction, setCommentAction] = useState<PublicComment | null>(null);
   const [reportingPublicComment, setReportingPublicComment] = useState<PublicComment | null>(null);
   const [regionPickerGroup, setRegionPickerGroup] = useState<string | null>(null);
-  const [testPayment, setTestPayment] = useState<{ title: string; amount: string } | null>(null);
+  const [testPayment, setTestPayment] = useState<{ title: string; amount: string; serviceCode: "plus_month" | "highlight_48h" | "highlight_pack_5" | "hot_listing" | "hot_pack_5" } | null>(null);
+  const [paymentStarting, setPaymentStarting] = useState(false);
+  const [paymentMessage, setPaymentMessage] = useState("");
   const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(() => isPaymentInfoPage() || isRequisitesPage());
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(() => legalDocumentFromUrl());
   const [inAppNotice, setInAppNotice] = useState<AppNotification | null>(null);
 
-  function openTestPayment(title: string, amount: string) {
-    setTestPayment({ title, amount });
+  function openTestPayment(title: string, amount: string, serviceCode: "plus_month" | "highlight_48h" | "highlight_pack_5" | "hot_listing" | "hot_pack_5") {
+    setPaymentMessage("");
+    setTestPayment({ title, amount, serviceCode });
+  }
+
+  async function startPayment() {
+    if (!testPayment || paymentStarting) return;
+    if (!supabase || !currentUserId) {
+      setPaymentMessage("Войди в аккаунт, чтобы перейти к оплате.");
+      return;
+    }
+    setPaymentStarting(true);
+    setPaymentMessage("");
+    try {
+      const { data, error } = await supabase.functions.invoke("create-yookassa-payment", { body: { serviceCode: testPayment.serviceCode } });
+      if (error || !data?.confirmationUrl) throw error ?? new Error("Payment URL is missing");
+      await Linking.openURL(data.confirmationUrl);
+      setPaymentMessage("Страница оплаты открыта. После успешной оплаты вернись в ЗаНомером — статус обновится автоматически.");
+    } catch {
+      setPaymentMessage("Оплата пока недоступна. Попробуй чуть позже или проверь подключение ЮKassa.");
+    } finally {
+      setPaymentStarting(false);
+    }
   }
 
   function resetSearchAndFilters() {
@@ -2415,12 +2438,12 @@ export default function HomeScreen() {
           <Text style={styles.boostTitle}>🔥 Переместить в горячие предложения</Text>
           <Text style={styles.boostText}>Подними объявление в блок «Горячие предложения» и выше в каталоге.</Text>
           <View style={styles.priceRow}>
-            <Pressable onPress={() => openTestPayment("Выделение объявления на 48 часов", "129 ₽")} style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Выделение объявления на 48 часов", "129 ₽", "highlight_48h")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>1 выделение</Text>
               <Text style={styles.priceValue}>129 ₽</Text>
               <Text style={styles.priceTerm}>на 48 часов</Text>
             </Pressable>
-            <Pressable onPress={() => openTestPayment("Пакет из 5 выделений", "499 ₽")} style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Пакет из 5 выделений", "499 ₽", "highlight_pack_5")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>5 выделений</Text>
               <Text style={styles.priceValue}>499 ₽</Text>
               <Text style={styles.priceTerm}>99,80 ₽ за одно · на 48 ч.</Text>
@@ -2429,12 +2452,12 @@ export default function HomeScreen() {
           <Text style={styles.priceDiscount}>В пакете экономия 146 ₽</Text>
           <Text style={styles.permanentLabel}>Горячие предложения навсегда</Text>
           <View style={styles.priceRow}>
-            <Pressable onPress={() => openTestPayment("Горячее предложение навсегда", "399 ₽")} style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Горячее предложение навсегда", "399 ₽", "hot_listing")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>1 размещение</Text>
               <Text style={styles.priceValue}>399 ₽</Text>
               <Text style={styles.priceTerm}>пока объявление активно</Text>
             </Pressable>
-            <Pressable onPress={() => openTestPayment("Пакет из 5 горячих размещений", "1 599 ₽")} style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Пакет из 5 горячих размещений", "1 599 ₽", "hot_pack_5")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>5 размещений</Text>
               <Text style={styles.priceValue}>1 599 ₽</Text>
               <Text style={styles.priceTerm}>319,80 ₽ за одно</Text>
@@ -2452,7 +2475,7 @@ export default function HomeScreen() {
           <Text style={styles.premiumItem}>◉ Ранний доступ к объявлениям — на 15 минут раньше</Text>
           <Text style={styles.premiumItem}>◉ График изменения цены номера</Text>
           <Text style={styles.premiumItem}>◉ До 30 сохранённых поисков и избранных номеров</Text>
-          <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Перейти к оплате</Text></Pressable>
+          <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽", "plus_month")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Перейти к оплате</Text></Pressable>
         </View>
       </View>}
 
@@ -2838,8 +2861,9 @@ export default function HomeScreen() {
             </View>
             <Text style={styles.paymentItem}>{testPayment?.title}</Text>
             <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
-            <Text style={styles.paymentHint}>Приём платежей пока не подключён. До подтверждения платежа подписка, график цен, расширенные лимиты и «Горячие предложения» остаются закрытыми.</Text>
-            <Pressable onPress={() => setTestPayment(null)} style={styles.paymentButton}><Text style={styles.paymentButtonText}>Понятно</Text></Pressable>
+            <Text style={styles.paymentHint}>Оплата проводится на защищённой странице ЮKassa. Доступ к услуге откроется только после подтверждения платежа.</Text>
+            {!!paymentMessage && <Text style={styles.paymentHint}>{paymentMessage}</Text>}
+            <Pressable disabled={paymentStarting} onPress={() => { void startPayment(); }} style={[styles.paymentButton, paymentStarting && styles.saveSearchButtonDisabled]}><Text style={styles.paymentButtonText}>{paymentStarting ? "Открываем оплату…" : "Перейти к оплате"}</Text></Pressable>
           </Pressable>
         </Pressable>
       </Modal>
