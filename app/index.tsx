@@ -93,7 +93,7 @@ type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
 type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
-type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites" | "plus" | "highlight" | "hot" | "hot-pack";
+type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites" | "plus" | "highlight" | "hot" | "highlight-pack" | "hot-pack";
 
 const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
   firstTen: "Первая десятка",
@@ -157,7 +157,7 @@ function isRequisitesPage() {
 }
 function isPaymentInfoPage() {
   if (typeof window === "undefined" || !window.location) return false;
-  return ["payment-info", "offer", "refund", "delivery", "privacy", "plus", "highlight", "hot", "hot-pack"].includes(new URLSearchParams(window.location.search).get("page") ?? "");
+  return ["payment-info", "offer", "refund", "delivery", "privacy", "plus", "highlight", "hot", "highlight-pack", "hot-pack"].includes(new URLSearchParams(window.location.search).get("page") ?? "");
 }
 function legalPageUrl(page: Exclude<LegalDocument, "overview">) {
   if (typeof window !== "undefined" && window.location) {
@@ -170,7 +170,7 @@ function legalPageUrl(page: Exclude<LegalDocument, "overview">) {
 function legalDocumentFromUrl(): LegalDocument {
   if (typeof window === "undefined" || !window.location) return "overview";
   const page = new URLSearchParams(window.location.search).get("page");
-  return ["offer", "refund", "delivery", "privacy", "requisites", "plus", "highlight", "hot", "hot-pack"].includes(page ?? "") ? page as LegalDocument : "overview";
+  return ["offer", "refund", "delivery", "privacy", "requisites", "plus", "highlight", "hot", "highlight-pack", "hot-pack"].includes(page ?? "") ? page as LegalDocument : "overview";
 }
 const legalDocumentDetails: Record<Exclude<LegalDocument, "overview">, { title: string; body: string }> = {
   offer: { title: "Публичная оферта", body: "ЗаНомером оказывает только цифровые услуги: доступ к дополнительным функциям сервиса и продвижение объявления. Оплата не является оплатой государственного регистрационного знака, автомобиля или иной сделки между пользователями. Договор на услугу заключается после успешной оплаты; её стоимость, состав и срок действия показываются до нажатия кнопки оплаты." },
@@ -181,13 +181,15 @@ const legalDocumentDetails: Record<Exclude<LegalDocument, "overview">, { title: 
   plus: { title: "ЗаНомером Плюс — 199 ₽", body: "Разовая оплата за 30 календарных дней. Подписка автоматически включается после подтверждения платежа в аккаунте покупателя. Лимиты сохранённых поисков и избранных номеров увеличиваются с 15 до 30; доступен график изменения цены при наличии истории. Сохранённые поиски помогают получать уведомления о подходящих объявлениях. Автоматических повторных списаний нет. Повторная покупка продлевает действующий срок. Это доступ к функциям сервиса, а не покупка госномера." },
   highlight: { title: "Выделение на 48 часов — 129 ₽", body: "Одна покупка даёт одно выделение собственного активного объявления. После подтверждения оплаты размещение появляется на балансе профиля. Откройте Мои объявления, выберите своё прошедшее модерацию объявление и нажмите Выделить в горячие предложения. После применения оно получает выделение и показывается в блоке Горячие предложения в течение 48 часов. Срок отсчитывается от применения, а не покупки. Продвижение не гарантирует продажу, просмотры или отклики и не оплачивает сам госномер." },
   hot: { title: "Горячее предложение — 399 ₽", body: "Одна покупка даёт одно постоянное горячее размещение собственного активного объявления. После подтверждения платежа размещение зачисляется на баланс. В профиле откройте Мои объявления, выберите своё прошедшее модерацию объявление и примените горячее размещение. Оно показывается в Горячих предложениях без фиксированного срока окончания, пока объявление активно и сервис работает. После снятия объявления с публикации показ прекращается. Продвижение не гарантирует продажу или количество откликов; деньги за госномер сервис не принимает." },
-  "hot-pack": { title: "5 горячих размещений — 1 599 ₽", body: "Разовая покупка зачисляет 5 горячих размещений на баланс профиля после подтверждения платежа. В профиле откройте Мои объявления, выберите своё активное объявление, прошедшее модерацию, и примените горячее размещение. Каждое применение расходует одно размещение из пакета. Можно продвинуть до пяти своих объявлений; оставшиеся размещения сохраняются на балансе и не применяются автоматически. Каждое выбранное объявление показывается в Горячих предложениях без фиксированного срока окончания, пока оно активно и сервис работает. При снятии объявления с публикации его показ прекращается. Продвижение не гарантирует продажу, просмотры или отклики. Оплачивается цифровая услуга сервиса, не госномер." },
+  "hot-pack": { title: "5 горячих размещений навсегда — 1 599 ₽", body: "Разовая покупка зачисляет 5 горячих размещений на баланс профиля после подтверждения платежа. В профиле откройте Мои объявления, выберите своё активное объявление, прошедшее модерацию, и примените горячее размещение. Каждое применение расходует одно размещение из пакета. Можно продвинуть до пяти своих объявлений; оставшиеся размещения сохраняются на балансе и не применяются автоматически. Каждое выбранное объявление показывается в Горячих предложениях без фиксированного срока окончания, пока оно активно и сервис работает. При снятии объявления с публикации его показ прекращается. Продвижение не гарантирует продажу, просмотры или отклики. Оплачивается цифровая услуга сервиса, не госномер." },
+  "highlight-pack": { title: "5 выделений на 48 часов — 499 ₽", body: "Разовая покупка зачисляет 5 выделений на баланс профиля после подтверждения платежа. В профиле откройте Мои объявления, выберите своё активное объявление, прошедшее модерацию, и примените выделение на 48 часов. Каждое применение расходует одно выделение из пакета. Срок каждого выделения — 48 часов с момента применения к объявлению, а не с момента покупки пакета. Неиспользованные выделения остаются на балансе. Объявление получает визуальное выделение и показывается в Горячих предложениях на время действия услуги. Продвижение не гарантирует продажу или отклики и не оплачивает сам госномер." },
 };
 const paidServiceCheckout = {
+  "highlight-pack": { title: "Пакет из 5 выделений на 48 часов", amount: "499 ₽", code: "highlight_pack_5" },
   plus: { title: "Подписка ЗаНомером Плюс на месяц", amount: "199 ₽", code: "plus_month" },
   highlight: { title: "Выделение объявления на 48 часов", amount: "129 ₽", code: "highlight_48h" },
   hot: { title: "Горячее предложение", amount: "399 ₽", code: "hot_listing" },
-  "hot-pack": { title: "Пакет из 5 горячих размещений", amount: "1 599 ₽", code: "hot_pack_5" },
+  "hot-pack": { title: "Пакет из 5 горячих размещений навсегда", amount: "1 599 ₽", code: "hot_pack_5" },
 } as const;
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
@@ -2523,7 +2525,7 @@ export default function HomeScreen() {
               <Text style={styles.priceValue}>129 ₽</Text>
               <Text style={styles.priceTerm}>на 48 часов</Text>
             </Pressable>
-            <Pressable onPress={() => openTestPayment("Пакет из 5 выделений", "499 ₽", "highlight_pack_5")} style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Пакет из 5 выделений на 48 часов", "499 ₽", "highlight_pack_5")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>5 выделений</Text>
               <Text style={styles.priceValue}>499 ₽</Text>
               <Text style={styles.priceTerm}>99,80 ₽ за одно · на 48 ч.</Text>
@@ -2537,10 +2539,10 @@ export default function HomeScreen() {
               <Text style={styles.priceValue}>399 ₽</Text>
               <Text style={styles.priceTerm}>пока объявление активно</Text>
             </Pressable>
-            <Pressable onPress={() => openTestPayment("Пакет из 5 горячих размещений", "1 599 ₽", "hot_pack_5")} style={styles.priceOption}>
+            <Pressable onPress={() => openTestPayment("Пакет из 5 горячих размещений навсегда", "1 599 ₽", "hot_pack_5")} style={styles.priceOption}>
               <Text style={styles.priceTitle}>5 размещений</Text>
               <Text style={styles.priceValue}>1 599 ₽</Text>
-              <Text style={styles.priceTerm}>319,80 ₽ за одно</Text>
+              <Text style={styles.priceTerm}>319,80 ₽ за одно · навсегда</Text>
             </Pressable>
           </View>
           <Text style={styles.priceDiscount}>В пакете экономия 396 ₽</Text>
@@ -2979,7 +2981,7 @@ export default function HomeScreen() {
             <ScrollView key={legalDocument} style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках. Площадка не продаёт номера и не принимает оплату за них.</Text>
               {legalDocument !== "overview" && <View style={styles.openedLegalDocument}><Text style={styles.openedLegalTitle}>{legalDocumentDetails[legalDocument].title}</Text><Text style={styles.legalText}>{legalDocumentDetails[legalDocument].body}</Text><Pressable onPress={() => { setLegalDocument("overview"); clearLegalPageFromUrl(); }}><Text style={styles.legalLink}>← Все документы</Text></Pressable></View>}
-              {(legalDocument === "plus" || legalDocument === "highlight" || legalDocument === "hot" || legalDocument === "hot-pack") && <View style={styles.legalCard}>
+              {(legalDocument === "plus" || legalDocument === "highlight" || legalDocument === "hot" || legalDocument === "highlight-pack" || legalDocument === "hot-pack") && <View style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Получение и оплата услуги</Text>
                 <Text style={styles.legalText}>Для покупки нужен аккаунт. Перед оплатой ознакомьтесь с офертой, порядком оказания услуги и возврата ниже. Услуга начисляется после подтверждения платежа, а не просто после возвращения на сайт.</Text>
                 <Pressable style={styles.comingSoonButton} onPress={() => { const service = paidServiceCheckout[legalDocument]; closePaymentInfo(); openTestPayment(service.title, service.amount, service.code); }}><Text style={styles.comingSoonButtonText}>Перейти к оплате · {paidServiceCheckout[legalDocument].amount}</Text></Pressable>
@@ -3010,8 +3012,13 @@ export default function HomeScreen() {
                 <Text style={styles.legalText}>Одно постоянное размещение для своего объявления, пока оно активно и сервис работает.</Text>
                 <Text style={styles.legalLink}>Подробнее →</Text>
               </Pressable>
+              <Pressable accessibilityRole="link" onPress={() => openLegalDocument("highlight-pack")} style={styles.legalCard}>
+                <Text style={styles.legalCardTitle}>Пакет из 5 выделений на 48 часов — 499 ₽</Text>
+                <Text style={styles.legalText}>Пять выделений на балансе профиля. Каждое действует 48 часов с момента применения к своему активному объявлению.</Text>
+                <Text style={styles.legalLink}>Подробнее →</Text>
+              </Pressable>
               <Pressable accessibilityRole="link" onPress={() => openLegalDocument("hot-pack")} style={styles.legalCard}>
-                <Text style={styles.legalCardTitle}>Пакет из 5 горячих размещений — 1 599 ₽</Text>
+                <Text style={styles.legalCardTitle}>Пакет из 5 горячих размещений навсегда — 1 599 ₽</Text>
                 <Text style={styles.legalText}>Пять размещений на балансе профиля. Выберите свои активные объявления и примените к ним продвижение по одному. Каждое показывается в горячих, пока активно.</Text>
                 <Text style={styles.legalLink}>Подробнее →</Text>
               </Pressable>
