@@ -2974,7 +2974,7 @@ export default function HomeScreen() {
               <View style={{ flex: 1, minWidth: 0 }}><Text style={styles.paymentKicker}>ЗА НОМЕРОМ</Text><Text style={styles.requisitesTitle}>{legalDocument === "overview" ? "Информация" : legalDocumentDetails[legalDocument].title}</Text></View>
               <Pressable onPress={closePaymentInfo} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
-            <ScrollView style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
+            <ScrollView key={legalDocument} style={styles.legalScroll} contentContainerStyle={styles.legalScrollContent} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
               <Text style={styles.legalLead}>ЗаНомером — сервис поиска и размещения объявлений о красивых государственных регистрационных знаках. Площадка не продаёт номера и не принимает оплату за них.</Text>
               {legalDocument !== "overview" && <View style={styles.openedLegalDocument}><Text style={styles.openedLegalTitle}>{legalDocumentDetails[legalDocument].title}</Text><Text style={styles.legalText}>{legalDocumentDetails[legalDocument].body}</Text><Pressable onPress={() => { setLegalDocument("overview"); clearLegalPageFromUrl(); }}><Text style={styles.legalLink}>← Все документы</Text></Pressable></View>}
               {(legalDocument === "plus" || legalDocument === "highlight" || legalDocument === "hot") && <View style={styles.legalCard}>
