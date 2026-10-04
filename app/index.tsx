@@ -2552,6 +2552,7 @@ export default function HomeScreen() {
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {activeTab === "buy" && <View style={{ width: "100%", maxWidth: 1100, alignSelf: "center", marginBottom: 20, padding: 16, borderRadius: 20, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
         <Text style={[styles.sectionTitle, { textAlign: "center" }]}>🔥 Горячие предложения</Text>
+        <View style={styles.hotDivider} />
         {hotPlates.length === 0 ? <Text style={[styles.managementHint, { textAlign: "center" }]}>Пока нет горячих предложений по выбранным параметрам.</Text> : <View style={styles.hotCarousel}>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие предложения: влево" disabled={!hotOverflow || hotScrollX <= 1} onPress={() => scrollHot(-1)} style={[styles.hotArrow, (!hotOverflow || hotScrollX <= 1) && styles.hotArrowDisabled]}><Text style={styles.hotArrowText}>‹</Text></Pressable>
           <ScrollView ref={hotScrollRef} horizontal scrollEnabled={hotOverflow} bounces={false} showsHorizontalScrollIndicator={false} style={{ flex: 1 }} onLayout={event => setHotViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={width => setHotContentWidth(width)} onScroll={event => setHotScrollX(event.nativeEvent.contentOffset.x)} scrollEventThrottle={16} contentContainerStyle={styles.hotCarouselContent}>
@@ -3376,6 +3377,7 @@ const styles = StyleSheet.create({
   cardShell: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   card: { paddingHorizontal: 14, paddingTop: 14 },
   hotCarousel: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
+  hotDivider: { height: 1, backgroundColor: "#FED7AA", alignSelf: "stretch", marginTop: 12, marginBottom: 4 },
   hotCarouselContent: { gap: 12, paddingVertical: 8 },
   hotCard: { width: 240, padding: 10, borderRadius: 16, justifyContent: "center" },
   hotPlate: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", height: 50, minHeight: 50, borderWidth: 2 },
