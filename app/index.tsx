@@ -260,6 +260,15 @@ export default function HomeScreen() {
   const catalogPageSize = compactLayout ? 4 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
+  const hotScrollRef = useRef<ScrollView>(null);
+  const [hotViewportWidth, setHotViewportWidth] = useState(0);
+  const [hotContentWidth, setHotContentWidth] = useState(0);
+  const [hotScrollX, setHotScrollX] = useState(0);
+  const hotOverflow = hotContentWidth > hotViewportWidth + 1;
+  function scrollHot(direction: -1 | 1) {
+    if (!hotOverflow) return;
+    hotScrollRef.current?.scrollTo({ x: Math.max(0, Math.min(hotContentWidth - hotViewportWidth, hotScrollX + direction * Math.max(252, hotViewportWidth * 0.8))), animated: true });
+  }
   const downloadedUpdateRef = useRef(false);
   const latestPartnerListingRef = useRef("");
   const latestSiteListingRef = useRef("");
@@ -2542,15 +2551,19 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {activeTab === "buy" && <View style={{ width: "100%", maxWidth: 1100, alignSelf: "center", marginBottom: 20, padding: 16, borderRadius: 20, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
-        <Text style={styles.sectionTitle}>🔥 Горячие предложения</Text>
-        {hotPlates.length === 0 ? <Text style={styles.managementHint}>Пока нет горячих предложений по выбранным параметрам.</Text> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 12, paddingBottom: 4 }}>
-          {hotPlates.map(plate => <Pressable key={`hot-${plate.id}`} onPress={() => setSelectedPlate(plate)} accessibilityLabel={`Открыть горячее предложение ${plate.value}, ${plate.region}`} style={{ width: 230, padding: 16, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#FED7AA" }}>
-            <Text style={styles.managementPlate}>{plate.value}</Text>
-            <Text style={styles.managementMeta}>{plate.region}</Text>
-            <Text style={styles.managementPlate}>{plate.price}</Text>
-            <Text style={styles.managementHint}>Открыть объявление →</Text>
-          </Pressable>)}
-        </ScrollView>}
+        <Text style={[styles.sectionTitle, { textAlign: "center" }]}>🔥 Горячие предложения</Text>
+        {hotPlates.length === 0 ? <Text style={[styles.managementHint, { textAlign: "center" }]}>Пока нет горячих предложений по выбранным параметрам.</Text> : <View style={styles.hotCarousel}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Горячие предложения: влево" disabled={!hotOverflow || hotScrollX <= 1} onPress={() => scrollHot(-1)} style={[styles.hotArrow, (!hotOverflow || hotScrollX <= 1) && styles.hotArrowDisabled]}><Text style={styles.hotArrowText}>‹</Text></Pressable>
+          <ScrollView ref={hotScrollRef} horizontal scrollEnabled={hotOverflow} bounces={false} showsHorizontalScrollIndicator={false} style={{ flex: 1 }} onLayout={event => setHotViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={width => setHotContentWidth(width)} onScroll={event => setHotScrollX(event.nativeEvent.contentOffset.x)} scrollEventThrottle={16} contentContainerStyle={styles.hotCarouselContent}>
+            {hotPlates.map(plate => <Pressable key={`hot-${plate.id}`} onPress={() => setSelectedPlate(plate)} accessibilityRole="button" accessibilityLabel={`Открыть горячее предложение ${plate.value}, ${plate.region}, ${plate.price}`} style={[styles.cardShell, styles.hotCard]}>
+              <View style={[styles.cardPlate, styles.hotPlate, plate.vehicle === "motorcycle" && styles.hotMotoPlate]}>
+                <PlateFace leftLetter={plate.leftLetter} digits={plate.digits} rightLetters={plate.rightLetters} region={plate.region.split(" · ")[1] ?? ""} vehicle={plate.vehicle} />
+              </View>
+              <View style={styles.hotCardMeta}><Text style={[styles.price, { fontSize: 17 }]}>{plate.price}</Text><Text style={styles.cardPublishedTop}>{formatListingDate(plate.publishedAt ?? plate.createdAt)}</Text></View>
+            </Pressable>)}
+          </ScrollView>
+          <Pressable accessibilityRole="button" accessibilityLabel="Горячие предложения: вправо" disabled={!hotOverflow || hotScrollX >= hotContentWidth - hotViewportWidth - 1} onPress={() => scrollHot(1)} style={[styles.hotArrow, (!hotOverflow || hotScrollX >= hotContentWidth - hotViewportWidth - 1) && styles.hotArrowDisabled]}><Text style={styles.hotArrowText}>›</Text></Pressable>
+        </View>}
       </View>}
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
@@ -3362,6 +3375,15 @@ const styles = StyleSheet.create({
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
   cardShell: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   card: { paddingHorizontal: 14, paddingTop: 14 },
+  hotCarousel: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
+  hotCarouselContent: { gap: 12, paddingVertical: 8 },
+  hotCard: { width: 240, padding: 10, borderRadius: 16, justifyContent: "center" },
+  hotPlate: { flex: 0, width: "100%", height: 50, borderWidth: 2 },
+  hotMotoPlate: { width: 100, height: 58, alignSelf: "center" },
+  hotCardMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10 },
+  hotArrow: { width: 28, height: 38, borderRadius: 10, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
+  hotArrowText: { color: "#5143C2", fontSize: 30, lineHeight: 34 },
+  hotArrowDisabled: { opacity: 0.3 },
   cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
   // На телефоне сначала показываем номер на всю ширину, затем все сведения
   // в этой же карточке. Так знак никогда не обрезается сбоку.
