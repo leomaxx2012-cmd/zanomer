@@ -386,6 +386,7 @@ export default function HomeScreen() {
       if (error) { setAuthMessage("Не удалось применить размещение. Проверь остаток покупок и статус объявления."); return; }
       const featuredUntil = data === "infinity" ? "9999-12-31T23:59:59Z" : String(data);
       setCatalog(items => items.map(item => item.id === listing.id ? { ...item, featuredUntil } : item));
+      setMyListings(items => items.map(item => item.id === listing.id ? { ...item, featuredUntil } : item));
       setAuthMessage(kind === "hot" ? "Номер добавлен в горячие предложения на всё время публикации." : "Номер выделен в горячих предложениях на 48 часов.");
       await loadPaymentBenefits();
       await loadManagement(currentUserId);
@@ -1599,10 +1600,10 @@ export default function HomeScreen() {
   const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
   const sellerProfileJoinedAt = sellerProfileListings.find((plate) => plate.sellerJoinedAt)?.sellerJoinedAt;
   const hotPlates = useMemo(() => {
-    const now = new Date().toISOString();
-    return plates.filter((plate) => !!plate.featuredUntil && plate.featuredUntil > now)
+    const now = Date.now();
+    return visiblePlates.filter((plate) => !!plate.featuredUntil && new Date(plate.featuredUntil).getTime() > now)
       .sort((a, b) => (b.featuredUntil ?? "").localeCompare(a.featuredUntil ?? ""));
-  }, [plates]);
+  }, [visiblePlates]);
   const regionGroups = useMemo(() => {
     const groups = new Map<string, Map<string, number>>();
     catalog.forEach((plate) => {
@@ -2187,6 +2188,7 @@ export default function HomeScreen() {
                 <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>0</Text><Text style={styles.statLabel}>сообщений</Text></View></View>
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
                   <Pressable onPress={() => setPromotionListing(value => value === listing.id ? null : listing.id)} style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text><Text style={styles.managementHint}>Нажми на номер для выделения</Text>
+                    {listing.listingStatus === "active" && !!listing.featuredUntil && new Date(listing.featuredUntil).getTime() > Date.now() && <Text style={styles.managementStatus}>🔥 В горячих предложениях · {new Date(listing.featuredUntil).getFullYear() >= 9999 ? "до продажи" : `до ${new Date(listing.featuredUntil).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`}</Text>}
                     {promotionListing === listing.id && listing.listingStatus === "active" && <View>
                       <Pressable disabled={promotionBusy || promotionBalance.highlights < 1} onPress={() => { void applyPromotion(listing, "highlight"); }} style={styles.managementButton}><Text style={styles.managementButtonText}>Выделить в горячие предложения · 48 ч. ({promotionBalance.highlights})</Text></Pressable>
                       <Pressable disabled={promotionBusy || promotionBalance.hot < 1} onPress={() => { void applyPromotion(listing, "hot"); }} style={styles.managementButton}><Text style={styles.managementButtonText}>В горячие до продажи ({promotionBalance.hot})</Text></Pressable>
@@ -2539,6 +2541,17 @@ export default function HomeScreen() {
       </View>}
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
+      {activeTab === "buy" && <View style={{ width: "100%", maxWidth: 1100, alignSelf: "center", marginBottom: 20, padding: 16, borderRadius: 20, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
+        <Text style={styles.sectionTitle}>🔥 Горячие предложения</Text>
+        {hotPlates.length === 0 ? <Text style={styles.managementHint}>Пока нет горячих предложений по выбранным параметрам.</Text> : <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12, paddingTop: 12, paddingBottom: 4 }}>
+          {hotPlates.map(plate => <Pressable key={`hot-${plate.id}`} onPress={() => setSelectedPlate(plate)} accessibilityLabel={`Открыть горячее предложение ${plate.value}, ${plate.region}`} style={{ width: 230, padding: 16, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#FED7AA" }}>
+            <Text style={styles.managementPlate}>{plate.value}</Text>
+            <Text style={styles.managementMeta}>{plate.region}</Text>
+            <Text style={styles.managementPlate}>{plate.price}</Text>
+            <Text style={styles.managementHint}>Открыть объявление →</Text>
+          </Pressable>)}
+        </ScrollView>}
+      </View>}
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
