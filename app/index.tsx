@@ -366,6 +366,31 @@ export default function HomeScreen() {
   const [paymentStarting, setPaymentStarting] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState("");
   const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
+  const [promotionBalance, setPromotionBalance] = useState({ highlights: 0, hot: 0 });
+  const [promotionListing, setPromotionListing] = useState<string | null>(null);
+  const [promotionBusy, setPromotionBusy] = useState(false);
+
+  async function loadPaymentBenefits() {
+    if (!supabase || !currentUserId) return;
+    const { data, error } = await supabase.rpc("get_payment_benefits");
+    if (error || !data) return;
+    setPromotionBalance({ highlights: data.highlights, hot: data.hot });
+    setHasPlusSubscription(Boolean(data.plus_until && new Date(data.plus_until).getTime() > Date.now()));
+  }
+
+  async function applyPromotion(listing: Plate, kind: "highlight" | "hot") {
+    if (!supabase || promotionBusy) return;
+    setPromotionBusy(true);
+    try {
+      const { data, error } = await supabase.rpc("apply_listing_promotion", { listing: listing.id, promotion: kind });
+      if (error) { setAuthMessage("Не удалось применить размещение. Проверь остаток покупок и статус объявления."); return; }
+      const featuredUntil = data === "infinity" ? "9999-12-31T23:59:59Z" : String(data);
+      setCatalog(items => items.map(item => item.id === listing.id ? { ...item, featuredUntil } : item));
+      setAuthMessage(kind === "hot" ? "Номер добавлен в горячие предложения на всё время публикации." : "Номер выделен в горячих предложениях на 48 часов.");
+      await loadPaymentBenefits();
+      await loadManagement(currentUserId);
+    } finally { setPromotionBusy(false); }
+  }
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(() => isPaymentInfoPage() || isRequisitesPage());
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(() => legalDocumentFromUrl());
   const [inAppNotice, setInAppNotice] = useState<AppNotification | null>(null);
@@ -558,6 +583,7 @@ export default function HomeScreen() {
       isSiteListing: true,
       ownerId: item.owner_id,
       listingStatus: item.status,
+      featuredUntil: item.featured_until === "infinity" ? "9999-12-31T23:59:59Z" : item.featured_until,
       photoUrl: item.photo_url ?? undefined,
       sellerComment: item.seller_comment ?? undefined,
     };
@@ -568,7 +594,7 @@ export default function HomeScreen() {
     const client = supabase;
     const { data: own } = await client
       .from("auto_listings")
-      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url, seller_comment")
       .eq("owner_id", userId)
       .order("created_at", { ascending: false });
     setMyListings((own ?? []).map((item) => mapManagedListing(item, ownerName)));
@@ -730,6 +756,12 @@ export default function HomeScreen() {
       setHasPlusSubscription(paidAt > Date.now() - 30 * 24 * 60 * 60 * 1000);
     };
     void loadPlusSubscription();
+    void loadPaymentBenefits();
+    const timer = setInterval(() => { void loadPaymentBenefits(); }, 15000);
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") void loadPaymentBenefits(); });
+    const onFocus = () => { void loadPaymentBenefits(); };
+    if (Platform.OS === "web") window.addEventListener("focus", onFocus);
+    return () => { clearInterval(timer); subscription.remove(); if (Platform.OS === "web") window.removeEventListener("focus", onFocus); };
   }, [currentUserId]);
   function openLegalDocument(document: Exclude<LegalDocument, "overview">) {
     setLegalDocument(document);
@@ -2130,6 +2162,8 @@ export default function HomeScreen() {
           {isSignedIn && !(authMode === "signup" && authStep === 3) ? (
             <>
               <Text style={styles.authHint}>Ты уже вошёл. Пароль нужен только если хочешь изменить его для будущих входов.</Text>
+              <Text style={styles.managementTitle}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "Подписка Плюс не активна"}</Text>
+              <Text style={styles.managementHint}>Куплено: {promotionBalance.highlights} выделений на 48 часов · {promotionBalance.hot} горячих размещений. Выбери свой номер ниже, чтобы применить покупку.</Text>
               <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Придумай пароль (минимум 6 символов)" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry />
               <Pressable onPress={async () => {
                 if (!supabase) return;
@@ -2152,7 +2186,13 @@ export default function HomeScreen() {
                 <Text style={styles.managementTitle}>Мои объявления</Text>
                 <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>0</Text><Text style={styles.statLabel}>сообщений</Text></View></View>
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
-                  <View style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text></View>
+                  <Pressable onPress={() => setPromotionListing(value => value === listing.id ? null : listing.id)} style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text><Text style={styles.managementHint}>Нажми на номер для выделения</Text>
+                    {promotionListing === listing.id && listing.listingStatus === "active" && <View>
+                      <Pressable disabled={promotionBusy || promotionBalance.highlights < 1} onPress={() => { void applyPromotion(listing, "highlight"); }} style={styles.managementButton}><Text style={styles.managementButtonText}>Выделить в горячие предложения · 48 ч. ({promotionBalance.highlights})</Text></Pressable>
+                      <Pressable disabled={promotionBusy || promotionBalance.hot < 1} onPress={() => { void applyPromotion(listing, "hot"); }} style={styles.managementButton}><Text style={styles.managementButtonText}>В горячие до продажи ({promotionBalance.hot})</Text></Pressable>
+                    </View>}
+                    {promotionListing === listing.id && listing.listingStatus !== "active" && <Text style={styles.managementHint}>Размещение доступно после одобрения объявления.</Text>}
+                  </Pressable>
                   {listing.listingStatus !== "archived" && <View style={styles.managementActions}>
                     <Pressable onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
                   </View>}
