@@ -192,6 +192,11 @@ const paidServiceCheckout = {
   hot: { title: "Горячие предложения · 1 размещение навсегда", amount: "399 ₽", code: "hot_listing" },
   "hot-pack": { title: "Горячие предложения · 5 размещений навсегда", amount: "1 599 ₽", code: "hot_pack_5" },
 } as const;
+function getPaymentServiceDescription(serviceCode: string) {
+  const document = (Object.keys(paidServiceCheckout) as (keyof typeof paidServiceCheckout)[])
+    .find(key => paidServiceCheckout[key].code === serviceCode);
+  return document ? legalDocumentDetails[document].body : "";
+}
 // Пользователь может печатать русской или английской раскладкой. Латинские
 // аналоги приводим к буквам российского госномера, остальные символы отсекаем.
 const latinPlateLetters: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
@@ -2994,19 +2999,25 @@ export default function HomeScreen() {
 
       <Modal visible={!!testPayment} transparent animationType="fade" onRequestClose={() => setTestPayment(null)}>
         <Pressable style={styles.detailsOverlay} onPress={() => setTestPayment(null)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.paymentPanel}>
+          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.paymentPanel, { maxHeight: Math.max(240, windowHeight - 32) }]}>
             <View style={styles.detailsHeader}>
               <View><Text style={styles.paymentKicker}>ОПЛАТА</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
               <Pressable onPress={() => setTestPayment(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
+            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 16 }}>
             <Text style={styles.paymentItem}>{testPayment?.title}</Text>
             <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
+            <View style={styles.paymentServiceInfo}>
+              <Text style={styles.paymentItem}>Что входит и как воспользоваться</Text>
+              <Text style={styles.paymentServiceDescription}>{testPayment ? getPaymentServiceDescription(testPayment.serviceCode) : ""}</Text>
+            </View>
             <Text style={styles.paymentHint}>Оплата проводится на защищённой странице ЮKassa. Доступ к услуге откроется только после подтверждения платежа.</Text>
             <Text style={styles.paymentHint}>Разовая покупка, без автоматических списаний. Оплачивается цифровая услуга, не госномер. Подписка включается автоматически; продвижение сначала зачисляется на баланс профиля.</Text>
             <View style={styles.paymentMethods}>
               {(["offer", "delivery", "refund"] as const).map(document => <Pressable key={document} onPress={() => { setTestPayment(null); setPaymentInfoOpen(true); openLegalDocument(document); }}><Text style={styles.legalLink}>{legalDocumentDetails[document].title}</Text></Pressable>)}
             </View>
             {!!paymentMessage && <Text style={styles.paymentHint}>{paymentMessage}</Text>}
+            </ScrollView>
             <Pressable disabled={paymentStarting} onPress={() => { void startPayment(); }} style={[styles.paymentButton, paymentStarting && styles.saveSearchButtonDisabled]}><Text style={styles.paymentButtonText}>{paymentStarting ? "Открываем оплату…" : "Перейти к оплате"}</Text></Pressable>
           </Pressable>
         </Pressable>
@@ -3572,6 +3583,8 @@ const styles = StyleSheet.create({
   paymentItem: { color: "#344054", fontSize: 15, fontWeight: "700", marginTop: 22 },
   paymentAmount: { color: "#155EEF", fontSize: 29, fontWeight: "900", marginTop: 7 },
   paymentHint: { color: "#667085", fontSize: 13, lineHeight: 19, marginTop: 15 },
+  paymentServiceInfo: { backgroundColor: "#F7F5FF", borderColor: "#DDD6FE", borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 16 },
+  paymentServiceDescription: { color: "#475467", fontSize: 14, lineHeight: 21, marginTop: 8 },
   paymentButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, marginTop: 20, paddingVertical: 13 },
   paymentButtonText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
   paymentSuccess: { alignItems: "center", paddingTop: 25 },
