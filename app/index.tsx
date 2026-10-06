@@ -2436,11 +2436,11 @@ export default function HomeScreen() {
         {vehicle === "motorcycle" && <>
           <TextInput accessibilityLabel="Четыре цифры мото-номера" value={digits} onChangeText={value => setDigits(normalizePlateDigits(value, 4))} onFocus={() => setPlatePicker("digits")} placeholder="1234" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchDigits]} maxLength={4} />
           <View style={styles.motoSearchBottom}>
-            <TextInput accessibilityLabel="Две буквы мото-номера" value={rightLetters} onChangeText={value => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
-            <View style={styles.plateDivider} />
-            <Pressable accessibilityLabel="Выбрать регион мото-номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
-              <Text style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}>{selectedRegionLabel}</Text>
+            <TextInput accessibilityLabel="Две буквы мото-номера" value={rightLetters} onChangeText={value => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchLetters]} autoCapitalize="characters" maxLength={2} />
+            <View style={[styles.plateDivider, { marginTop: 18 }]} />
+            <Pressable accessibilityLabel="Выбрать регион мото-номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={[styles.regionCodeBox, styles.motoSearchRegion]}>
               <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
+              <Text style={[styles.regionCodeInput, styles.motoSearchRegionCode, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}>{selectedRegionLabel}</Text>
             </Pressable>
           </View>
         </>}
@@ -3287,8 +3287,11 @@ const styles = StyleSheet.create({
   vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", minHeight: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
   plateSearchMotorcycle: { alignSelf: "center", width: 240, maxWidth: "100%", height: 180, minHeight: 180, flexDirection: "column" },
-  motoSearchDigits: { flex: 0, height: 92, fontSize: 52, width: "100%" },
+  motoSearchDigits: { flex: 0, height: 88, fontSize: 74, width: "100%", padding: 0 },
   motoSearchBottom: { flexDirection: "row", flex: 1, width: "100%" },
+  motoSearchLetters: { flex: 1.2, fontSize: 58, padding: 0, paddingTop: 14 },
+  motoSearchRegion: { paddingVertical: 0, justifyContent: "flex-start" },
+  motoSearchRegionCode: { fontSize: 52, lineHeight: 60 },
   plateSearchTrailer: { alignSelf: "center", maxWidth: 620 },
   plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", textAlignVertical: "center", letterSpacing: 1, minWidth: 0, textAlign: "center" },
   plateInputMotorcycle: { fontSize: 32 },
@@ -3488,7 +3491,7 @@ const styles = StyleSheet.create({
   hotCard: { width: 240, padding: 10, borderRadius: 16, justifyContent: "center" },
   hotPlate: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", height: 50, minHeight: 50, borderWidth: 2 },
   hotMotoPlate: { width: 120, height: 90, minHeight: 90, alignSelf: "center" },
-  cardPlateMotorcycle: { flex: 0, width: 220, maxWidth: "100%", height: 165, minHeight: 165, alignSelf: "center" },
+  cardPlateMotorcycle: { flex: 0, flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: 240, maxWidth: "100%", height: 180, minHeight: 180, alignSelf: "center", borderRadius: 14 },
   hotCardMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10 },
   hotArrow: { width: 28, height: 38, borderRadius: 10, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
   hotArrowText: { color: "#5143C2", fontSize: 30, lineHeight: 34 },
