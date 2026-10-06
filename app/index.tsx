@@ -25,6 +25,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase } from "../lib/supabase";
+import { waitForAuth } from "../lib/auth-request";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
@@ -1365,7 +1366,9 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!supabase) return;
 
+    let profileUpdateVersion = 0;
     async function setProfile(user: { id?: string; email?: string | null; is_anonymous?: boolean; user_metadata?: Record<string, unknown> } | null) {
+      const updateVersion = ++profileUpdateVersion;
       const displayName = user?.user_metadata?.display_name;
       const guestName = user?.is_anonymous && user.id ? `Гость-${user.id.slice(0, 6)}` : "";
       const name = typeof displayName === "string" && displayName ? displayName : user?.email?.split("@")[0] ?? guestName;
@@ -1381,7 +1384,10 @@ export default function HomeScreen() {
       setIsSignedIn(true);
       setIsAnonymous(Boolean(user.is_anonymous));
       setCurrentUserId(user.id);
+      setProfileName(name);
       const { error } = await supabase.from("auto_profiles").upsert({ id: user.id, username: name }, { onConflict: "id" });
+      // Поздний ответ старого запроса не должен возвращать профиль после выхода.
+      if (!authEffectActive || updateVersion !== profileUpdateVersion) return;
       if (error) {
         // Сессия уже подтверждена письмом. Не прячем профиль из-за того,
         // что похожее имя когда-то занял другой пользователь.
@@ -1405,23 +1411,36 @@ export default function HomeScreen() {
     // Не проверяем вход только через сеть: при старте с VPN или слабым
     // интернетом getUser() может временно вернуть пустой ответ, хотя
     // действующая сессия уже сохранена в AsyncStorage.
-    void supabase.auth.getSession().then(({ data }) => setProfile(data.session?.user ?? null));
+    let authEffectActive = true;
+    void supabase.auth.getSession().then(({ data, error }) => {
+      if (authEffectActive && !error) void setProfile(data.session?.user ?? null);
+    }).catch(() => {
+      // Ошибка связи не означает, что пользователь вышел из аккаунта.
+    });
     const { data: subscription } = supabase.auth.onAuthStateChange((event, session) => {
       // При кратком обрыве сети или VPN Supabase иногда присылает пустую
       // сессию во время TOKEN_REFRESHED. Это не выход пользователя.
       if (!session?.user && event !== "SIGNED_OUT") return;
-      void setProfile(session?.user ?? null);
+      // Запросы профиля запускаем после завершения события авторизации.
+      setTimeout(() => {
+        if (authEffectActive) void setProfile(session?.user ?? null);
+      }, 0);
     });
     // При переходе между Wi‑Fi и мобильной сетью SDK не всегда сам сразу
     // обновляет токен. Пробуем восстановить уже сохранённую сессию, но не
     // разлогиниваем пользователя, если сеть всё ещё недоступна.
+    let restoringSession = false;
     const restoreSavedSession = () => {
-      void supabase.auth.getSession().then(async ({ data }) => {
-        if (!data.session) return;
-        const { data: refreshed } = await supabase.auth.refreshSession();
-        if (refreshed.session?.user) void setProfile(refreshed.session.user);
+      if (restoringSession || !authEffectActive) return;
+      restoringSession = true;
+      // getSession сам обновляет истёкший токен. Принудительный refresh
+      // при каждом возвращении создавал лишние запросы при смене сети.
+      void supabase.auth.getSession().then(({ data, error }) => {
+        if (authEffectActive && !error && data.session?.user) void setProfile(data.session.user);
       }).catch(() => {
         // Сохранённая сессия остаётся действующей до следующей удачной связи.
+      }).finally(() => {
+        restoringSession = false;
       });
     };
     const appStateSubscription = AppState.addEventListener("change", (state) => {
@@ -1430,6 +1449,7 @@ export default function HomeScreen() {
     const onlineHandler = () => restoreSavedSession();
     if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("online", onlineHandler);
     return () => {
+      authEffectActive = false;
       subscription.subscription.unsubscribe();
       appStateSubscription.remove();
       if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("online", onlineHandler);
@@ -2008,6 +2028,19 @@ export default function HomeScreen() {
   }
 
   async function submitAuth() {
+    if (authSending || authRequestInFlightRef.current) return;
+    authRequestInFlightRef.current = true;
+    try {
+      await submitAuthRequest();
+    } catch (error) {
+      setAuthMessage(error instanceof Error ? error.message : "Не удалось связаться с сервисом входа. Попробуй снова.");
+    } finally {
+      authRequestInFlightRef.current = false;
+      setAuthSending(false);
+    }
+  }
+
+  async function submitAuthRequest() {
     if (!supabase) {
       if (profileDraft.trim()) { setProfileName(profileDraft.trim()); setAuthOpen(false); }
       return;
@@ -2015,7 +2048,6 @@ export default function HomeScreen() {
     setAuthMessage("");
     const email = authEmail.trim().toLowerCase();
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) return setAuthMessage("Введи корректный email.");
-    if (authSending || authRequestInFlightRef.current) return;
     Keyboard.dismiss();
 
     // Код можно использовать и для первой регистрации, и как запасной
@@ -2024,38 +2056,43 @@ export default function HomeScreen() {
       const elapsed = lastOtpRequest?.email === email ? Date.now() - lastOtpRequest.at : Number.POSITIVE_INFINITY;
       if (elapsed < 60_000) {
         const seconds = Math.ceil((60_000 - elapsed) / 1000);
-        setAuthMessage(`Код уже отправлен. Проверь почту или подожди ${seconds} сек. перед повторной отправкой.`);
+        setAuthMessage(`Код уже запрошен. Письмо может прийти с задержкой. Проверь почту или подожди ${seconds} сек. перед повторным запросом.`);
         return;
       }
-      authRequestInFlightRef.current = true;
       setAuthSending(true);
       setAuthMessage("Отправляем код на почту…");
       // На нестабильной сети SDK может ждать ответ бесконечно. У пользователя
       // должна снова стать доступна кнопка, а не вечная надпись «Отправляем».
-      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Не удалось связаться с почтовым сервисом за 20 секунд. Проверь интернет и попробуй ещё раз.")), 20_000));
+      // Даже если ответ потерялся, сервер мог отправить письмо.
+      setLastOtpRequest({ email, at: Date.now() });
       let error: { message: string } | null = null;
       try {
-        ({ error } = await Promise.race([
-          supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: authMode === "signup" } }),
-          timeout,
-        ]));
+        ({ error } = await waitForAuth(supabase.auth.signInWithOtp({ email, options: { shouldCreateUser: authMode === "signup" } })));
       } catch (requestError) {
         error = { message: requestError instanceof Error ? requestError.message : "Не удалось отправить код. Попробуй ещё раз." };
       } finally {
-        authRequestInFlightRef.current = false;
         setAuthSending(false);
       }
-      if (error) return setAuthMessage(error.message);
+      if (error) {
+        const detail = error.message.toLowerCase();
+        return setAuthMessage(
+          detail.includes("rate limit") || detail.includes("too many")
+            ? "Почтовый сервис ограничил отправку. Подожди несколько минут и попробуй снова. Если у тебя уже есть пароль, войди с ним."
+            : detail.includes("sending") || detail.includes("smtp")
+              ? "Почтовый сервис не смог отправить письмо. Попробуй войти с паролем; настройку отправки нужно проверить."
+              : error.message
+        );
+      }
       setLastOtpRequest({ email, at: Date.now() });
       setAuthStep(2);
-      return setAuthMessage("Код отправлен. Проверь входящие и папку «Спам».");
+      return setAuthMessage("Код отправлен. Письмо может прийти с задержкой. Проверь входящие и «Спам», используй самый свежий код.");
     }
     if ((authMode === "signup" || authMode === "otp") && authStep === 2) {
       const token = authCode.trim();
       if (token.length < 6) return setAuthMessage("Введи код из письма.");
       setAuthSending(true);
       setAuthMessage("Проверяем код…");
-      const { error } = await supabase.auth.verifyOtp({ email, token, type: "email" });
+      const { error } = await waitForAuth(supabase.auth.verifyOtp({ email, token, type: "email" }));
       setAuthSending(false);
       if (error) return setAuthMessage("Код не подошёл или срок его действия истёк. Запроси новый код.");
       setAuthCode("");
@@ -2072,7 +2109,7 @@ export default function HomeScreen() {
       setAuthSending(true);
       setAuthMessage("Сохраняем пароль…");
       const metadata = profileDraft.trim() ? { display_name: profileDraft.trim() } : undefined;
-      const { error } = await supabase.auth.updateUser({ password: authPassword, ...(metadata ? { data: metadata } : {}) });
+      const { error } = await waitForAuth(supabase.auth.updateUser({ password: authPassword, ...(metadata ? { data: metadata } : {}) }));
       setAuthSending(false);
       if (error) return setAuthMessage(error.message);
       setAuthPassword("");
@@ -2083,7 +2120,7 @@ export default function HomeScreen() {
     if (authPassword.length < 6) return setAuthMessage("Пароль должен быть не короче 6 символов.");
     setAuthSending(true);
     setAuthMessage("Входим…");
-    const result = await supabase.auth.signInWithPassword({ email, password: authPassword });
+    const result = await waitForAuth(supabase.auth.signInWithPassword({ email, password: authPassword }));
     setAuthSending(false);
     if (result.error) {
       const text = result.error.message.toLowerCase();
