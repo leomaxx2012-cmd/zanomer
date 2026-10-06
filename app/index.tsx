@@ -1204,7 +1204,11 @@ export default function HomeScreen() {
       const firstPartnerResult = await Promise.race([firstPartnerPageRequest, firstPageFallback]);
       // Первый сетевой ответ используем только как начало тихой синхронизации.
       // Экран продолжает показывать встроенный полный каталог без ожидания.
-      if (!firstPartnerResult.error && firstPartnerResult.data?.length) setCatalogRefreshing(false);
+      if (!firstPartnerResult.error && firstPartnerResult.data?.length) {
+        clearTimeout(slowNoticeTimeout);
+        setCatalogSlowMessage("");
+        setCatalogRefreshing(false);
+      }
 
       // Полную историю получаем только после быстрого ответа с новинками,
       // чтобы параллельные тяжёлые запросы не мешали старту каталога.
@@ -1300,6 +1304,7 @@ export default function HomeScreen() {
         if (requestTimeout) clearTimeout(requestTimeout);
         clearTimeout(slowNoticeTimeout);
         clearTimeout(refreshIndicatorTimeout);
+        setCatalogSlowMessage("");
         setCatalogLoading(false);
         setCatalogRefreshing(false);
         loadingCatalog = false;
