@@ -15,7 +15,7 @@ function Glyph({ value, left, top, width, size, scale }: { value: string; left: 
 // Мото: четыре цифры над двумя буквами. Прицеп: две буквы и четыре цифры.
 export function PlateFace({ leftLetter = "", digits = "", rightLetters = "", region = "", vehicle = "car" }: PlateFaceProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const base = vehicle === "motorcycle" ? { width: 300, height: 170 } : vehicle === "truck" ? { width: 500, height: 126 } : { width: 520, height: 112 };
+  const base = vehicle === "motorcycle" ? { width: 300, height: 225 } : vehicle === "truck" ? { width: 520, height: 112 } : { width: 520, height: 112 };
   const scale = Math.min(size.width / base.width, size.height / base.height);
   const label = vehicle === "motorcycle" ? `Мотоцикл: ${digits} ${rightLetters}, регион ${region}` : vehicle === "truck" ? `Прицеп: ${leftLetter} ${digits}, регион ${region}` : `${leftLetter} ${digits} ${rightLetters}, регион ${region}`;
   return <View accessible accessibilityLabel={label} style={styles.container} onLayout={({ nativeEvent: { layout } }) => setSize((old) => old.width === layout.width && old.height === layout.height ? old : { width: layout.width, height: layout.height })}>
@@ -25,12 +25,15 @@ export function PlateFace({ leftLetter = "", digits = "", rightLetters = "", reg
         <Glyph value={region} left={396} top={7} width={118} size={region.length > 2 ? 58 : 68} scale={scale} /><View style={[styles.meta, { left: 396 * scale, top: 79 * scale, width: 118 * scale, gap: 5 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 13 * scale }]}>RUS</Text><Flag scale={scale} /></View>
       </>}
       {vehicle === "motorcycle" && <>
-        <Glyph value={digits} left={12} top={2} width={188} size={74} scale={scale} /><Glyph value={rightLetters} left={18} top={79} width={112} size={50} scale={scale} /><View style={[styles.divider, { left: 205 * scale }]} />
-        <Glyph value={region} left={214} top={25} width={78} size={region.length > 2 ? 42 : 52} scale={scale} /><View style={[styles.metaColumn, { left: 218 * scale, top: 86 * scale, width: 70 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 11 * scale }]}>RUS</Text><Flag scale={scale} /></View>
+        <Glyph value={digits} left={10} top={4} width={280} size={102} scale={scale} />
+        <Glyph value={rightLetters} left={10} top={128} width={146} size={80} scale={scale} />
+        <View style={[styles.divider, { left: 163 * scale, top: 133 * scale }]} />
+        <Glyph value={region} left={171} top={142} width={119} size={region.length > 2 ? 60 : 76} scale={scale} />
+        <View style={[styles.meta, { left: 169 * scale, top: 114 * scale, width: 122 * scale, gap: 6 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 18 * scale }]}>RUS</Text><Flag scale={scale} /></View>
       </>}
       {vehicle === "truck" && <>
-        <Glyph value={leftLetter} left={14} top={28} width={110} size={66} scale={scale} /><Glyph value={digits} left={118} top={13} width={214} size={82} scale={scale} /><View style={[styles.divider, { left: 342 * scale }]} />
-        <Glyph value={region} left={351} top={13} width={136} size={region.length > 2 ? 56 : 64} scale={scale} /><View style={[styles.meta, { left: 355 * scale, top: 90 * scale, width: 126 * scale, gap: 5 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 13 * scale }]}>RUS</Text><Flag scale={scale} /></View>
+        <Glyph value={leftLetter} left={10} top={26} width={114} size={68} scale={scale} /><Glyph value={digits} left={124} top={0} width={260} size={94} scale={scale} /><View style={[styles.divider, { left: 390 * scale }]} />
+        <Glyph value={region} left={396} top={7} width={118} size={region.length > 2 ? 58 : 68} scale={scale} /><View style={[styles.meta, { left: 396 * scale, top: 79 * scale, width: 118 * scale, gap: 5 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 13 * scale }]}>RUS</Text><Flag scale={scale} /></View>
       </>}
       <View style={[styles.bolt, { left: 5 * scale, width: 5 * scale, height: 5 * scale }]} /><View style={[styles.bolt, { right: 5 * scale, width: 5 * scale, height: 5 * scale }]} />
     </View>}

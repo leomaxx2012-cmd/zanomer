@@ -2360,7 +2360,7 @@ export default function HomeScreen() {
         style={[styles.catalogHeroButton, compactLayout && styles.catalogHeroButtonCompact]}
       >
         <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
-        <Text style={styles.catalogHeroButtonHint} accessibilityLiveRegion="polite">{catalogLoadError ? "Нет связи с каталогом — проверь интернет" : catalogRefreshing ? "↻ Каталог обновляется… сохранённые номера уже доступны" : `Каталог показан сразу под поиском · ${catalog.length} номеров`}</Text>
+        <Text style={styles.catalogHeroButtonHint} accessibilityLiveRegion="polite">{catalogLoadError ? "Нет связи с каталогом — проверь интернет" : catalogRefreshing ? "↻ Каталог обновляется… сохранённые номера уже доступны" : `Всего в каталоге: ${catalog.length} · авто, мото и прицепы`}</Text>
       </Pressable>}
 
       {activeTab === "buy" && !catalogOnly && <>
@@ -2418,7 +2418,7 @@ export default function HomeScreen() {
           <Text style={styles.searchLabel}>Найди свой номер</Text>
           <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
         </View>
-        <View style={styles.catalogCount}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={styles.catalogCountCaption}>найдено</Text></View>
+        <View style={styles.catalogCount}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={styles.catalogCountCaption}>По выбранным{"\n"}фильтрам</Text></View>
       </View>
       <View style={styles.vehicleTabs}>
         {([
@@ -2433,9 +2433,21 @@ export default function HomeScreen() {
         ))}
       </View>
       <View style={[styles.plateSearch, vehicle === "motorcycle" && styles.plateSearchMotorcycle, vehicle === "truck" && styles.plateSearchTrailer]}>
-        {vehicle !== "motorcycle" && <><TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, plateFormat(vehicle).left))} onFocus={() => setPlatePicker("left")} placeholder={vehicle === "truck" ? "АА" : "А"} placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={plateFormat(vehicle).left} /><View style={styles.plateDivider} /></>}
-        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, plateFormat(vehicle).digits))} onFocus={() => setPlatePicker("digits")} placeholder={plateFormat(vehicle).digitsPlaceholder} placeholderTextColor="#B8C0CC" style={[styles.plateInput, vehicle === "motorcycle" && styles.plateInputMotorcycle]} keyboardType="default" maxLength={plateFormat(vehicle).digits} />
-        {vehicle !== "truck" && <><View style={styles.plateDivider} /><TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={[styles.plateInput, vehicle === "motorcycle" && styles.plateInputMotorcycle]} autoCapitalize="characters" maxLength={2} /></>}
+        {vehicle === "motorcycle" && <>
+          <TextInput accessibilityLabel="Четыре цифры мото-номера" value={digits} onChangeText={value => setDigits(normalizePlateDigits(value, 4))} onFocus={() => setPlatePicker("digits")} placeholder="1234" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchDigits]} maxLength={4} />
+          <View style={styles.motoSearchBottom}>
+            <TextInput accessibilityLabel="Две буквы мото-номера" value={rightLetters} onChangeText={value => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} />
+            <View style={styles.plateDivider} />
+            <Pressable accessibilityLabel="Выбрать регион мото-номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
+              <Text style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}>{selectedRegionLabel}</Text>
+              <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
+            </Pressable>
+          </View>
+        </>}
+        {vehicle !== "motorcycle" && <>
+        <TextInput value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, plateFormat(vehicle).left))} onFocus={() => setPlatePicker("left")} placeholder={vehicle === "truck" ? "АА" : "А"} placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={plateFormat(vehicle).left} /><View style={styles.plateDivider} />
+        <TextInput value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, plateFormat(vehicle).digits))} onFocus={() => setPlatePicker("digits")} placeholder={plateFormat(vehicle).digitsPlaceholder} placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={plateFormat(vehicle).digits} />
+        {vehicle !== "truck" && <><View style={styles.plateDivider} /><TextInput value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onFocus={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} /></>}
         <View style={styles.plateDivider} />
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text
@@ -2443,6 +2455,7 @@ export default function HomeScreen() {
           >{showingMultipleRegionCodes && compactLayout ? selectedRegionCodes.join("\n") : selectedRegionLabel}</Text>
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
+        </>}
       </View>
       <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
         <Text style={styles.searchResetButtonText}>↺ Сбросить поиск и фильтры</Text>
@@ -2518,7 +2531,7 @@ export default function HomeScreen() {
               <Text style={styles.listingTypeLabel}>Тип номера</Text>
               <View style={styles.listingVehicleTabs}>{([ ["car", "🚗", "Авто"], ["motorcycle", "🏍️", "Мото"], ["truck", "🚛", "Прицеп"] ] as const).map(([type, icon, label]) => <Pressable key={type} onPress={() => chooseListingVehicle(type)} style={[styles.listingVehicleTab, listingVehicle === type && styles.listingVehicleTabActive]}><Text style={[styles.listingVehicleTabText, listingVehicle === type && styles.listingVehicleTabTextActive]}>{icon} {label}</Text></Pressable>)}</View>
               <Text style={styles.listingFormatHint}>{listingVehicle === "motorcycle" ? "Мото: 4 цифры сверху и 2 буквы снизу." : listingVehicle === "truck" ? "Прицеп: 2 буквы и 4 цифры." : "Авто: 1 буква, 3 цифры, 2 буквы."}</Text>
-              <View style={styles.addPlateRow}>
+              <View style={[styles.addPlateRow, listingVehicle === "motorcycle" && styles.addMotoPlateRow]}>
                 {listingVehicle !== "motorcycle" && <TextInput value={listingLeftLetter} onFocus={() => setListingPicker("left")} onChangeText={(value) => setListingLeftLetter(normalizePlateLetters(value, plateFormat(listingVehicle).left, false))} placeholder={listingVehicle === "truck" ? "АА" : "А"} placeholderTextColor="#98A2B3" style={[styles.addSmallInput, listingVehicle === "truck" && styles.addLettersInput]} autoCapitalize="characters" maxLength={plateFormat(listingVehicle).left} />}
                 <TextInput value={listingDigits} onFocus={() => setListingPicker("digits")} onChangeText={(value) => setListingDigits(normalizePlateDigits(value, plateFormat(listingVehicle).digits, false))} placeholder={plateFormat(listingVehicle).digitsPlaceholder} placeholderTextColor="#98A2B3" style={styles.addDigitsInput} keyboardType="number-pad" maxLength={plateFormat(listingVehicle).digits} />
                 {listingVehicle !== "truck" && <TextInput value={listingRightLetters} onFocus={() => setListingPicker("right")} onChangeText={(value) => setListingRightLetters(normalizePlateLetters(value, 2, false))} placeholder="АА" placeholderTextColor="#98A2B3" style={styles.addLettersInput} autoCapitalize="characters" maxLength={2} />}
@@ -2694,7 +2707,7 @@ export default function HomeScreen() {
             <View style={styles.cardShell}>
             <View style={styles.card}>
               <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop, item.vehicle === "motorcycle" && styles.cardPlateMotorcycle]}>
                   <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} vehicle={item.vehicle} />
                 </Pressable>
                   <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
@@ -2806,7 +2819,7 @@ export default function HomeScreen() {
                 </View>
                 <Pressable onPress={() => setSelectedPlate(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
               </View>
-              <View style={styles.detailsPlatePreview}>
+              <View style={[styles.detailsPlatePreview, selectedPlate?.vehicle === "motorcycle" && styles.cardPlateMotorcycle]}>
                 <PlateFace leftLetter={selectedPlate?.leftLetter} digits={selectedPlate?.digits} rightLetters={selectedPlate?.rightLetters} region={selectedPlate?.region.split(" · ")[1] ?? ""} vehicle={selectedPlate?.vehicle} />
               </View>
               {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
@@ -3251,7 +3264,7 @@ const styles = StyleSheet.create({
   searchHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 3 },
   catalogCount: { alignItems: "center", backgroundColor: "#EEEBFF", borderRadius: 13, flexShrink: 0, minWidth: 58, paddingHorizontal: 8, paddingVertical: 6 },
   catalogCountText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
-  catalogCountCaption: { color: "#655F7A", fontSize: 10, fontWeight: "700" },
+  catalogCountCaption: { color: "#655F7A", fontSize: 10, fontWeight: "700", textAlign: "center" },
   vehicleTabs: { alignItems: "stretch", flexDirection: "row", gap: 8, marginBottom: 15, width: "100%" },
   vehicleTab: { alignItems: "center", backgroundColor: "#F2F4F7", borderColor: "#E2E8F0", borderRadius: 16, borderWidth: 1, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", minWidth: 0, paddingHorizontal: 10, paddingVertical: 11 },
   // На телефоне пиктограмма над подписью, но высота кнопки остаётся прежней.
@@ -3273,7 +3286,9 @@ const styles = StyleSheet.create({
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", minHeight: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
-  plateSearchMotorcycle: { alignSelf: "center", maxWidth: 450, minHeight: 100 },
+  plateSearchMotorcycle: { alignSelf: "center", width: 240, maxWidth: "100%", height: 180, minHeight: 180, flexDirection: "column" },
+  motoSearchDigits: { flex: 0, height: 92, fontSize: 52, width: "100%" },
+  motoSearchBottom: { flexDirection: "row", flex: 1, width: "100%" },
   plateSearchTrailer: { alignSelf: "center", maxWidth: 620 },
   plateInput: { color: "#111827", flex: 1, fontSize: 34, fontWeight: "900", textAlignVertical: "center", letterSpacing: 1, minWidth: 0, textAlign: "center" },
   plateInputMotorcycle: { fontSize: 32 },
@@ -3338,6 +3353,7 @@ const styles = StyleSheet.create({
   listingVehicleTabTextActive: { color: "#FFFFFF" },
   listingFormatHint: { color: "#716A88", fontSize: 11, lineHeight: 16, marginTop: 6 },
   addPlateRow: { flexDirection: "row", gap: 7, marginTop: 11 },
+  addMotoPlateRow: { alignSelf: "center", flexDirection: "column", width: 220, maxWidth: "100%" },
   addSmallInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", fontSize: 18, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 10, textAlign: "center", width: 55 },
   addDigitsInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", flex: 1, fontSize: 18, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 10, textAlign: "center" },
   addLettersInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", fontSize: 18, fontWeight: "800", paddingHorizontal: 10, paddingVertical: 10, textAlign: "center", width: 76 },
@@ -3471,7 +3487,8 @@ const styles = StyleSheet.create({
   hotCarouselContent: { gap: 12, paddingVertical: 8 },
   hotCard: { width: 240, padding: 10, borderRadius: 16, justifyContent: "center" },
   hotPlate: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", height: 50, minHeight: 50, borderWidth: 2 },
-  hotMotoPlate: { width: 100, height: 58, minHeight: 58, alignSelf: "center" },
+  hotMotoPlate: { width: 120, height: 90, minHeight: 90, alignSelf: "center" },
+  cardPlateMotorcycle: { flex: 0, width: 220, maxWidth: "100%", height: 165, minHeight: 165, alignSelf: "center" },
   hotCardMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10 },
   hotArrow: { width: 28, height: 38, borderRadius: 10, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
   hotArrowText: { color: "#5143C2", fontSize: 30, lineHeight: 34 },
