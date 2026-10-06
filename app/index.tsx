@@ -2622,17 +2622,20 @@ export default function HomeScreen() {
       </View>}
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
-      {activeTab === "buy" && <View style={{ width: "100%", maxWidth: 1100, alignSelf: "center", marginBottom: 20, padding: 16, borderRadius: 20, backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#FED7AA" }}>
-        <Text style={[styles.sectionTitle, { textAlign: "center" }]}>🔥 Горячие предложения</Text>
+      {activeTab === "buy" && <View style={styles.hotSection}>
+        <View style={styles.hotHeading}><Text style={styles.hotHeadingText}>🔥 Горячие предложения</Text></View>
         <View style={styles.hotDivider} />
         {hotPlates.length === 0 ? <Text style={[styles.managementHint, { textAlign: "center" }]}>Пока нет горячих предложений по выбранным параметрам.</Text> : <View style={styles.hotCarousel}>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие предложения: влево" disabled={!hotOverflow || hotScrollX <= 1} onPress={() => scrollHot(-1)} style={[styles.hotArrow, (!hotOverflow || hotScrollX <= 1) && styles.hotArrowDisabled]}><Text style={styles.hotArrowText}>‹</Text></Pressable>
           <ScrollView ref={hotScrollRef} horizontal scrollEnabled={hotOverflow} bounces={false} showsHorizontalScrollIndicator={false} style={{ flex: 1 }} onLayout={event => setHotViewportWidth(event.nativeEvent.layout.width)} onContentSizeChange={width => setHotContentWidth(width)} onScroll={event => setHotScrollX(event.nativeEvent.contentOffset.x)} scrollEventThrottle={16} contentContainerStyle={styles.hotCarouselContent}>
-            {hotPlates.map(plate => <Pressable key={`hot-${plate.id}`} onPress={() => setSelectedPlate(plate)} accessibilityRole="button" accessibilityLabel={`Открыть горячее предложение ${plate.value}, ${plate.region}, ${plate.price}`} style={[styles.cardShell, styles.hotCard]}>
+            {hotPlates.map(plate => <Pressable key={`hot-${plate.id}`} onPress={() => setSelectedPlate(plate)} accessibilityRole="button" accessibilityLabel={`Открыть горячее предложение ${plate.value}, ${plate.region}, ${plate.price}`} style={({ pressed }) => [styles.cardShell, styles.hotCard, pressed && styles.hotCardPressed]}>
+              <View style={styles.hotCardAccent} />
+              <View style={styles.hotPlateArea}>
               <View style={[styles.cardPlate, styles.hotPlate, plate.vehicle === "motorcycle" && styles.hotMotoPlate]}>
                 <PlateFace leftLetter={plate.leftLetter} digits={plate.digits} rightLetters={plate.rightLetters} region={plate.region.split(" · ")[1] ?? ""} vehicle={plate.vehicle} />
               </View>
-              <View style={styles.hotCardMeta}><Text style={[styles.price, { fontSize: 17 }]}>{plate.price}</Text><Text style={styles.cardPublishedTop}>{formatListingDate(plate.publishedAt ?? plate.createdAt)}</Text></View>
+              </View>
+              <View style={styles.hotCardMeta}><Text style={styles.hotPrice}>{plate.price}</Text><Text style={styles.hotDate}>{formatListingDate(plate.publishedAt ?? plate.createdAt)}</Text></View>
             </Pressable>)}
           </ScrollView>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие предложения: вправо" disabled={!hotOverflow || hotScrollX >= hotContentWidth - hotViewportWidth - 1} onPress={() => scrollHot(1)} style={[styles.hotArrow, (!hotOverflow || hotScrollX >= hotContentWidth - hotViewportWidth - 1) && styles.hotArrowDisabled]}><Text style={styles.hotArrowText}>›</Text></Pressable>
@@ -3485,17 +3488,25 @@ const styles = StyleSheet.create({
   showMoreText: { color: "#5B43C9", fontSize: 15, fontWeight: "800" },
   cardShell: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   card: { paddingHorizontal: 14, paddingTop: 14 },
+  hotSection: { width: "100%", maxWidth: 1100, alignSelf: "center", marginTop: 24, marginBottom: 24, padding: 16, borderRadius: 24, backgroundColor: "#FFF9F2", borderWidth: 1, borderColor: "#F7CDA4", shadowColor: "#9A4B14", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.06, shadowRadius: 14 },
+  hotHeading: { alignSelf: "center", backgroundColor: "#FFE8D1", borderRadius: 18, paddingHorizontal: 18, paddingVertical: 9 },
+  hotHeadingText: { color: "#8A3D14", fontSize: 17, fontWeight: "900", textAlign: "center" },
   hotCarousel: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
   hotDivider: { height: 1, backgroundColor: "#FED7AA", alignSelf: "stretch", marginTop: 12, marginBottom: 4 },
-  hotCarouselContent: { gap: 12, paddingVertical: 8 },
-  hotCard: { width: 240, padding: 10, borderRadius: 16, justifyContent: "center" },
-  hotPlate: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", height: 50, minHeight: 50, borderWidth: 2 },
+  hotCarouselContent: { gap: 14, paddingVertical: 10, paddingHorizontal: 2 },
+  hotCard: { width: 260, padding: 12, borderRadius: 18, justifyContent: "center", backgroundColor: "#FFFFFF", borderColor: "#EAC9A5", shadowColor: "#9A4B14", shadowOpacity: 0.12, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+  hotCardPressed: { backgroundColor: "#FFF0E0", borderColor: "#E89442", opacity: 0.9 },
+  hotCardAccent: { position: "absolute", top: 0, left: 14, right: 14, height: 3, borderBottomLeftRadius: 4, borderBottomRightRadius: 4, backgroundColor: "#ED9D48" },
+  hotPlateArea: { minHeight: 94, justifyContent: "center" },
+  hotPrice: { color: "#146C4B", fontSize: 22, fontWeight: "900" },
+  hotDate: { color: "#7D7169", fontSize: 11, lineHeight: 16, textAlign: "right", marginTop: 5 },
+  hotPlate: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", height: 54, minHeight: 54, borderWidth: 2, backgroundColor: "#FAFBFD" },
   hotMotoPlate: { width: 120, height: 90, minHeight: 90, alignSelf: "center" },
   cardPlateMotorcycle: { flex: 0, flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: 240, maxWidth: "100%", height: 180, minHeight: 180, alignSelf: "center", borderRadius: 14 },
-  hotCardMeta: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginTop: 10 },
-  hotArrow: { width: 28, height: 38, borderRadius: 10, backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
-  hotArrowText: { color: "#5143C2", fontSize: 30, lineHeight: 34 },
-  hotArrowDisabled: { opacity: 0.3 },
+  hotCardMeta: { borderTopWidth: 1, borderTopColor: "#F2E9DF", paddingTop: 10, marginTop: 4 },
+  hotArrow: { width: 32, height: 42, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#F0D4B5", alignItems: "center", justifyContent: "center" },
+  hotArrowText: { color: "#9A4B14", fontSize: 30, lineHeight: 34 },
+  hotArrowDisabled: { opacity: 0.25 },
   cardMainRow: { alignItems: "stretch", flexDirection: "row", gap: 10, minWidth: 0 },
   // На телефоне сначала показываем номер на всю ширину, затем все сведения
   // в этой же карточке. Так знак никогда не обрезается сбоку.
