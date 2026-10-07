@@ -8,6 +8,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { writeFile } from "node:fs/promises";
+import { offerIdentity } from "./catalog-identity.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL || "https://qiqnbjdgkhbtfpxqtpio.supabase.co";
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "sb_publishable_F-nhmdzQnvxe3stusjD-NA_i1-AOXOB";
@@ -30,7 +31,7 @@ for (let start = 0; ; start += pageSize) {
 
 const unique = new Map();
 for (const item of rows) {
-  const key = `${item.vehicle_type}|${item.plate_left}${item.plate_digits}${item.plate_right}|${item.region.trim().toLocaleUpperCase("ru-RU")}`;
+  const key = offerIdentity(item);
   if (!unique.has(key)) unique.set(key, item);
 }
 

@@ -26,6 +26,7 @@ import { PlateFace } from "../components/PlateFace";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
+import { deduplicateOffers } from "../lib/catalog-offers";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
@@ -265,7 +266,7 @@ const initialPlates: Plate[] = [
 // вместо сервера, а чтобы при проблеме с мобильной сетью пользователь не
 // видел 18 демонстрационных карточек.
 const bundledCatalog = bundledCatalogData as Plate[];
-const catalogFallback = bundledCatalog.length > 0 ? bundledCatalog : initialPlates;
+const catalogFallback = deduplicateOffers(bundledCatalog.length > 0 ? bundledCatalog : initialPlates);
 
 export default function HomeScreen() {
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -1100,7 +1101,7 @@ export default function HomeScreen() {
       if (!mounted || !saved) return;
       try {
         const cached = JSON.parse(saved) as Plate[];
-        if (Array.isArray(cached) && cached.length > 120) setCatalog(cached);
+        if (Array.isArray(cached) && cached.length > 120) setCatalog(deduplicateOffers(cached));
       } catch {
         void AsyncStorage.removeItem(CATALOG_CACHE_KEY);
       }
@@ -1284,15 +1285,7 @@ export default function HomeScreen() {
       const loaded = [...catalogFallback, ...fromDatabase, ...partners];
       // Один и тот же номер с тем же кодом региона показываем только один раз.
       // Если запись пришла повторно, оставляем самую свежую.
-      const uniqueListings = new Map<string, Plate>();
-      loaded.forEach((plate) => {
-        const key = `${plate.vehicle}|${normalizePlateLetters(plate.leftLetter, 2)}${plate.digits}${normalizePlateLetters(plate.rightLetters, 2)}|${plate.region.split(" · ").at(-1)?.trim()}|${plate.priceValue}`;
-        const previous = uniqueListings.get(key);
-        const currentDate = new Date(plate.publishedAt ?? plate.createdAt).getTime();
-        const previousDate = previous ? new Date(previous.publishedAt ?? previous.createdAt).getTime() : Number.NEGATIVE_INFINITY;
-        if (!previous || currentDate >= previousDate) uniqueListings.set(key, plate);
-      });
-      const uniqueLoaded = [...uniqueListings.values()].sort((first, second) => (second.publishedAt ?? second.createdAt).localeCompare(first.publishedAt ?? first.createdAt));
+      const uniqueLoaded = deduplicateOffers(loaded);
       // Demo cards are useful only before the first database data arrives.
       // Mixing them into a real catalogue inflated the public count.
       // Не меняем тысячу карточек прямо посреди касания/прокрутки: на слабых
