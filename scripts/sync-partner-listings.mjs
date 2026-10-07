@@ -10,6 +10,7 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { createWorker } from "tesseract.js";
+import { loadCatalogIndex } from "./catalog-identity.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -18,6 +19,7 @@ if (!url || !serviceKey) {
 }
 
 const db = createClient(url, serviceKey, { auth: { persistSession: false } });
+const catalogIndex = await loadCatalogIndex(db);
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 // Partner sources requested a slow, low-impact nightly scan. One public page
 // is read per source and this pause prevents a burst of requests.
@@ -267,6 +269,8 @@ async function syncSource(source) {
   const posts = extractPosts(await response.text(), source);
   let added = 0;
   let archived = 0;
+  let updated = 0;
+  let skippedDuplicates = 0;
   for (const post of posts) {
     const sourceUrl = `https://t.me/${source.handle}/${post.postId}`;
     if (post.sold) {
@@ -285,17 +289,21 @@ async function syncSource(source) {
       rows = parsePost(`${post.text}\n${photoText}`, source, post.postId, post.postedAt);
     }
     if (!rows.length) continue;
-    const { data: existing, error: existingError } = await db.from("partner_listings").select("id").in("id", rows.map((row) => row.id));
-    if (existingError) throw existingError;
-    const existingIds = new Set((existing ?? []).map((row) => row.id));
-    const newlyAddedRows = rows.filter((row) => !existingIds.has(row.id));
-    const { error } = await db.from("partner_listings").upsert(rows, { onConflict: "id" });
-    if (error) throw error;
+    const newlyAddedRows = [];
+    for (const row of rows) {
+      const known = catalogIndex.sameSource(row);
+      if (!known && catalogIndex.duplicate(row)) { skippedDuplicates++; continue; }
+      const savedRow = known ? { ...row, id: known.id } : row;
+      const { error } = await db.from("partner_listings").upsert(savedRow, { onConflict: "id" });
+      if (error) throw error;
+      if (!known) { added++; newlyAddedRows.push(savedRow); }
+      else if (Number(known.price_rub) !== row.price_rub || known.status !== row.status) updated++;
+      catalogIndex.remember(savedRow);
+    }
     await notifySearchAlerts(newlyAddedRows);
     await db.from("partner_listing_statuses").upsert({ source_url: sourceUrl, status: "active", archive_reason: null, checked_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-    added += rows.length;
   }
-  return { source: source.name, posts: posts.length, added, archived };
+  return { source: source.name, posts: posts.length, added, updated, archived, skippedDuplicates };
 }
 
 const result = [];

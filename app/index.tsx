@@ -1286,7 +1286,7 @@ export default function HomeScreen() {
       // Если запись пришла повторно, оставляем самую свежую.
       const uniqueListings = new Map<string, Plate>();
       loaded.forEach((plate) => {
-        const key = `${plate.vehicle}|${plate.leftLetter}${plate.digits}${plate.rightLetters}|${plate.region.trim().toLocaleUpperCase("ru-RU")}`;
+        const key = `${plate.vehicle}|${normalizePlateLetters(plate.leftLetter, 2)}${plate.digits}${normalizePlateLetters(plate.rightLetters, 2)}|${plate.region.split(" · ").at(-1)?.trim()}|${plate.priceValue}`;
         const previous = uniqueListings.get(key);
         const currentDate = new Date(plate.publishedAt ?? plate.createdAt).getTime();
         const previousDate = previous ? new Date(previous.publishedAt ?? previous.createdAt).getTime() : Number.NEGATIVE_INFINITY;

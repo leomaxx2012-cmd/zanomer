@@ -7,6 +7,8 @@
  * retained; post text is used in memory and never stored.
  */
 import { createClient } from "@supabase/supabase-js";
+import { loadCatalogIndex } from "./catalog-identity.mjs";
+import { validatePublicResponse } from "./vk-public-response.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -172,17 +174,7 @@ function extractPosts(html) {
   return [...new Map(posts.map((post) => [post.postId, post])).values()];
 }
 
-async function hasCatalogDuplicate(row) {
-  const match = (query) => query.eq("plate_left", row.plate_left).eq("plate_digits", row.plate_digits)
-    .eq("plate_right", row.plate_right).eq("region", row.region).eq("vehicle_type", row.vehicle_type).limit(1);
-  const [{ data: partner, error: partnerError }, { data: own, error: ownError }] = await Promise.all([
-    match(db.from("partner_listings").select("id").neq("id", row.id)),
-    match(db.from("auto_listings").select("id").eq("status", "active")),
-  ]);
-  if (partnerError) throw partnerError;
-  if (ownError) throw ownError;
-  return Boolean(partner?.length || own?.length);
-}
+const catalogIndex = await loadCatalogIndex(db);
 
 async function syncPost(post) {
   const sourceUrl = `https://vk.ru/wall${post.postId}`;
@@ -199,18 +191,19 @@ async function syncPost(post) {
   let skippedDuplicates = 0;
   const newlyAddedRows = [];
   for (const row of rows) {
-    const { data: known, error: knownError } = await db.from("partner_listings").select("id").eq("id", row.id).maybeSingle();
-    if (knownError) throw knownError;
-    if (!known && await hasCatalogDuplicate(row)) {
+    const known = catalogIndex.sameSource(row);
+    if (!known && catalogIndex.duplicate(row)) {
       skippedDuplicates += 1;
       continue;
     }
-    const { error } = await db.from("partner_listings").upsert(row, { onConflict: "id" });
+    const savedRow = known ? { ...row, id: known.id } : row;
+    const { error } = await db.from("partner_listings").upsert(savedRow, { onConflict: "id" });
     if (error) throw error;
     if (!known) {
       added += 1;
-      newlyAddedRows.push(row);
+      newlyAddedRows.push(savedRow);
     }
+    catalogIndex.remember(savedRow);
   }
   await notifySearchAlerts(newlyAddedRows);
   if (rows.length) {
@@ -225,11 +218,10 @@ const timeout = setTimeout(() => controller.abort(), 20_000);
 try {
   const response = await fetch(SOURCE.url, {
     signal: controller.signal,
+    redirect: "manual",
     headers: { "user-agent": "ZaNomer catalog checker/1.1", accept: "text/html,application/xhtml+xml" },
   });
-  if (!response.ok) throw new Error(`VK returned HTTP ${response.status}`);
-  const html = await response.text();
-  if (!html.includes("aautonomera777")) throw new Error("Public community identifier was not found in the response");
+  const html = validatePublicResponse(response, await response.text());
   const posts = extractPosts(html);
   const totals = { added: 0, archived: 0, skippedDuplicates: 0 };
   for (const post of posts) {
