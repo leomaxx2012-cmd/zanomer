@@ -27,6 +27,7 @@ import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
 import { deduplicateOffers } from "../lib/catalog-offers";
+import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
@@ -180,7 +181,7 @@ const legalDocumentDetails: Record<Exclude<LegalDocument, "overview">, { title: 
   delivery: { title: "Оказание услуг", body: "Услуги оказываются онлайн в аккаунте, с которого сделана оплата; физической доставки нет. После подтверждения платежа подписка включается автоматически. Покупка продвижения зачисляет размещение на баланс: откройте профиль → Мои объявления → своё активное объявление → Выделить в горячие предложения. Срок продвижения начинается при применении к объявлению. Если статус не обновился, вернитесь на сайт и обратитесь на zanomerom@mail.ru с идентификатором платежа. ЗаНомером не принимает деньги по сделкам между пользователями." },
   privacy: { title: "Политика обработки персональных данных", body: "Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: e-mail, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Данные банковских карт сервис не хранит: их обрабатывает выбранный платёжный партнёр на защищённой странице оплаты." },
   requisites: { title: "Реквизиты и контакты", body: "Исполнитель цифровых услуг: ИП Леонович Александр Леонидович. ИНН 504406730552. ОГРНИП 319508100089501. КПП не применяется для ИП. Адрес: 141570, МО, Солнечногорский район, пгт Менделеево, ул. Левобережная, д. 1, кв. 69. E-mail: zanomerom@mail.ru. Телефон: +7 (495) 268-01-43. Расчётный счёт: 40802 810 5 0000 0054446. Банк: ПАО Банк ПСБ, г. Ярославль. БИК: 044525555. Корреспондентский счёт: 30101 810 4 0000 0000555." },
-  plus: { title: "ЗаНомером Плюс — 199 ₽", body: "Разовая оплата за 30 календарных дней. Подписка автоматически включается после подтверждения платежа в аккаунте покупателя. Лимиты сохранённых поисков и избранных номеров увеличиваются с 15 до 30; доступен график изменения цены при наличии истории. Сохранённые поиски помогают получать уведомления о подходящих объявлениях. Автоматических повторных списаний нет. Повторная покупка продлевает действующий срок. Это доступ к функциям сервиса, а не покупка госномера." },
+  plus: { title: "ЗаНомером Плюс — 199 ₽", body: "Разовая оплата за 30 календарных дней. После подтверждения платежа подписка включается в аккаунте покупателя. Включены сравнение до 4 объявлений, график цены при наличии истории, уведомления в аккаунте о снижении цены избранных объявлений и увеличение лимитов поисков и избранного с 15 до 30. Цена отслеживается в сохранённом объявлении: другое предложение того же номера не считается снижением его цены. За каждый успешно оплаченный период начисляется одно размещение собственного активного объявления в горячих предложениях на 48 часов. Бонус появляется на балансе профиля и применяется вручную к объявлению после модерации; 48 часов отсчитываются с применения. Неиспользованные размещения сохраняются на балансе. Автоматических повторных списаний нет. Повторная покупка продлевает действующий срок. Оплачивается цифровая услуга, не госномер." },
   highlight: { title: "Горячие предложения · 1 размещение на 48 часов — 129 ₽", body: "Одна покупка даёт одно выделение собственного активного объявления. После подтверждения оплаты размещение появляется на балансе профиля. Откройте Мои объявления, выберите своё прошедшее модерацию объявление и нажмите Выделить в горячие предложения. После применения оно получает выделение и показывается в блоке Горячие предложения в течение 48 часов. Срок отсчитывается от применения, а не покупки. Продвижение не гарантирует продажу, просмотры или отклики и не оплачивает сам госномер." },
   hot: { title: "Горячие предложения · 1 размещение навсегда — 399 ₽", body: "Одна покупка даёт одно постоянное горячее размещение собственного активного объявления. После подтверждения платежа размещение зачисляется на баланс. В профиле откройте Мои объявления, выберите своё прошедшее модерацию объявление и примените горячее размещение. Оно показывается в Горячих предложениях без фиксированного срока окончания, пока объявление активно и сервис работает. После снятия объявления с публикации показ прекращается. Продвижение не гарантирует продажу или количество откликов; деньги за госномер сервис не принимает." },
   "hot-pack": { title: "Горячие предложения · 5 размещений навсегда — 1 599 ₽", body: "Разовая покупка зачисляет 5 горячих размещений на баланс профиля после подтверждения платежа. В профиле откройте Мои объявления, выберите своё активное объявление, прошедшее модерацию, и примените горячее размещение. Каждое применение расходует одно размещение из пакета. Можно продвинуть до пяти своих объявлений; оставшиеся размещения сохраняются на балансе и не применяются автоматически. Каждое выбранное объявление показывается в Горячих предложениях без фиксированного срока окончания, пока оно активно и сервис работает. При снятии объявления с публикации его показ прекращается. Продвижение не гарантирует продажу, просмотры или отклики. Оплачивается цифровая услуга сервиса, не госномер." },
@@ -358,6 +359,9 @@ export default function HomeScreen() {
   const [selectedPlate, setSelectedPlate] = useState<Plate | null>(null);
   const [sellerProfile, setSellerProfile] = useState<string | null>(null);
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
+  const [comparison, setComparison] = useState<Plate[]>([]);
+  const [comparisonOpen, setComparisonOpen] = useState(false);
+  const [favoriteWatchMessage, setFavoriteWatchMessage] = useState("");
   const [listingPicker, setListingPicker] = useState<PlatePicker>(null);
   const [myListings, setMyListings] = useState<Plate[]>([]);
   const [moderationListings, setModerationListings] = useState<Plate[]>([]);
@@ -394,6 +398,40 @@ export default function HomeScreen() {
   const [paymentStarting, setPaymentStarting] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState("");
   const [hasPlusSubscription, setHasPlusSubscription] = useState(false);
+
+  function toggleComparison(plate: Plate) {
+    if (!hasPlusSubscription) { setSelectedPlate(null); setActiveTab("subscriptions"); return; }
+    if (comparison.some(item => item.id === plate.id)) {
+      setComparison(items => toggleCompared(items, plate));
+    } else if (comparison.length < 4) {
+      setComparison(items => toggleCompared(items, plate));
+    } else {
+      setComparisonOpen(true);
+    }
+  }
+
+  async function savePriceWatch(id: string, enabled: boolean) {
+    if (!supabase || !currentUserId) {
+      if (enabled) setFavoriteWatchMessage("Войди в аккаунт, чтобы сохранить уведомления о снижении цены.");
+      return;
+    }
+    const { error } = await supabase.rpc("set_favorite_price_watch", { listing: id, enabled });
+    setFavoriteWatchMessage(error ? "Не удалось сохранить отслеживание цены. Попробуй ещё раз." : enabled
+      ? "Номер сохранён в аккаунте. Уведомления о снижении цены доступны с активным Плюсом." : "Отслеживание цены отключено.");
+  }
+
+  useEffect(() => {
+    setFavoriteWatchMessage("");
+    setComparison([]);
+    setComparisonOpen(false);
+    setSaved([]);
+    if (!supabase || !currentUserId) return;
+    let cancelled = false;
+    void supabase.from("favorite_price_watches").select("listing_id").eq("owner_id", currentUserId).then(({ data, error }) => {
+      if (!cancelled && !error && data) setSaved(data.map(item => String(item.listing_id)));
+    });
+    return () => { cancelled = true; };
+  }, [currentUserId]);
   const [promotionBalance, setPromotionBalance] = useState({ highlights: 0, hot: 0 });
   const [promotionListing, setPromotionListing] = useState<string | null>(null);
   const [promotionBusy, setPromotionBusy] = useState(false);
@@ -773,18 +811,6 @@ export default function HomeScreen() {
       setHasPlusSubscription(false);
       return;
     }
-    const loadPlusSubscription = async () => {
-      const { data } = await supabase
-        .from("service_payments")
-        .select("paid_at")
-        .eq("service_code", "plus_month")
-        .eq("status", "succeeded")
-        .order("paid_at", { ascending: false })
-        .limit(1);
-      const paidAt = data?.[0]?.paid_at ? new Date(data[0].paid_at).getTime() : 0;
-      setHasPlusSubscription(paidAt > Date.now() - 30 * 24 * 60 * 60 * 1000);
-    };
-    void loadPlusSubscription();
     void loadPaymentBenefits();
     const timer = setInterval(() => { void loadPaymentBenefits(); }, 15000);
     const subscription = AppState.addEventListener("change", state => { if (state === "active") void loadPaymentBenefits(); });
@@ -1498,6 +1524,13 @@ export default function HomeScreen() {
     setInAppNotice(data as AppNotification);
   }
 
+  useEffect(() => {
+    if (!currentUserId || inAppNotice) return;
+    void loadUnreadAppNotice(currentUserId);
+    const timer = setInterval(() => void loadUnreadAppNotice(currentUserId), 30000);
+    return () => clearInterval(timer);
+  }, [currentUserId, inAppNotice]);
+
   // Закрытое уведомление не должно появляться снова. Помечаем все повторы
   // одного и того же события прочитанными: ранние версии сервера могли
   // создать две одинаковые записи об одобрении.
@@ -1510,7 +1543,7 @@ export default function HomeScreen() {
       .update({ read_at: new Date().toISOString() })
       .eq("owner_id", currentUserId)
       .eq("kind", notice.kind)
-      .eq("listing_id", notice.listing_id)
+      .eq(notice.kind === "price-drop" ? "id" : "listing_id", notice.kind === "price-drop" ? notice.id : notice.listing_id)
       .is("read_at", null);
     if (error) console.warn("Could not mark app notification as read", error.message);
     if (openListing) void openListingFromNotification(notice.kind, notice.listing_id);
@@ -1719,6 +1752,8 @@ export default function HomeScreen() {
   const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode);
 
   function toggleSaved(id: string) {
+    if (!saved.includes(id) && saved.length >= (hasPlusSubscription ? 30 : 15)) { setSubscriptionToast(true); return; }
+    void savePriceWatch(id, !saved.includes(id));
     setSaved((current) => {
       const limit = hasPlusSubscription ? 30 : 15;
       if (!current.includes(id) && current.length >= limit) {
@@ -2225,7 +2260,7 @@ export default function HomeScreen() {
             <>
               <Text style={styles.authHint}>Ты уже вошёл. Пароль нужен только если хочешь изменить его для будущих входов.</Text>
               <Text style={styles.managementTitle}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "Подписка Плюс не активна"}</Text>
-              <Text style={styles.managementHint}>Куплено: {promotionBalance.highlights} выделений на 48 часов · {promotionBalance.hot} горячих размещений. Выбери свой номер ниже, чтобы применить покупку.</Text>
+              <Text style={styles.managementHint}>Доступно: {promotionBalance.highlights} размещений на 48 часов (включая бонусы Плюса) · {promotionBalance.hot} постоянных размещений. Выбери свой номер ниже. За каждый оплаченный период Плюса начисляется одно размещение на 48 часов.</Text>
               <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Придумай пароль (минимум 6 символов)" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry />
               <Pressable onPress={async () => {
                 if (!supabase) return;
@@ -2610,6 +2645,9 @@ export default function HomeScreen() {
           <Text style={styles.premiumItem}>◉ Ранний доступ к объявлениям — на 15 минут раньше</Text>
           <Text style={styles.premiumItem}>◉ График изменения цены номера</Text>
           <Text style={styles.premiumItem}>◉ До 30 сохранённых поисков и избранных номеров</Text>
+          <Text style={styles.premiumItem}>◉ Уведомления о снижении цены избранных номеров</Text>
+          <Text style={styles.premiumItem}>◉ Удобное сравнение до 4 объявлений</Text>
+          <Text style={styles.premiumItem}>◉ 1 размещение в горячих на 48 часов за каждый оплаченный период</Text>
           <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽", "plus_month")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Перейти к оплате</Text></Pressable>
         </View>
       </View>}
@@ -2685,6 +2723,12 @@ export default function HomeScreen() {
       </View>}
 
       <View style={styles.listContainer}>
+      {!!favoriteWatchMessage && <Text accessibilityLiveRegion="polite" style={styles.comparisonHint}>{favoriteWatchMessage}</Text>}
+      {comparison.length > 0 && hasPlusSubscription && <View style={styles.comparisonBar}>
+        <View style={{ flex: 1 }}><Text style={styles.comparisonBarTitle}>Сравнение · {comparison.length} из 4</Text><Text style={styles.comparisonBarCaption}>{comparison.map(item => item.value).join(" · ")}</Text></View>
+        <Pressable disabled={comparison.length < 2} onPress={() => setComparisonOpen(true)} style={[styles.comparisonPrimary, comparison.length < 2 && { opacity: 0.5 }]}><Text style={styles.comparisonPrimaryText}>{comparison.length < 2 ? "Добавь ещё номер" : "Сравнить →"}</Text></Pressable>
+        <Pressable onPress={() => setComparison([])} accessibilityLabel="Очистить сравнение"><Text style={styles.comparisonHint}>Очистить</Text></Pressable>
+      </View>}
       {hiddenSeriesGroupKeys.length > 0 && <Pressable onPress={() => setHiddenSeriesGroupKeys([])} style={styles.restoreSeriesButton}>
         <Text style={styles.restoreSeriesButtonText}>Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
       </Pressable>}
@@ -2720,6 +2764,8 @@ export default function HomeScreen() {
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
                   </View>
                   <View style={styles.cardButtonsSpread}>
+                    <Pressable onPress={() => toggleComparison(item)} style={[styles.cardAction, comparison.some(plate => plate.id === item.id) && styles.comparisonSelected]}><Text style={styles.cardActionText}>{comparison.some(plate => plate.id === item.id) ? "✓ В сравнении" : "⇄ Сравнить · Плюс"}</Text></Pressable>
+                    <Pressable onPress={() => toggleSaved(item.id)} style={styles.cardAction}><Text style={styles.cardActionText}>{saved.includes(item.id) ? "♥ Сохранён" : "♡ В избранное"}</Text></Pressable>
                     {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={[styles.sourceButton, compactLayout && styles.cardPrimaryActionCompact]}>
                       <Text style={styles.sourceButtonText}>Открыть объявление ↗</Text>
                     </Pressable>}
@@ -2749,6 +2795,31 @@ export default function HomeScreen() {
       </>}
 
       </ScrollView>
+
+      <Modal visible={comparisonOpen && hasPlusSubscription} transparent animationType="fade" onRequestClose={() => setComparisonOpen(false)}>
+        <View style={styles.detailsOverlay}>
+          <View style={[styles.comparisonPanel, { maxHeight: windowHeight - 40 }]}>
+            <View style={styles.detailsHeader}><View style={{ flex: 1 }}><Text style={styles.comparisonEyebrow}>ЗА НОМЕРОМ ПЛЮС</Text><Text style={styles.detailsTitle}>Сравни и выбери свой</Text></View><Pressable accessibilityLabel="Закрыть сравнение" onPress={() => setComparisonOpen(false)} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable></View>
+            <Text style={styles.comparisonHint}>До 4 объявлений рядом. Самая низкая цена — не гарантия лучшего предложения: уточни условия у продавца.</Text>
+            <ScrollView><ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.comparisonColumns}>
+              {comparisonPrices(comparison, catalog).map(({ item: plate, difference }) => {
+                const sameNumber = comparison.some(item => item.id !== plate.id && item.vehicle === plate.vehicle && item.value === plate.value && item.region === plate.region);
+                return <View key={plate.id} style={[styles.comparisonColumn, { width: compactLayout ? Math.max(170, (windowWidth - 64) / 2) : 240 }]}>
+                  <View style={styles.comparisonColumnHeader}><Text style={styles.comparisonEyebrow}>{difference === 0 ? "МИНИМАЛЬНАЯ ЦЕНА" : "ПРЕДЛОЖЕНИЕ"}</Text><Pressable accessibilityLabel={`Убрать ${plate.value} из сравнения`} onPress={() => setComparison(items => items.filter(item => item.id !== plate.id))}><Text style={styles.detailsCloseText}>×</Text></Pressable></View>
+                  <View style={[styles.comparisonPlate, plate.vehicle === "motorcycle" && { height: undefined, aspectRatio: 4 / 3 }]}><PlateFace leftLetter={plate.leftLetter} digits={plate.digits} rightLetters={plate.rightLetters} region={plate.region.split(" · ")[1] ?? ""} vehicle={plate.vehicle}/></View>
+                  <Text style={styles.comparisonPrice}>{plate.price}</Text>
+                  <Text style={[styles.comparisonDifference, difference === 0 && { color: "#087A53" }]}>{difference === 0 ? "Самая низкая из выбранных" : `На ${difference.toLocaleString("ru-RU")} ₽ дороже`}</Text>
+                  {sameNumber && <Text style={styles.comparisonSame}>Один номер · разные предложения</Text>}
+                  {[ ["Регион", plate.region], ["Транспорт", plate.vehicle === "car" ? "Авто" : plate.vehicle === "motorcycle" ? "Мото" : "Прицеп"], ["Опубликовано", formatListingDate(plate.publishedAt ?? plate.createdAt)], ["Продавец / источник", plate.seller] ].map(([label, value]) => <View key={label} style={styles.comparisonRow}><Text style={styles.comparisonRowLabel}>{label}</Text><Text style={styles.comparisonRowValue}>{value}</Text></View>)}
+                  <Pressable style={styles.comparisonPrimary} onPress={() => { setComparisonOpen(false); setSelectedPlate(plate); }}><Text style={styles.comparisonPrimaryText}>Подробнее и история цены</Text></Pressable>
+                  {!!plate.sourceUrl && <Pressable onPress={() => void Linking.openURL(plate.sourceUrl!)}><Text style={styles.comparisonSource}>Открыть источник ↗</Text></Pressable>}
+                </View>;
+              })}
+            </ScrollView></ScrollView>
+            <Text style={styles.comparisonHint}>{comparison.length < 2 ? "Добавь ещё объявления из каталога для сравнения." : "На телефоне листай карточки вбок →"}</Text>
+          </View>
+        </View>
+      </Modal>
 
       <Modal visible={!!similarityPickerPlate} transparent animationType="fade" onRequestClose={() => setSimilarityPickerPlate(null)}>
         <Pressable style={styles.detailsOverlay} onPress={() => setSimilarityPickerPlate(null)}>
@@ -3061,7 +3132,7 @@ export default function HomeScreen() {
               <Text style={styles.legalHeading}>Платные услуги</Text>
               <Pressable accessibilityRole="link" onPress={() => openLegalDocument("plus")} style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Подписка ЗаНомером Плюс — 199 ₽ в месяц</Text>
-                <Text style={styles.legalText}>30 дней доступа к дополнительным функциям. Разовая оплата, без автоматических списаний.</Text>
+                <Text style={styles.legalText}>30 дней: сравнение до 4 объявлений, снижение цены избранного, история цены и одно горячее размещение на 48 часов. Разовая оплата.</Text>
                 <Text style={styles.legalLink}>Подробнее →</Text>
               </Pressable>
               <Pressable accessibilityRole="link" onPress={() => openLegalDocument("highlight")} style={styles.legalCard}>
@@ -3127,6 +3198,11 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {comparison.length > 0 && hasPlusSubscription && (activeTab === "buy" || activeTab === "favorites") && <View style={[styles.comparisonDock, { width: Math.min(windowWidth - 48, 600), left: (windowWidth - Math.min(windowWidth - 48, 600)) / 2 }]}>
+        <Text style={styles.comparisonBarTitle}>{comparison.length}/4</Text>
+        <Pressable disabled={comparison.length < 2} onPress={() => setComparisonOpen(true)} style={[styles.comparisonPrimary, { flex: 1 }, comparison.length < 2 && { opacity: 0.5 }]}><Text style={styles.comparisonPrimaryText}>{comparison.length < 2 ? "Выбери ещё номер" : "⇄ Сравнить выбранные"}</Text></Pressable>
+        <Pressable accessibilityLabel="Очистить сравнение" onPress={() => setComparison([])}><Text style={styles.detailsCloseText}>×</Text></Pressable>
+      </View>}
       <View style={styles.bottomNav}>
         {([
           ["buy", "⌕", "Купить", "#155EEF"],
@@ -3573,6 +3649,27 @@ const styles = StyleSheet.create({
   emptyTabTitle: { color: "#101828", fontSize: 21, fontWeight: "800", marginTop: 12, textAlign: "center" },
   emptyTabText: { color: "#667085", fontSize: 14, lineHeight: 20, marginTop: 7, textAlign: "center" },
   premiumCard: { alignSelf: "stretch", backgroundColor: "#101828", borderRadius: 18, marginTop: 18, padding: 18 },
+  comparisonPanel: { backgroundColor: "#FAF9FF", borderRadius: 24, padding: 20, width: "100%", maxWidth: 1100, alignSelf: "center" },
+  comparisonDock: { position: "absolute", bottom: 85, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#C9BFF4", borderRadius: 18, padding: 12, gap: 12, flexDirection: "row", alignItems: "center", shadowColor: "#352F67", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 16, elevation: 8, zIndex: 20 },
+  comparisonEyebrow: { color: "#7566CE", fontSize: 10, fontWeight: "900", letterSpacing: 1 },
+  comparisonHint: { color: "#716A88", fontSize: 12, lineHeight: 19, paddingVertical: 12 },
+  comparisonBar: { backgroundColor: "#EDE9FF", borderRadius: 18, padding: 16, marginBottom: 18, flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 12, borderWidth: 1, borderColor: "#D6CEFF" },
+  comparisonBarTitle: { color: "#352F67", fontSize: 17, fontWeight: "900" },
+  comparisonBarCaption: { color: "#716A88", fontSize: 12, marginTop: 4 },
+  comparisonPrimary: { backgroundColor: "#5143C2", borderRadius: 12, padding: 12, alignItems: "center", justifyContent: "center" },
+  comparisonPrimaryText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800", textAlign: "center" },
+  comparisonSelected: { borderWidth: 2, borderColor: "#A69AEF" },
+  comparisonColumns: { gap: 12, paddingVertical: 12 },
+  comparisonColumn: { backgroundColor: "#FFFFFF", borderRadius: 18, padding: 12, borderWidth: 1, borderColor: "#E2DDF5" },
+  comparisonColumnHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 30 },
+  comparisonPlate: { width: "100%", height: 65, marginVertical: 14, borderWidth: 2, borderRadius: 8, borderColor: "#202737", overflow: "hidden" },
+  comparisonPrice: { color: "#172A24", fontSize: 24, fontWeight: "900" },
+  comparisonDifference: { color: "#716A88", fontSize: 11, minHeight: 38, marginTop: 6 },
+  comparisonSame: { backgroundColor: "#FFF3DF", borderRadius: 8, padding: 8, color: "#946117", fontSize: 11 },
+  comparisonRow: { minHeight: 75, borderTopWidth: 1, borderColor: "#EEEAF8", paddingVertical: 12 },
+  comparisonRowLabel: { color: "#8A839E", fontSize: 11 },
+  comparisonRowValue: { color: "#352F67", fontSize: 13, fontWeight: "700", marginTop: 5 },
+  comparisonSource: { color: "#5143C2", fontSize: 12, fontWeight: "700", textAlign: "center", paddingTop: 14 },
   premiumTitle: { color: "#FFFFFF", fontSize: 17, fontWeight: "800" },
   premiumItem: { color: "#D0D5DD", fontSize: 13, lineHeight: 20, marginTop: 10 },
   comingSoonButton: { alignItems: "center", backgroundColor: "#344054", borderRadius: 11, marginTop: 17, paddingVertical: 12 },

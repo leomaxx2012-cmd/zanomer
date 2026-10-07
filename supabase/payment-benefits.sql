@@ -12,7 +12,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare highlights integer; hot integer; expiry timestamptz; purchase record;
 begin
   if auth.uid() is null then raise exception 'Unauthorized'; end if;
-  select coalesce(sum(case service_code when 'highlight_48h' then 1 when 'highlight_pack_5' then 5 else 0 end),0),
+  select coalesce(sum(case service_code when 'highlight_48h' then 1 when 'highlight_pack_5' then 5 when 'plus_month' then 1 else 0 end),0),
          coalesce(sum(case service_code when 'hot_listing' then 1 when 'hot_pack_5' then 5 else 0 end),0)
   into highlights, hot from service_payments where owner_id=auth.uid() and status='succeeded';
   highlights := highlights - (select count(*) from listing_promotion_uses where owner_id=auth.uid() and kind='highlight');
