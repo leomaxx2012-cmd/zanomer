@@ -30,6 +30,7 @@ jobs:
       - run: |
           rm -rf dist
           npx expo export --platform web --clear
+          node scripts/version-favicon.mjs
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}

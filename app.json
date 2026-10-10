@@ -9,7 +9,7 @@
     "newArchEnabled": false,
     "web": {
       "output": "static",
-      "favicon": "./assets/zanomer-logo.png"
+      "favicon": "./assets/zanomer-favicon.png"
     },
     "plugins": [
       "expo-router",
