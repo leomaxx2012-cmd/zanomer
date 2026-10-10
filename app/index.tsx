@@ -1681,7 +1681,7 @@ export default function HomeScreen() {
     return visiblePlates.filter((plate) => !!plate.featuredUntil && new Date(plate.featuredUntil).getTime() > now)
       .sort((a, b) => (b.featuredUntil ?? "").localeCompare(a.featuredUntil ?? ""));
   }, [visiblePlates]);
-  const regionGroups = useMemo(() => {
+  const catalogRegionGroups = useMemo(() => {
     const groups = new Map<string, Map<string, number>>();
     catalog.forEach((plate) => {
       const title = plate.region.split(" · ")[0].trim();
@@ -1699,11 +1699,19 @@ export default function HomeScreen() {
       }))
       .sort((a, b) => a.title.localeCompare(b.title, "ru"));
   }, [catalog]);
-  const availableRegions = useMemo(() => regionGroups.flatMap((group) => group.codes.map((code) => ({
+  const regionGroups = useMemo(() => catalogRegionGroups.map(group => {
+    const plates = catalog.filter(plate => plate.vehicle === vehicle
+      && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))
+      && plate.region.split(" · ")[0].trim() === group.title);
+    const codes = group.codes.map(code => ({ ...code, count: plates.filter(plate => extractRegionCodes(plate.region).includes(code.value)).length })).filter(code => code.count > 0);
+    return { ...group, codes, count: plates.length };
+  }).filter(group => group.codes.length > 0), [catalogRegionGroups, catalog, vehicle, archivedPartnerSources]);
+  const vehicleRegionCount = catalog.filter(plate => plate.vehicle === vehicle && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).length;
+  const availableRegions = useMemo(() => catalogRegionGroups.flatMap((group) => group.codes.map((code) => ({
     value: code.value,
     title: `${code.value} (${group.title})`,
     count: code.count,
-  }))), [regionGroups]);
+  }))), [catalogRegionGroups]);
   const popularListingRegions = useMemo(() => [...availableRegions]
     .sort((first, second) => second.count - first.count || Number(first.value) - Number(second.value))
     .slice(0, 14), [availableRegions]);
@@ -1742,14 +1750,14 @@ export default function HomeScreen() {
   const selectedRegionLabel = region === "Все"
     ? "77"
     : showingWholeRegion
-      ? selectedRegionOption?.title ?? region
+      ? selectedRegionOption?.codes.map(code => code.value).join(", ") || "—"
       : selectedRegionCodes.join(", ");
   const selectedRegionFilterLabel = region === "Все"
     ? "Любой регион"
     : showingWholeRegion
-      ? selectedRegionOption?.title ?? region
-      : selectedRegionCodes.join(", ");
-  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode);
+      ? `${region} · ${selectedRegionLabel}`
+      : `${region} · ${selectedRegionCodes.join(", ")}`;
+  const hasSearchCriteria = Boolean(leftLetter || rightLetters || digits || regionCode || region !== "Все");
 
   function toggleSaved(id: string) {
     if (!saved.includes(id) && saved.length >= (hasPlusSubscription ? 30 : 15)) { setSubscriptionToast(true); return; }
@@ -1940,7 +1948,7 @@ export default function HomeScreen() {
   }
 
   function listingRegionLabel(regionCode: string) {
-    const knownRegion = regionGroups.find((group) => group.codes.some((item) => item.value === regionCode));
+    const knownRegion = catalogRegionGroups.find((group) => group.codes.some((item) => item.value === regionCode));
     return `${knownRegion?.title ?? "Регион"} · ${regionCode}`;
   }
 
@@ -2454,7 +2462,7 @@ export default function HomeScreen() {
           ["motorcycle", "🏍️", "Мото"],
           ["truck", "🚛", "Прицеп"],
         ] as const).map(([type, icon, label]) => (
-          <Pressable key={type} onPress={() => { setVehicle(type); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
+          <Pressable key={type} onPress={() => { setVehicle(type); setRegion("Все"); setRegionCode(""); setRegionPickerGroup(null); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
             <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
             <Text numberOfLines={1} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
@@ -2468,7 +2476,8 @@ export default function HomeScreen() {
             <View style={[styles.plateDivider, { marginTop: 18 }]} />
             <Pressable accessibilityLabel="Выбрать регион мото-номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={[styles.regionCodeBox, styles.motoSearchRegion]}>
               <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
-              <Text style={[styles.regionCodeInput, styles.motoSearchRegionCode, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}>{selectedRegionLabel}</Text>
+              <Text style={[styles.regionCodeInput, styles.motoSearchRegionCode, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputMultiple, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}>{selectedRegionLabel}</Text>
+              {region !== "Все" && <Text style={styles.searchRegionName}>{region}</Text>}
             </Pressable>
           </View>
         </>}
@@ -2479,8 +2488,9 @@ export default function HomeScreen() {
         <View style={styles.plateDivider} />
         <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text
-            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputName, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
-          >{showingMultipleRegionCodes && compactLayout ? selectedRegionCodes.join("\n") : selectedRegionLabel}</Text>
+            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputMultiple, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
+          >{selectedRegionLabel}</Text>
+          {region !== "Все" && <Text style={styles.searchRegionName}>{region}</Text>}
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
         </>}
@@ -2501,17 +2511,17 @@ export default function HomeScreen() {
               <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Сначала выбери название региона, затем отметь один или несколько кодов."}</Text>
               <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
               {!regionPickerGroup ? <>
-                <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{catalog.length}</Text></Pressable>
+                <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{vehicleRegionCount}</Text></Pressable>
                 {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, region === item.title && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === item.title && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, region === item.title && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
               </> : <>
                 <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
                 <Pressable onPress={() => { setRegion(regionPickerGroup); setRegionCode(""); }} style={[styles.pickerOption, styles.regionPickerOption, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === regionPickerGroup && selectedRegionCodes.length === 0 && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{region === regionPickerGroup && selectedRegionCodes.length === 0 ? "✓" : "□"}</Text></Pressable>
                 {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
-                  const selected = selectedRegionCodes.includes(item.value);
+                  const selected = region === regionPickerGroup && selectedRegionCodes.includes(item.value);
                   return <Pressable key={item.value} onPress={() => {
                     setRegion(regionPickerGroup);
                     setRegionCode((current) => {
-                      const codes = current.split(",").map((code) => code.trim()).filter(Boolean);
+                      const codes = region === regionPickerGroup ? current.split(",").map((code) => code.trim()).filter(Boolean) : [];
                       return (codes.includes(item.value) ? codes.filter((code) => code !== item.value) : [...codes, item.value]).join(",");
                     });
                   }} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Регион {item.value}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
@@ -3379,6 +3389,7 @@ const styles = StyleSheet.create({
   quickFilterTextActive: { color: "#FFFFFF" },
   regionCodeBox: { alignItems: "center", flex: 1, paddingVertical: 12, justifyContent: "center", minWidth: 0 },
   regionCodeInput: { color: "#111827", fontSize: 18, fontWeight: "900", maxWidth: "100%", textAlign: "center" },
+  searchRegionName: { color: "#4B5563", fontSize: 11, lineHeight: 14, textAlign: "center", paddingHorizontal: 5, marginTop: 3, maxWidth: "100%" },
   regionCodeInputName: { fontSize: 15, lineHeight: 18, paddingHorizontal: 7 },
   regionCodeInputMultiple: { fontSize: 16, lineHeight: 18, paddingHorizontal: 7 },
   regionCodePlaceholder: { color: "#667085" },
