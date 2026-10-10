@@ -21,7 +21,7 @@
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/zanomer-logo.png",
-        "backgroundColor": "#5541C9"
+        "backgroundColor": "#FFFFFF"
       },
       "permissions": [
         "POST_NOTIFICATIONS"
