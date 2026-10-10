@@ -3242,10 +3242,10 @@ const styles = StyleSheet.create({
   headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 12 },
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
   headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
-  headerAvatar: { borderRadius: 12, height: 48, width: 48 },
+  headerAvatar: { height: 60, width: 60 },
   // На телефоне текст названия скрыт: сам знак заметнее и занимает всё
   // свободное место слева от кнопок шапки.
-  headerAvatarCompact: { borderRadius: 10, height: 38, width: 38 },
+  headerAvatarCompact: { height: 48, width: 48 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
   brandCompact: { flexShrink: 1, fontSize: 25, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
