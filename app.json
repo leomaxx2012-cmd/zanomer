@@ -2,14 +2,14 @@
   "expo": {
     "name": "ЗаНомером",
     "slug": "zanomer",
-    "icon": "./assets/zanomer-plate-avatar.png",
+    "icon": "./assets/zanomer-logo.png",
     "scheme": "avtonomer",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
     "web": {
       "output": "static",
-      "favicon": "./assets/zanomer-plate-avatar.png"
+      "favicon": "./assets/zanomer-logo.png"
     },
     "plugins": [
       "expo-router",
@@ -20,8 +20,8 @@
       "versionCode": 22,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/zanomer-plate-avatar.png",
-        "backgroundColor": "#21154F"
+        "foregroundImage": "./assets/zanomer-logo.png",
+        "backgroundColor": "#5541C9"
       },
       "permissions": [
         "POST_NOTIFICATIONS"

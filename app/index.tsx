@@ -2227,8 +2227,8 @@ export default function HomeScreen() {
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
           <View style={styles.headerBrand}>
           <View style={styles.headerBrandRow}>
-            <Image source={require("../assets/zanomer-plate-avatar-readable.png")} resizeMode="contain" style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
-            {!compactLayout && <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={styles.brand}>ЗаНомером</Text>}
+            <Image source={require("../assets/zanomer-logo.png")} resizeMode="contain" style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={[styles.brand, compactLayout && styles.brandCompact]}>ЗаНомером</Text>
           </View>
           <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
         </View>
@@ -3242,10 +3242,10 @@ const styles = StyleSheet.create({
   headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 12 },
   headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
   headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
-  headerAvatar: { borderRadius: 7, height: 44, width: 112 },
+  headerAvatar: { borderRadius: 12, height: 48, width: 48 },
   // На телефоне текст названия скрыт: сам знак заметнее и занимает всё
   // свободное место слева от кнопок шапки.
-  headerAvatarCompact: { borderRadius: 6, height: 42, width: 132 },
+  headerAvatarCompact: { borderRadius: 10, height: 38, width: 38 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
   brandCompact: { flexShrink: 1, fontSize: 25, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
