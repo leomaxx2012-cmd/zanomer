@@ -2075,7 +2075,7 @@ export default function HomeScreen() {
     setListingConfirmed(false);
     setListingMessage(isModerator
       ? "✓ Объявление опубликовано: твой аккаунт подтверждён как модератор."
-      : "✓ Объявление принято: проверим номер, регион, цену и повторные публикации. После одобрения оно появится в разделе «Купить».");
+      : "✓ Объявление принято: проверим номер, регион, цену и повторные публикации. После одобрения оно появится в разделе «Поиск объявлений».");
   }
 
   async function submitAuth() {
@@ -3223,8 +3223,8 @@ export default function HomeScreen() {
       </View>}
       <View style={styles.bottomNav}>
         {([
-          ["buy", "⌕", "Купить", "#155EEF"],
-          ["sell", "＋", "Продать", "#F04438"],
+          ["buy", "⌕", "Поиск объявлений", "#155EEF"],
+          ["sell", "＋", "Разместить объявление", "#F04438"],
           ["favorites", "♡", "Избранное, сохранённое и лайки", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
