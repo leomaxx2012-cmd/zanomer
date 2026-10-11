@@ -97,7 +97,7 @@ type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
 type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
-type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites" | "plus" | "highlight" | "hot" | "highlight-pack" | "hot-pack";
+type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites" | "plus" | "highlight" | "hot" | "highlight-pack" | "hot-pack" | "security" | "payment-methods";
 
 const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
   firstTen: "Первая десятка",
@@ -161,7 +161,7 @@ function isRequisitesPage() {
 }
 function isPaymentInfoPage() {
   if (typeof window === "undefined" || !window.location) return false;
-  return ["payment-info", "offer", "refund", "delivery", "privacy", "plus", "highlight", "hot", "highlight-pack", "hot-pack"].includes(new URLSearchParams(window.location.search).get("page") ?? "");
+  return ["payment-info", "offer", "refund", "delivery", "privacy", "plus", "highlight", "hot", "highlight-pack", "hot-pack", "security", "payment-methods"].includes(new URLSearchParams(window.location.search).get("page") ?? "");
 }
 function legalPageUrl(page: Exclude<LegalDocument, "overview">) {
   if (typeof window !== "undefined" && window.location) {
@@ -174,12 +174,17 @@ function legalPageUrl(page: Exclude<LegalDocument, "overview">) {
 function legalDocumentFromUrl(): LegalDocument {
   if (typeof window === "undefined" || !window.location) return "overview";
   const page = new URLSearchParams(window.location.search).get("page");
-  return ["offer", "refund", "delivery", "privacy", "requisites", "plus", "highlight", "hot", "highlight-pack", "hot-pack"].includes(page ?? "") ? page as LegalDocument : "overview";
+  return ["offer", "refund", "delivery", "privacy", "requisites", "plus", "highlight", "hot", "highlight-pack", "hot-pack", "security", "payment-methods"].includes(page ?? "") ? page as LegalDocument : "overview";
 }
+const PAYMENT_ACCEPTANCE_ENABLED = false;
+const PAYMENT_UNAVAILABLE_MESSAGE = "Приём платежей пока не подключён. Покупка услуг временно недоступна.";
+
 const legalDocumentDetails: Record<Exclude<LegalDocument, "overview">, { title: string; body: string }> = {
-  offer: { title: "Публичная оферта", body: "ЗаНомером оказывает только цифровые услуги: доступ к дополнительным функциям сервиса и продвижение объявления. Оплата не является оплатой государственного регистрационного знака, автомобиля или иной сделки между пользователями. Договор на услугу заключается после успешной оплаты; её стоимость, состав и срок действия показываются до нажатия кнопки оплаты." },
-  refund: { title: "Возврат средств", body: "Для отказа от услуги или проверки ошибочного платежа напишите на zanomerom@mail.ru: укажите аккаунт, услугу, дату и идентификатор платежа, но не данные банковской карты. Возврат рассматривается с учётом фактически оказанной услуги и применимых требований законодательства. При подтверждении возврата деньги возвращаются исходным способом оплаты; срок зачисления зависит от банка. Права потребителя, предусмотренные законом, сохраняются. Оплата разовая: автоматического продления и повторных списаний нет." },
-  delivery: { title: "Оказание услуг", body: "Услуги оказываются онлайн в аккаунте, с которого сделана оплата; физической доставки нет. После подтверждения платежа подписка включается автоматически. Покупка продвижения зачисляет размещение на баланс: откройте профиль → Мои объявления → своё активное объявление → Выделить в горячие предложения. Срок продвижения начинается при применении к объявлению. Если статус не обновился, вернитесь на сайт и обратитесь на zanomerom@mail.ru с идентификатором платежа. ЗаНомером не принимает деньги по сделкам между пользователями." },
+  "security": {"title":"Безопасность платежей","body":"Сайт доступен по HTTPS. ЗаНомером не запрашивает и не хранит полный номер банковской карты, CVV/CVC, срок её действия и банковские коды подтверждения. Приём платежей пока не подключён. После подключения реквизиты вводятся только на защищённой странице согласованного платёжного партнёра. Дополнительное подтверждение операции выполняется банком, если требуется. В аккаунте сервиса используются сведения о заказе, сумме и статусе платежа для начисления услуги и рассмотрения обращений. Не передавайте пароли и коды подтверждения поддержке, продавцам объявлений или третьим лицам. Проверяйте адрес страницы оплаты и защищённое соединение; при подозрительной операции обратитесь в банк и на zanomerom@mail.ru. Оплата за государственные номера, перевод продавцу и ввод реквизитов карты в переписке не относятся к услугам ЗаНомером."},
+  "payment-methods": {"title":"Оплата и статус подключения","body":"Приём платежей пока не подключён. Сейчас оплатить подписку или продвижение на сайте нельзя. Цены и описания цифровых услуг доступны для ознакомления. После одобрения подключения на этой странице будут перечислены фактически доступные платёжные системы и способы оплаты. Сведения о банке расчётного счёта в реквизитах не означают подключённый интернет-эквайринг. Оплачивается только выбранная цифровая услуга, в рублях, без автоматических повторных списаний. Деньги по сделкам между продавцом и покупателем госномера через ЗаНомером не принимаются."},
+  offer: { title: "Публичная оферта", body: "Исполнитель: ИП Леонович Александр Леонидович, ИНН 504406730552, ОГРНИП 319508100089501. Контакты и адрес опубликованы в разделе «Реквизиты и контакты». ЗаНомером оказывает цифровые услуги: доступ к дополнительным функциям аккаунта и продвижение собственных объявлений. Площадка не продаёт государственные регистрационные знаки, автомобили и не принимает оплату по сделкам между пользователями. Для покупки необходим аккаунт. Состав услуги, цена в рублях и срок показываются до оплаты в описании тарифа и окне заказа. После подключения приёма платежей успешная оплата выбранной услуги означает принятие этих условий. Подписка действует 30 календарных дней после подтверждения платежа; покупка продвижения зачисляется на баланс и применяется пользователем к своему активному объявлению после модерации. Применённое размещение на 48 часов отсчитывается с момента применения; бессрочное размещение действует, пока объявление активно. Продвижение не гарантирует продажу или количество просмотров. Автоматического продления и повторных списаний нет. Отказ от услуги, возврат и обращение при ошибках описаны в разделе «Возврат средств». Права потребителя, установленные законодательством РФ, сохраняются. Приём платежей пока не подключён." },
+  refund: { title: "Возврат средств", body: "Для отказа от услуги, сообщения о двойном списании или ошибочном платеже обратитесь на zanomerom@mail.ru или по телефону +7 (495) 268-01-43. Укажите e-mail аккаунта, название услуги, дату, сумму, идентификатор платежа и описание ситуации. Не сообщайте полный номер карты, срок действия, CVV/CVC, пароли и коды подтверждения. Можно отказаться от услуги в порядке, предусмотренном законодательством РФ; при рассмотрении учитываются объём уже оказанной услуги и подтверждённые фактические расходы исполнителя. Для неприменённого продвижения укажите, что размещение осталось на балансе. Результат рассмотрения и сведения о возврате направляются по контактному адресу обращения. Подтверждённый возврат производится исходным способом оплаты; зачисление зависит от банка и платёжного способа. Требования рассматриваются и исполняются в применимые законные сроки. Если услуга не предоставлена после подтверждённой оплаты, обратитесь в поддержку для проверки начисления или возврата. Автоматических списаний и платной отмены продления нет. Права потребителя сохраняются." },
+  delivery: { title: "Оказание услуг", body: "Услуги предоставляются онлайн пользователям на территории Российской Федерации, в аккаунте, с которого оформлена покупка. Физических товаров и доставки нет. Приём платежей пока не подключён. После его подключения начисление происходит автоматически после получения и обработки подтверждения успешной оплаты от платёжного партнёра. Само возвращение на сайт не подтверждает оплату. Подписка предоставляет доступ на 30 календарных дней; оплаченные периоды складываются. Продвижение зачисляется на баланс профиля. Для применения откройте «Мои объявления», выберите собственное активное объявление, прошедшее модерацию, и примените размещение. Продвижение на 48 часов начинается с применения; бессрочное действует, пока объявление активно. До применения размещение хранится на балансе. Статус и остаток размещений доступны в профиле. Если подтверждённая покупка не отображается, вернитесь в аккаунт и обратитесь на zanomerom@mail.ru или +7 (495) 268-01-43, указав идентификатор платежа. Экспорт физических товаров не осуществляется. Сервис не принимает оплату за госномера и сделки между пользователями." },
   privacy: { title: "Политика обработки персональных данных", body: "Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: e-mail, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Данные банковских карт сервис не хранит: их обрабатывает выбранный платёжный партнёр на защищённой странице оплаты." },
   requisites: { title: "Реквизиты и контакты", body: "Исполнитель цифровых услуг: ИП Леонович Александр Леонидович. ИНН 504406730552. ОГРНИП 319508100089501. КПП не применяется для ИП. Адрес: 141570, МО, Солнечногорский район, пгт Менделеево, ул. Левобережная, д. 1, кв. 69. E-mail: zanomerom@mail.ru. Телефон: +7 (495) 268-01-43. Расчётный счёт: 40802 810 5 0000 0054446. Банк: ПАО Банк ПСБ, г. Ярославль. БИК: 044525555. Корреспондентский счёт: 30101 810 4 0000 0000555." },
   plus: { title: "ЗаНомером Плюс — 199 ₽", body: "Разовая оплата за 30 календарных дней. После подтверждения платежа подписка включается в аккаунте покупателя. Включены сравнение до 4 объявлений, график цены при наличии истории, уведомления в аккаунте о снижении цены избранных объявлений и увеличение лимитов поисков и избранного с 15 до 30. Цена отслеживается в сохранённом объявлении: другое предложение того же номера не считается снижением его цены. За каждый успешно оплаченный период начисляется одно размещение собственного активного объявления в горячих предложениях на 48 часов. Бонус появляется на балансе профиля и применяется вручную к объявлению после модерации; 48 часов отсчитываются с применения. Неиспользованные размещения сохраняются на балансе. Автоматических повторных списаний нет. Повторная покупка продлевает действующий срок. Оплачивается цифровая услуга, не госномер." },
@@ -470,6 +475,7 @@ export default function HomeScreen() {
 
   async function startPayment() {
     if (!testPayment || paymentStarting) return;
+    if (!PAYMENT_ACCEPTANCE_ENABLED) { setPaymentMessage(PAYMENT_UNAVAILABLE_MESSAGE); return; }
     if (!supabase || !currentUserId) {
       setPaymentMessage("Войди в аккаунт, чтобы перейти к оплате.");
       return;
@@ -482,7 +488,7 @@ export default function HomeScreen() {
       await Linking.openURL(data.confirmationUrl);
       setPaymentMessage("Страница оплаты открыта. После успешной оплаты вернись в ЗаНомером — статус обновится автоматически.");
     } catch {
-      setPaymentMessage("Оплата пока недоступна. Попробуй чуть позже или проверь подключение ЮKassa.");
+      setPaymentMessage("Оплата пока недоступна. Обратись в поддержку сервиса.");
     } finally {
       setPaymentStarting(false);
     }
@@ -2655,7 +2661,7 @@ export default function HomeScreen() {
           <Text style={styles.premiumItem}>◉ Уведомления о снижении цены избранных номеров</Text>
           <Text style={styles.premiumItem}>◉ Удобное сравнение до 4 объявлений</Text>
           <Text style={styles.premiumItem}>◉ 1 размещение в горячих на 48 часов за каждый оплаченный период</Text>
-          <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽", "plus_month")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>Перейти к оплате</Text></Pressable>
+          <Pressable onPress={() => openTestPayment("Подписка ЗаНомером Плюс на месяц", "199 ₽", "plus_month")} style={styles.comingSoonButton}><Text style={styles.comingSoonButtonText}>{PAYMENT_ACCEPTANCE_ENABLED ? "Перейти к оплате" : "Условия покупки"}</Text></Pressable>
         </View>
       </View>}
 
@@ -3098,14 +3104,14 @@ export default function HomeScreen() {
               <Text style={styles.paymentItem}>Что входит и как воспользоваться</Text>
               <Text style={styles.paymentServiceDescription}>{testPayment ? getPaymentServiceDescription(testPayment.serviceCode) : ""}</Text>
             </View>
-            <Text style={styles.paymentHint}>Оплата проводится на защищённой странице ЮKassa. Доступ к услуге откроется только после подтверждения платежа.</Text>
+            <Text style={styles.paymentHint}>Приём платежей пока не подключён. После подключения оплата будет проходить на защищённой странице платёжного партнёра.</Text>
             <Text style={styles.paymentHint}>Разовая покупка, без автоматических списаний. Оплачивается цифровая услуга, не госномер. Подписка включается автоматически; продвижение сначала зачисляется на баланс профиля.</Text>
             <View style={styles.paymentMethods}>
-              {(["offer", "delivery", "refund"] as const).map(document => <Pressable key={document} onPress={() => { setTestPayment(null); setPaymentInfoOpen(true); openLegalDocument(document); }}><Text style={styles.legalLink}>{legalDocumentDetails[document].title}</Text></Pressable>)}
+              {(["offer", "delivery", "refund", "security", "payment-methods"] as const).map(document => <Pressable key={document} onPress={() => { setTestPayment(null); setPaymentInfoOpen(true); openLegalDocument(document); }}><Text style={styles.legalLink}>{legalDocumentDetails[document].title}</Text></Pressable>)}
             </View>
             {!!paymentMessage && <Text style={styles.paymentHint}>{paymentMessage}</Text>}
             </ScrollView>
-            <Pressable disabled={paymentStarting} onPress={() => { void startPayment(); }} style={[styles.paymentButton, paymentStarting && styles.saveSearchButtonDisabled]}><Text style={styles.paymentButtonText}>{paymentStarting ? "Открываем оплату…" : "Перейти к оплате"}</Text></Pressable>
+            <Pressable disabled={paymentStarting || !PAYMENT_ACCEPTANCE_ENABLED} onPress={() => { void startPayment(); }} style={[styles.paymentButton, (paymentStarting || !PAYMENT_ACCEPTANCE_ENABLED) && styles.saveSearchButtonDisabled]}><Text style={styles.paymentButtonText}>{!PAYMENT_ACCEPTANCE_ENABLED ? "Оплата временно недоступна" : paymentStarting ? "Открываем оплату…" : "Перейти к оплате"}</Text></Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -3124,7 +3130,8 @@ export default function HomeScreen() {
               {(legalDocument === "plus" || legalDocument === "highlight" || legalDocument === "hot" || legalDocument === "highlight-pack" || legalDocument === "hot-pack") && <View style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Получение и оплата услуги</Text>
                 <Text style={styles.legalText}>Для покупки нужен аккаунт. Перед оплатой ознакомьтесь с офертой, порядком оказания услуги и возврата ниже. Услуга начисляется после подтверждения платежа, а не просто после возвращения на сайт.</Text>
-                <Pressable style={styles.comingSoonButton} onPress={() => { const service = paidServiceCheckout[legalDocument]; closePaymentInfo(); openTestPayment(service.title, service.amount, service.code); }}><Text style={styles.comingSoonButtonText}>Перейти к оплате · {paidServiceCheckout[legalDocument].amount}</Text></Pressable>
+                <Pressable style={styles.comingSoonButton} onPress={() => { const service = paidServiceCheckout[legalDocument]; closePaymentInfo(); openTestPayment(service.title, service.amount, service.code); }}><Text style={styles.comingSoonButtonText}>{PAYMENT_ACCEPTANCE_ENABLED ? "Перейти к оплате" : "Условия покупки"} · {paidServiceCheckout[legalDocument].amount}</Text></Pressable>
+                <Text style={styles.legalText}>{PAYMENT_UNAVAILABLE_MESSAGE}</Text>
                 <Text style={styles.legalText}>Поддержка: zanomerom@mail.ru · +7 (495) 268-01-43.</Text>
               </View>}
               <Text style={styles.legalHeading}>Документы и информация</Text>
@@ -3132,6 +3139,8 @@ export default function HomeScreen() {
                 <Pressable onPress={() => openLegalDocument("offer")}><Text style={styles.legalLink}>Публичная оферта</Text></Pressable>
                 <Pressable onPress={() => openLegalDocument("refund")}><Text style={styles.legalLink}>Возврат средств</Text></Pressable>
                 <Pressable onPress={() => openLegalDocument("delivery")}><Text style={styles.legalLink}>Оказание услуг</Text></Pressable>
+                <Pressable onPress={() => openLegalDocument("security")}><Text style={styles.legalLink}>Безопасность платежей</Text></Pressable>
+                <Pressable onPress={() => openLegalDocument("payment-methods")}><Text style={styles.legalLink}>Оплата и статус подключения</Text></Pressable>
                 <Pressable onPress={() => openLegalDocument("privacy")}><Text style={styles.legalLink}>Политика обработки данных</Text></Pressable>
                 <Pressable onPress={() => openLegalDocument("requisites")}><Text style={styles.legalLink}>Реквизиты и контакты</Text></Pressable>
               </View>
@@ -3180,8 +3189,9 @@ export default function HomeScreen() {
               <Text style={styles.legalHeading}>Политика обработки персональных данных</Text>
               <Text style={styles.legalText}>Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: адрес электронной почты, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Платёжные реквизиты карт сервис не хранит — их обрабатывает платёжный партнёр. По вопросам обработки данных и безопасности можно написать на zanomerom@mail.ru или позвонить по телефону ниже.</Text>
               <Text style={styles.legalHeading}>Способы оплаты</Text>
-              <Text style={styles.legalText}>После подключения будут доступны способы оплаты, поддерживаемые выбранным платёжным партнёром. Платёж проводится только на его защищённой странице.</Text>
-              <View style={styles.paymentMethods}><Text style={styles.paymentMethod}>БАНКОВСКИЕ КАРТЫ</Text><Text style={styles.paymentMethod}>СБП</Text></View>
+              <Text style={styles.legalText}>Приём платежей пока не подключён. Доступные платёжные системы и способы оплаты будут опубликованы после одобрения и подключения.</Text>
+              <Text style={styles.legalHeading}>Безопасность платежей</Text>
+              <Text style={styles.legalText}>{legalDocumentDetails.security.body}</Text>
               <Text style={styles.legalHeading}>Экспортные ограничения</Text>
               <Text style={styles.legalText}>Не применяются: сервис оказывает цифровые услуги пользователям на территории Российской Федерации и не осуществляет экспорт товаров.</Text>
               <Text style={styles.legalHeading}>Реквизиты продавца услуг</Text>
@@ -3192,7 +3202,8 @@ export default function HomeScreen() {
                 <Text style={styles.requisitesRow}>КПП: не применяется для ИП</Text>
                 <Text style={styles.requisitesRow}>Адрес: 141570, МО, Солнечногорский район, пгт Менделеево, ул. Левобережная, д. 1, кв. 69</Text>
                 <Text style={styles.requisitesRow}>Расчётный счёт: 40802 810 5 0000 0054446</Text>
-                <Text style={styles.requisitesRow}>Банк: ПАО «Банк ПСБ», г. Ярославль</Text>
+                <Text style={styles.requisitesRow}>Банк расчётного счёта: ПАО «Банк ПСБ», г. Ярославль</Text>
+                <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("https://www.psbank.ru/"); }}><Text style={styles.legalLink}>Официальный сайт ПСБ ↗</Text></Pressable>
                 <Text style={styles.requisitesRow}>БИК: 044525555</Text>
                 <Text style={styles.requisitesRow}>Корреспондентский счёт: 30101 810 4 0000 0000555</Text>
                 <Pressable onPress={() => { void Linking.openURL("mailto:zanomerom@mail.ru"); }}><Text style={styles.requisitesPhone}>zanomerom@mail.ru</Text></Pressable>
