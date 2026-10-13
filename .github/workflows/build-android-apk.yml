@@ -39,8 +39,14 @@ jobs:
           test -n "$EXPO_PUBLIC_SUPABASE_URL"
           test -n "$EXPO_PUBLIC_SUPABASE_ANON_KEY"
 
+      - name: Обновить встроенный каталог
+        run: node scripts/snapshot-mobile-catalog.mjs
+
       - name: Подготовить Android-проект
         run: npx expo prebuild --platform android --clean --no-install
+
+      - name: Подготовить безопасные отступы иконки
+        run: node scripts/prepare-android-icon.mjs
 
       - name: Собрать APK
         working-directory: android

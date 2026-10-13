@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { createTimeoutFetch } from "./network-request";
 
 // Каталог должен работать и в APK, собранном вне EAS/Vercel. Metro иногда не
 // передаёт EXPO_PUBLIC_* из GitHub Actions в release-бандл, из-за чего APK
@@ -13,6 +14,7 @@ const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_AN
 
 // Service Role key сюда никогда не добавляем: он предназначен только для сервера.
 export const supabase = createClient(url, anonKey, {
+      global: { fetch: createTimeoutFetch(fetch) },
       auth: {
         // Браузер использует localStorage, Android — постоянное хранилище
         // приложения. Поэтому вход сохраняется после закрытия сайта или APK.

@@ -2131,7 +2131,11 @@ export default function HomeScreen() {
             ? "Почтовый сервис ограничил отправку. Подожди несколько минут и попробуй снова. Если у тебя уже есть пароль, войди с ним."
             : detail.includes("sending") || detail.includes("smtp")
               ? "Почтовый сервис не смог отправить письмо. Попробуй войти с паролем; настройку отправки нужно проверить."
-              : error.message
+              : detail.includes("signup")
+                ? "Для этой почты сначала создай аккаунт через «Создать аккаунт»."
+                : detail.includes("fetch") || detail.includes("network") || detail.includes("abort")
+                  ? "Не удалось связаться с сервисом входа. Попробуй другую сеть: Wi-Fi или мобильный интернет. Если письмо уже пришло, нажми «У меня уже есть код»."
+                  : error.message
         );
       }
       setLastOtpRequest({ email, at: Date.now() });
@@ -2139,13 +2143,18 @@ export default function HomeScreen() {
       return setAuthMessage("Код отправлен. Письмо может прийти с задержкой. Проверь входящие и «Спам», используй самый свежий код.");
     }
     if ((authMode === "signup" || authMode === "otp") && authStep === 2) {
-      const token = authCode.trim();
+      const token = authCode.replace(/\s/g, "");
       if (token.length < 6) return setAuthMessage("Введи код из письма.");
       setAuthSending(true);
       setAuthMessage("Проверяем код…");
       const { error } = await waitForAuth(supabase.auth.verifyOtp({ email, token, type: "email" }));
       setAuthSending(false);
-      if (error) return setAuthMessage("Код не подошёл или срок его действия истёк. Запроси новый код.");
+      if (error) {
+        const detail = error.message.toLowerCase();
+        return setAuthMessage(detail.includes("fetch") || detail.includes("network") || detail.includes("abort")
+          ? "Сервис входа недоступен в этой сети. Попробуй Wi-Fi или мобильный интернет, затем введи код снова."
+          : "Код не подошёл или срок его действия истёк. Используй последний код или запроси новый.");
+      }
       setAuthCode("");
       if (authMode === "otp") {
         setAuthOpen(false);
@@ -2362,6 +2371,8 @@ export default function HomeScreen() {
               {supabase && authMode === "signin" && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Пароль" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
               {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
               <View style={styles.authRow}>
+                {supabase && (authMode === "signup" || authMode === "otp") && authStep === 1 && lastOtpRequest?.email === authEmail.trim().toLowerCase() && <Pressable disabled={authSending} onPress={() => { setAuthStep(2); setAuthMessage("Введи самый свежий код, если письмо уже пришло."); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>У меня уже есть код</Text></Pressable>}
+                {supabase && (authMode === "signup" || authMode === "otp") && authStep === 2 && <Pressable disabled={authSending} onPress={() => { setAuthStep(1); setAuthCode(""); setAuthMessage("Проверь адрес почты. Повторная отправка доступна через минуту после предыдущего запроса."); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Запросить новый код</Text></Pressable>}
                 {supabase && authMode === "signin" && <Pressable onPress={() => { setAuthMode("signup"); setAuthStep(1); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Создать аккаунт</Text></Pressable>}
                 {supabase && authMode === "signin" && <Pressable onPress={() => { setAuthMode("otp"); setAuthStep(1); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Войти по коду</Text></Pressable>}
                 {supabase && authMode === "signup" && authStep < 3 && <Pressable onPress={() => { setAuthMode("signin"); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Уже есть аккаунт</Text></Pressable>}
@@ -3250,15 +3261,15 @@ const styles = StyleSheet.create({
   backgroundGlowRight: { backgroundColor: "#EADFFF", borderRadius: 999, height: 390, opacity: 0.72, position: "absolute", right: -190, top: 235, width: 440 },
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
   header: { alignItems: "center", backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, elevation: 6, flexDirection: "row", justifyContent: "space-between", marginHorizontal: -24, paddingBottom: 18, paddingHorizontal: 24, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 14 : 18, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, zIndex: 10 },
-  headerCompact: { paddingBottom: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 12 },
-  headerBrand: { flex: 1, minWidth: 0, paddingRight: 8 },
+  headerCompact: { flexDirection: "column", alignItems: "stretch", gap: 8, paddingBottom: 12, paddingHorizontal: 16, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 12 },
+  headerBrand: { flexGrow: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
   headerBrandRow: { alignItems: "center", flexDirection: "row", gap: 7, minWidth: 0 },
   headerAvatar: { height: 60, width: 60 },
   // На телефоне текст названия скрыт: сам знак заметнее и занимает всё
   // свободное место слева от кнопок шапки.
   headerAvatarCompact: { height: 48, width: 48 },
   brand: { color: "#352F67", fontSize: 28, fontWeight: "900", letterSpacing: -0.8 },
-  brandCompact: { flexShrink: 1, fontSize: 25, letterSpacing: -0.7 },
+  brandCompact: { flexShrink: 1, fontSize: 24, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
   subtitleCompact: { fontSize: 12, lineHeight: 16, marginTop: 2 },
   headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },
