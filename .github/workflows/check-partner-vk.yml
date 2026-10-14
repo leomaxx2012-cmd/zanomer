@@ -4,7 +4,8 @@ on:
   workflow_dispatch:
   schedule:
     # 03:30 Moscow time (00:30 UTC): exactly one public request to the
-    # owner-approved VK community. Telegram is handled by its own workflow.
+    # owner-approved VK community (official API when a token is configured).
+    # Telegram is handled by its own workflow.
     - cron: "30 0 * * *"
 
 jobs:
@@ -23,3 +24,4 @@ jobs:
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}

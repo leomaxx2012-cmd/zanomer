@@ -1,14 +1,16 @@
 /**
  * Nightly import from the only permitted VK source supplied by the owner.
  *
- * The job performs exactly one unauthenticated request to the public
- * community page. It does not follow private links, collect contacts or
+ * The job performs exactly one request: official wall.get when the owner
+ * supplies a token, otherwise the approved public community page.
+ * It does not follow private links, collect contacts or
  * inspect any other VK community. Only a complete plate + price + region is
  * retained; post text is used in memory and never stored.
  */
 import { createClient } from "@supabase/supabase-js";
 import { loadCatalogIndex } from "./catalog-identity.mjs";
 import { validatePublicResponse } from "./vk-public-response.mjs";
+import { loadVkApiPosts } from "./vk-api-source.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -185,13 +187,18 @@ async function syncPost(post) {
     await db.from("partner_listing_statuses").upsert({ source_url: sourceUrl, status: "archived", archive_reason: "В исходном посте указано, что номер продан или забронирован", checked_at: now, updated_at: now });
     return { added: 0, archived: 1, skippedDuplicates: 0 };
   }
-  if (!isRecent(post.postedAt)) return { added: 0, archived: 0, skippedDuplicates: 0 };
   const rows = parseRows(post.text, post.postId, post.postedAt);
   let added = 0;
+  let updated = 0;
+  let restored = 0;
+  let processed = 0;
   let skippedDuplicates = 0;
   const newlyAddedRows = [];
   for (const row of rows) {
     const known = catalogIndex.sameSource(row);
+    // Older source posts may change price or return to active status.
+    // The 24-hour window applies only to adding a previously unseen post.
+    if (!known && !isRecent(post.postedAt)) continue;
     if (!known && catalogIndex.duplicate(row)) {
       skippedDuplicates += 1;
       continue;
@@ -199,6 +206,9 @@ async function syncPost(post) {
     const savedRow = known ? { ...row, id: known.id } : row;
     const { error } = await db.from("partner_listings").upsert(savedRow, { onConflict: "id" });
     if (error) throw error;
+    processed += 1;
+    if (known && Number(known.price_rub) !== row.price_rub) updated += 1;
+    if (known?.status === "archived") restored += 1;
     if (!known) {
       added += 1;
       newlyAddedRows.push(savedRow);
@@ -206,31 +216,40 @@ async function syncPost(post) {
     catalogIndex.remember(savedRow);
   }
   await notifySearchAlerts(newlyAddedRows);
-  if (rows.length) {
+  if (processed) {
     const now = new Date().toISOString();
     await db.from("partner_listing_statuses").upsert({ source_url: sourceUrl, status: "active", archive_reason: null, checked_at: now, updated_at: now });
   }
-  return { added, archived: 0, skippedDuplicates };
+  return { added, updated, restored, archived: 0, skippedDuplicates };
 }
 
 const controller = new AbortController();
 const timeout = setTimeout(() => controller.abort(), 20_000);
 try {
-  const response = await fetch(SOURCE.url, {
-    signal: controller.signal,
-    redirect: "manual",
-    headers: { "user-agent": "ZaNomer catalog checker/1.1", accept: "text/html,application/xhtml+xml" },
-  });
-  const html = validatePublicResponse(response, await response.text());
-  const posts = extractPosts(html);
-  const totals = { added: 0, archived: 0, skippedDuplicates: 0 };
+  const useApi = Boolean(process.env.VK_ACCESS_TOKEN?.trim());
+  let posts;
+  if (useApi) {
+    posts = await loadVkApiPosts(process.env.VK_ACCESS_TOKEN, controller.signal);
+  } else {
+    console.log('VK_MODE_PUBLIC: VK_ACCESS_TOKEN is not configured; inspecting only the approved public URL.');
+    const response = await fetch(SOURCE.url, {
+      signal: controller.signal,
+      redirect: "manual",
+      headers: { "user-agent": "ZaNomer catalog checker/1.1", accept: "text/html,application/xhtml+xml" },
+    });
+    const html = validatePublicResponse(response, await response.text());
+    posts = extractPosts(html);
+  }
+  const totals = { added: 0, updated: 0, restored: 0, archived: 0, skippedDuplicates: 0 };
   for (const post of posts) {
     const result = await syncPost(post);
     totals.added += result.added;
+    totals.updated += result.updated ?? 0;
+    totals.restored += result.restored ?? 0;
     totals.archived += result.archived;
     totals.skippedDuplicates += result.skippedDuplicates;
   }
-  console.log(JSON.stringify({ checkedAt: new Date().toISOString(), source: SOURCE.name, posts: posts.length, ...totals }, null, 2));
+  console.log(JSON.stringify({ checkedAt: new Date().toISOString(), mode: useApi ? "official-api" : "public-page", source: SOURCE.name, posts: posts.length, ...totals }, null, 2));
 } finally {
   clearTimeout(timeout);
 }

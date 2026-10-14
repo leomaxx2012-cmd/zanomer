@@ -2,7 +2,13 @@
 // against alternative hosts, login endpoints or private APIs.
 export function validatePublicResponse(response, html) {
   if (response.status >= 300 && response.status < 400) {
-    throw new Error("VK_PUBLIC_REDIRECT: VK redirected the public request; import stopped without following the redirect.");
+    let destination = "unavailable";
+    try {
+      const target = new URL(response.headers.get("location"), "https://vk.ru/aautonomera777");
+      // Query strings, fragments and credentials can contain sensitive data.
+      destination = `${target.protocol}//${target.host}${target.pathname}`;
+    } catch { /* Invalid or absent Location header. */ }
+    throw new Error(`VK_PUBLIC_REDIRECT: HTTP ${response.status}; destination ${destination}; stopped without following redirect.`);
   }
   if (!response.ok) throw new Error(`VK_HTTP_ERROR: HTTP ${response.status}`);
   const contentType = response.headers.get("content-type") ?? "";

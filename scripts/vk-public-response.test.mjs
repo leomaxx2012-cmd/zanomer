@@ -18,3 +18,12 @@ test("rejects login, restrictions, redirects and non-HTML", () => {
   assert.throws(() => validatePublicResponse(response(302), ""), /VK_PUBLIC_REDIRECT/);
   assert.throws(() => validatePublicResponse(response(200, "application/json"), "{}"), /VK_UNEXPECTED_RESPONSE/);
 });
+
+test('redirect diagnosis omits sensitive URL components', () => {
+  const redirected = new Response('', { status: 302, headers: { location: 'https://user:password@vk.ru/login?token=secret#fragment' } });
+  assert.throws(() => validatePublicResponse(redirected, ''), error => {
+    assert.match(error.message, /destination https:\/\/vk.ru\/login/);
+    assert.doesNotMatch(error.message, /password|secret|fragment/);
+    return true;
+  });
+});
