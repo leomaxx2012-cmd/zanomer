@@ -1,12 +1,9 @@
 name: Sync permitted VK listings
 
 on:
+  # VK import disabled at the owner's request. No scheduled runs.
+  # Keep the implementation available if the owner reconnects it later.
   workflow_dispatch:
-  schedule:
-    # 03:30 Moscow time (00:30 UTC): exactly one public request to the
-    # owner-approved VK community (official API when a token is configured).
-    # Telegram is handled by its own workflow.
-    - cron: "30 0 * * *"
 
 jobs:
   check-vk:
