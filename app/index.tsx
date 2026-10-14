@@ -27,6 +27,7 @@ import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
 import { deduplicateOffers } from "../lib/catalog-offers";
+import { privacyPolicy } from "../lib/privacy-policy";
 import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
 import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion } from "../lib/search-regions";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
@@ -185,7 +186,7 @@ const legalDocumentDetails: Record<Exclude<LegalDocument, "overview">, { title: 
   offer: { title: "Публичная оферта", body: "Исполнитель: ИП Леонович Александр Леонидович, ИНН 504406730552, ОГРНИП 319508100089501. Контакты и адрес опубликованы в разделе «Реквизиты и контакты». ЗаНомером оказывает цифровые услуги: доступ к дополнительным функциям аккаунта и продвижение собственных объявлений. Площадка не продаёт государственные регистрационные знаки, автомобили и не принимает оплату по сделкам между пользователями. Для покупки необходим аккаунт. Состав услуги, цена в рублях и срок показываются до оплаты в описании тарифа и окне заказа. После подключения приёма платежей успешная оплата выбранной услуги означает принятие этих условий. Подписка действует 30 календарных дней после подтверждения платежа; покупка продвижения зачисляется на баланс и применяется пользователем к своему активному объявлению после модерации. Применённое размещение на 48 часов отсчитывается с момента применения; бессрочное размещение действует, пока объявление активно. Продвижение не гарантирует продажу или количество просмотров. Автоматического продления и повторных списаний нет. Отказ от услуги, возврат и обращение при ошибках описаны в разделе «Возврат средств». Права потребителя, установленные законодательством РФ, сохраняются. Приём платежей пока не подключён." },
   refund: { title: "Возврат средств", body: "Для отказа от услуги, сообщения о двойном списании или ошибочном платеже обратитесь на zanomerom@mail.ru или по телефону +7 (495) 268-01-43. Укажите e-mail аккаунта, название услуги, дату, сумму, идентификатор платежа и описание ситуации. Не сообщайте полный номер карты, срок действия, CVV/CVC, пароли и коды подтверждения. Можно отказаться от услуги в порядке, предусмотренном законодательством РФ; при рассмотрении учитываются объём уже оказанной услуги и подтверждённые фактические расходы исполнителя. Для неприменённого продвижения укажите, что размещение осталось на балансе. Результат рассмотрения и сведения о возврате направляются по контактному адресу обращения. Подтверждённый возврат производится исходным способом оплаты; зачисление зависит от банка и платёжного способа. Требования рассматриваются и исполняются в применимые законные сроки. Если услуга не предоставлена после подтверждённой оплаты, обратитесь в поддержку для проверки начисления или возврата. Автоматических списаний и платной отмены продления нет. Права потребителя сохраняются." },
   delivery: { title: "Оказание услуг", body: "Услуги предоставляются онлайн пользователям на территории Российской Федерации, в аккаунте, с которого оформлена покупка. Физических товаров и доставки нет. Приём платежей пока не подключён. После его подключения начисление происходит автоматически после получения и обработки подтверждения успешной оплаты от платёжного партнёра. Само возвращение на сайт не подтверждает оплату. Подписка предоставляет доступ на 30 календарных дней; оплаченные периоды складываются. Продвижение зачисляется на баланс профиля. Для применения откройте «Мои объявления», выберите собственное активное объявление, прошедшее модерацию, и примените размещение. Продвижение на 48 часов начинается с применения; бессрочное действует, пока объявление активно. До применения размещение хранится на балансе. Статус и остаток размещений доступны в профиле. Если подтверждённая покупка не отображается, вернитесь в аккаунт и обратитесь на zanomerom@mail.ru или +7 (495) 268-01-43, указав идентификатор платежа. Экспорт физических товаров не осуществляется. Сервис не принимает оплату за госномера и сделки между пользователями." },
-  privacy: { title: "Политика обработки персональных данных", body: "Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: e-mail, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Данные банковских карт сервис не хранит: их обрабатывает выбранный платёжный партнёр на защищённой странице оплаты." },
+  privacy: { title: "Политика обработки персональных данных", body: privacyPolicy },
   requisites: { title: "Реквизиты и контакты", body: "Исполнитель цифровых услуг: ИП Леонович Александр Леонидович. ИНН 504406730552. ОГРНИП 319508100089501. КПП не применяется для ИП. Адрес: 141570, МО, Солнечногорский район, пгт Менделеево, ул. Левобережная, д. 1, кв. 69. E-mail: zanomerom@mail.ru. Телефон: +7 (495) 268-01-43. Расчётный счёт: 40802 810 5 0000 0054446. Банк: ПАО Банк ПСБ, г. Ярославль. БИК: 044525555. Корреспондентский счёт: 30101 810 4 0000 0000555." },
   plus: { title: "ЗаНомером Плюс — 199 ₽", body: "Разовая оплата за 30 календарных дней. После подтверждения платежа подписка включается в аккаунте покупателя. Включены сравнение до 4 объявлений, график цены при наличии истории, уведомления в аккаунте о снижении цены избранных объявлений и увеличение лимитов поисков и избранного с 15 до 30. Цена отслеживается в сохранённом объявлении: другое предложение того же номера не считается снижением его цены. За каждый успешно оплаченный период начисляется одно размещение собственного активного объявления в горячих предложениях на 48 часов. Бонус появляется на балансе профиля и применяется вручную к объявлению после модерации; 48 часов отсчитываются с применения. Неиспользованные размещения сохраняются на балансе. Автоматических повторных списаний нет. Повторная покупка продлевает действующий срок. Оплачивается цифровая услуга, не госномер." },
   highlight: { title: "Горячие предложения · 1 размещение на 48 часов — 129 ₽", body: "Одна покупка даёт одно выделение собственного активного объявления. После подтверждения оплаты размещение появляется на балансе профиля. Откройте Мои объявления, выберите своё прошедшее модерацию объявление и нажмите Выделить в горячие предложения. После применения оно получает выделение и показывается в блоке Горячие предложения в течение 48 часов. Срок отсчитывается от применения, а не покупки. Продвижение не гарантирует продажу, просмотры или отклики и не оплачивает сам госномер." },
@@ -2371,6 +2372,7 @@ export default function HomeScreen() {
               {supabase && authMode === "signin" && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Пароль" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
               {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
               <View style={styles.authRow}>
+                {supabase && authStep === 1 && <Pressable onPress={() => openLegalDocument("privacy")} style={styles.authSwitch}><Text style={styles.authSwitchText}>Как обрабатываются данные аккаунта</Text></Pressable>}
                 {supabase && (authMode === "signup" || authMode === "otp") && authStep === 1 && lastOtpRequest?.email === authEmail.trim().toLowerCase() && <Pressable disabled={authSending} onPress={() => { setAuthStep(2); setAuthMessage("Введи самый свежий код, если письмо уже пришло."); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>У меня уже есть код</Text></Pressable>}
                 {supabase && (authMode === "signup" || authMode === "otp") && authStep === 2 && <Pressable disabled={authSending} onPress={() => { setAuthStep(1); setAuthCode(""); setAuthMessage("Проверь адрес почты. Повторная отправка доступна через минуту после предыдущего запроса."); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Запросить новый код</Text></Pressable>}
                 {supabase && authMode === "signin" && <Pressable onPress={() => { setAuthMode("signup"); setAuthStep(1); setAuthPassword(""); setAuthCode(""); setAuthMessage(""); }} style={styles.authSwitch}><Text style={styles.authSwitchText}>Создать аккаунт</Text></Pressable>}
@@ -2818,6 +2820,20 @@ export default function HomeScreen() {
       </View>
       </>}
 
+      {Platform.OS === "web" && <View style={styles.siteFooter} accessibilityRole="summary">
+        <Text style={styles.siteFooterTitle}>ЗаНомером — поиск и размещение объявлений</Text>
+        <Text style={styles.siteFooterText}>Исполнитель цифровых услуг: ИП Леонович Александр Леонидович</Text>
+        <Text style={styles.siteFooterText}>ИНН 504406730552 · ОГРНИП 319508100089501</Text>
+        <Text style={styles.siteFooterText}>141570, Московская область, пгт Менделеево, ул. Левобережная, д. 1, кв. 69</Text>
+        <View style={styles.siteFooterLinks}>
+          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("mailto:zanomerom@mail.ru"); }}><Text style={styles.siteFooterLink}>zanomerom@mail.ru</Text></Pressable>
+          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.siteFooterLink}>+7 (495) 268-01-43</Text></Pressable>
+        </View>
+        <View style={styles.siteFooterLinks}>
+          {([['offer', 'Оферта'], ['privacy', 'Политика обработки данных'], ['delivery', 'Оказание услуг'], ['refund', 'Возврат средств'], ['requisites', 'Реквизиты']] as const).map(([page, label]) => <Pressable key={page} accessibilityRole="link" onPress={() => openLegalDocument(page)}><Text style={styles.siteFooterLink}>{label}</Text></Pressable>)}
+        </View>
+        <Text style={styles.siteFooterText}>Оплата самих номеров и расчёты между пользователями через сервис не проводятся. Приём оплаты цифровых услуг пока не подключён.</Text>
+      </View>}
       </ScrollView>
 
       <Modal visible={comparisonOpen && hasPlusSubscription} transparent animationType="fade" onRequestClose={() => setComparisonOpen(false)}>
@@ -3198,7 +3214,8 @@ export default function HomeScreen() {
               <Text style={styles.legalText}>{legalDocumentDetails.delivery.body}</Text>
               <Text style={styles.legalText}>ЗаНомером не продаёт государственные номера, не является стороной сделки между продавцом и покупателем объявления и не принимает деньги за номер.</Text>
               <Text style={styles.legalHeading}>Политика обработки персональных данных</Text>
-              <Text style={styles.legalText}>Мы обрабатываем только данные, необходимые для работы аккаунта и оказания услуг: адрес электронной почты, имя профиля, сведения об объявлениях и технические данные устройства. Данные не продаются третьим лицам. Платёжные реквизиты карт сервис не хранит — их обрабатывает платёжный партнёр. По вопросам обработки данных и безопасности можно написать на zanomerom@mail.ru или позвонить по телефону ниже.</Text>
+              <Text style={styles.legalText}>Данные аккаунта, публикаций и технические сведения обрабатываются для работы сервиса. Полная политика описывает оператора, цели, доступ к данным, сроки хранения и порядок обращений.</Text>
+              <Pressable onPress={() => openLegalDocument("privacy")}><Text style={styles.legalLink}>Прочитать политику обработки персональных данных</Text></Pressable>
               <Text style={styles.legalHeading}>Способы оплаты</Text>
               <Text style={styles.legalText}>Приём платежей пока не подключён. Доступные платёжные системы и способы оплаты будут опубликованы после одобрения и подключения.</Text>
               <Text style={styles.legalHeading}>Безопасность платежей</Text>
@@ -3254,6 +3271,11 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  siteFooter: { borderTopWidth: 1, borderTopColor: "#DED8FF", marginTop: 28, paddingTop: 20, paddingBottom: 12, gap: 8 },
+  siteFooterTitle: { color: "#352F67", fontSize: 15, fontWeight: "800" },
+  siteFooterText: { color: "#667085", fontSize: 12, lineHeight: 18 },
+  siteFooterLinks: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  siteFooterLink: { color: "#4536B8", fontSize: 12, lineHeight: 20, textDecorationLine: "underline" },
   page: { backgroundColor: "#F8F7FC", flex: 1, overflow: "hidden", paddingLeft: 24, paddingRight: 24, width: "100%" },
   mainScroll: { flex: 1, marginHorizontal: -24 },
   mainScrollContent: { paddingBottom: 112, paddingHorizontal: 24 },
