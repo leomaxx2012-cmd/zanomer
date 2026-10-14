@@ -2703,6 +2703,10 @@ export default function HomeScreen() {
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
+      {activeTab === "buy" && <View style={styles.numberPaymentNotice}>
+        <Text style={[styles.numberPaymentNoticeTitle, compactLayout && styles.numberPaymentNoticeTitleCompact]}>Оплата за номера через сайт не принимается</Text>
+        <Text style={styles.numberPaymentNoticeText}>ЗаНомером — площадка объявлений. Условия сделки и расчёты продавец и покупатель согласуют напрямую вне сервиса. На сайте оплачиваются только подписка и продвижение объявлений после подключения платежей.</Text>
+      </View>}
       {!!catalogLoadError && activeTab === "buy" && !catalogOnly && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
       {similarTo && !catalogOnly && (
         <Pressable onPress={() => setSimilarToId(null)} style={styles.clearSimilarButton}>
@@ -3272,6 +3276,10 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  numberPaymentNotice: { alignSelf: "center", width: "100%", maxWidth: 1100, backgroundColor: "#EEEBFF", borderColor: "#C7BEFF", borderWidth: 2, borderRadius: 18, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 16, marginTop: 8 },
+  numberPaymentNoticeTitle: { color: "#352F67", fontSize: 26, lineHeight: 32, fontWeight: "900", textAlign: "center" },
+  numberPaymentNoticeTitleCompact: { fontSize: 21, lineHeight: 27 },
+  numberPaymentNoticeText: { color: "#51486E", fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 8 },
   siteFooter: { borderTopWidth: 1, borderTopColor: "#DED8FF", marginTop: 28, paddingTop: 20, paddingBottom: 12, gap: 8 },
   siteFooterTitle: { color: "#352F67", fontSize: 15, fontWeight: "800" },
   siteFooterText: { color: "#667085", fontSize: 12, lineHeight: 18 },
