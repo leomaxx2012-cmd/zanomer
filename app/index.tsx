@@ -828,6 +828,7 @@ export default function HomeScreen() {
   }, [currentUserId]);
   function openLegalDocument(document: Exclude<LegalDocument, "overview">) {
     setLegalDocument(document);
+    setPaymentInfoOpen(true);
     if (typeof window !== "undefined" && window.history) window.history.replaceState(null, "", legalPageUrl(document));
   }
 
