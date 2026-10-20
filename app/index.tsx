@@ -1053,15 +1053,6 @@ export default function HomeScreen() {
     setShareMessage("");
     try {
       if (Platform.OS === "web" && typeof navigator !== "undefined") {
-        if (typeof navigator.share === "function") {
-          try {
-            await navigator.share({ title: "Объявление ЗаНомером", text: `${listing.value} · ${listing.price}`, url });
-            return;
-          } catch (error) {
-            if ((error as Error)?.name === "AbortError") return;
-            // Some embedded browsers expose Share but do not allow using it.
-          }
-        }
         if (navigator.clipboard) {
           try {
             await navigator.clipboard.writeText(`${listing.value} · ${listing.price}\n${url}`);
