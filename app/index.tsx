@@ -1054,14 +1054,23 @@ export default function HomeScreen() {
     try {
       if (Platform.OS === "web" && typeof navigator !== "undefined") {
         if (typeof navigator.share === "function") {
-          await navigator.share({ title: "Объявление ЗаНомером", text: `${listing.value} · ${listing.price}`, url });
-          return;
+          try {
+            await navigator.share({ title: "Объявление ЗаНомером", text: `${listing.value} · ${listing.price}`, url });
+            return;
+          } catch (error) {
+            if ((error as Error)?.name === "AbortError") return;
+            // Some embedded browsers expose Share but do not allow using it.
+          }
         }
         if (navigator.clipboard) {
-          await navigator.clipboard.writeText(`${listing.value} · ${listing.price}\n${url}`);
-          setShareMessage("Ссылка на объявление скопирована.");
-          return;
+          try {
+            await navigator.clipboard.writeText(`${listing.value} · ${listing.price}\n${url}`);
+            setShareMessage("Ссылка на объявление скопирована.");
+            return;
+          } catch { /* Offer a selectable link when clipboard access is denied. */ }
         }
+        setShareMessage(`Скопируй ссылку на объявление: ${url}`);
+        return;
       }
       await Share.share({ message: `${listing.value} · ${listing.price}\n${url}`, url });
     } catch {
@@ -2532,6 +2541,7 @@ export default function HomeScreen() {
       </View>}
       {activeTab === "buy" && !!catalogSlowMessage && <Text accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{catalogSlowMessage}</Text>}
       {activeTab === "buy" && !!sharedListingMessage && <Text accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{sharedListingMessage}</Text>}
+      {activeTab === "buy" && !!shareMessage && !selectedPlate && <Text selectable accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{shareMessage}</Text>}
 
       {activeTab === "buy" && !catalogOnly && <Pressable
         onPress={() => {
@@ -3136,7 +3146,7 @@ export default function HomeScreen() {
                 <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
                 {Platform.OS === "web" && <Pressable onPress={() => { if (selectedPlate) void Linking.openURL(listingLink(selectedPlate.id, selectedPlate.isSiteListing, true)).catch(() => setShareMessage("Установи приложение ЗаНомером, чтобы открыть объявление в нём.")); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>Открыть в приложении ↗</Text></Pressable>}
               </View>
-              {!!shareMessage && <Text accessibilityLiveRegion="polite" style={styles.detailsMuted}>{shareMessage}</Text>}
+              {!!shareMessage && <Text selectable accessibilityLiveRegion="polite" style={styles.detailsMuted}>{shareMessage}</Text>}
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
                 {!!selectedPlate.sellerComment && <><Text style={styles.detailsLabel}>Комментарий продавца</Text><Text style={styles.detailsComment}>{selectedPlate.sellerComment}</Text></>}
                 <View style={styles.safeContactCard}>
