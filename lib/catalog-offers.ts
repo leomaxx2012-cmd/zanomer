@@ -21,3 +21,8 @@ export function deduplicateOffers<T extends Offer>(rows: T[]): T[] {
   }
   return [...offers.values()].sort((a,b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
 }
+
+// New pages extend the last successful catalogue, never an older bundled copy.
+export function mergeCatalogOffers<T extends Offer>(current: T[], incoming: T[]): T[] {
+  return deduplicateOffers([...current, ...incoming]);
+}

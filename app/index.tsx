@@ -24,9 +24,9 @@ import * as Updates from "expo-updates";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
-import { supabase } from "../lib/supabase";
+import { supabase, publicCatalogClient, readSavedProfile } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
-import { deduplicateOffers } from "../lib/catalog-offers";
+import { deduplicateOffers, mergeCatalogOffers } from "../lib/catalog-offers";
 import { privacyPolicy } from "../lib/privacy-policy";
 import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
 import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion } from "../lib/search-regions";
@@ -301,6 +301,8 @@ export default function HomeScreen() {
   const latestSiteListingRef = useRef("");
   const handledNotificationRef = useRef("");
   const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
+  const [catalogCacheReady, setCatalogCacheReady] = useState(false);
+  const catalogWriteRef = useRef(Promise.resolve());
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
@@ -1130,24 +1132,46 @@ export default function HomeScreen() {
   // При следующем запуске сразу показываем последнюю полную версию каталога,
   // сохранённую на устройстве. Проверка свежих данных продолжается в фоне.
   useEffect(() => {
-    if (Platform.OS === "web") return;
     let mounted = true;
     void AsyncStorage.getItem(CATALOG_CACHE_KEY).then((saved) => {
       if (!mounted || !saved) return;
       try {
         const cached = JSON.parse(saved) as Plate[];
-        if (Array.isArray(cached) && cached.length > 120) setCatalog(deduplicateOffers(cached));
+        if (Array.isArray(cached) && cached.every(item => item && typeof item.id === "string" && typeof item.region === "string" && typeof item.createdAt === "string")) {
+          // Network sync starts only after hydration. The saved price wins
+          // over an older bundled copy even if the post date is unchanged.
+          setCatalog(current => mergeCatalogOffers(current, cached));
+        }
       } catch {
-        void AsyncStorage.removeItem(CATALOG_CACHE_KEY);
+        // Keep the current catalogue even if a cache entry is malformed.
       }
-    });
+    }).catch(() => {}).finally(() => { if (mounted) setCatalogCacheReady(true); });
     return () => { mounted = false; };
   }, []);
 
   useEffect(() => {
-    if (!supabase) return;
-    const client = supabase;
+    if (!catalogCacheReady) return;
+    const timer = setTimeout(() => {
+      const saved = JSON.stringify(catalog);
+      // Serialize writes so a slow earlier write cannot overwrite newer data.
+      catalogWriteRef.current = catalogWriteRef.current
+        .catch(() => {})
+        .then(() => AsyncStorage.setItem(CATALOG_CACHE_KEY, saved))
+        .catch(() => {});
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [catalog, catalogCacheReady]);
+
+  useEffect(() => {
+    if (!catalogCacheReady) return;
+    const client = publicCatalogClient;
     let loadingCatalog = false;
+    let needsCatalogSync = true;
+    let lastCatalogCheck = 0;
+    let catalogEffectActive = true;
+    const publishCatalog = (incoming: Plate[]) => {
+      if (catalogEffectActive && incoming.length) setCatalog(current => mergeCatalogOffers(current, incoming));
+    };
 
     async function loadCatalog() {
       // Не создаём параллельные запросы при возврате приложения на экран
@@ -1157,7 +1181,6 @@ export default function HomeScreen() {
       setCatalogRefreshing(true);
       setCatalogLoadError("");
       setCatalogSlowMessage("");
-      let requestTimeout: ReturnType<typeof setTimeout> | undefined;
       // Не прячем задержку: пользователь сразу понимает, что касание принято,
       // а приложение ждёт сеть, а не зависло.
       const slowNoticeTimeout = setTimeout(() => {
@@ -1166,12 +1189,6 @@ export default function HomeScreen() {
       // Индикатор — только короткое подтверждение запуска. Длительный запрос
       // не должен создавать впечатление, что приложение зависло.
       const refreshIndicatorTimeout = setTimeout(() => setCatalogRefreshing(false), 8_000);
-      // Новые номера уже показаны отдельным быстрым запросом ниже. Полный
-      // каталог может быть объёмным, поэтому даём ему больше времени и не
-      // обрываем фоновую догрузку через 20 секунд на мобильной сети.
-      const stopSlowRequest = new Promise<never>((_, reject) => {
-        requestTimeout = setTimeout(() => reject(new Error("catalog-timeout")), 90_000);
-      });
       // Каталог большой для одного ответа на мобильной сети. Догружаем его
       // небольшими порциями и обновляем экран после каждой порции.
       async function loadAllPartnerListings(initialRows: Record<string, any>[] = [], totalCount?: number | null) {
@@ -1185,21 +1202,19 @@ export default function HomeScreen() {
           .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until")
           .eq("status", "active")
           .order("created_at", { ascending: false })
+          .order("id", { ascending: true })
           .range(start, start + partnerPageSize - 1);
 
-        // Полный каталог уже находится в снимке APK и локальном кэше. Сеть
-        // запрашивает только свежую страницу, иначе несколько тысяч строк
-        // занимали JS-поток и задерживали все кнопки.
-        const expectedCount = rows.length;
-        const pageStarts: number[] = [];
-        for (let start = rows.length; start < expectedCount; start += partnerPageSize) pageStarts.push(start);
-        // 4–5 страниц каталога не ждут друг друга по очереди. Это особенно
-        // важно на телефоне: при 4 000+ номерах последовательная загрузка
-        // могла не успеть до тайм-аута и оставляла старую локальную копию.
-        const pageResults = await Promise.all(pageStarts.map(loadPage));
-        const failedPage = pageResults.find((result) => result.error);
-        if (failedPage?.error) return { data: rows, error: failedPage.error };
-        pageResults.forEach((result) => rows.push(...(result.data ?? [])));
+        // Recover ALL missed rows, not just the latest 120. Publish each page
+        // immediately; a later network failure keeps every successful page.
+        for (let start = rows.length; catalogEffectActive && (totalCount == null || start < totalCount); start += partnerPageSize) {
+          const result = await loadPage(start);
+          if (result.error) return { data: rows, error: result.error };
+          const page = result.data ?? [];
+          rows.push(...page);
+          publishCatalog(page.map(toPartnerPlate));
+          if (page.length < partnerPageSize) break;
+        }
         return { data: rows, error: null };
       }
 
@@ -1227,6 +1242,7 @@ export default function HomeScreen() {
         .select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until", { count: "exact" })
         .eq("status", "active")
         .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
         // Берём только последние изменения. Остальная проверенная база уже
         // есть офлайн и не должна скачиваться заново при каждом открытии.
         .range(0, 119);
@@ -1239,13 +1255,11 @@ export default function HomeScreen() {
       // Таблицы загружаются независимо: партнёрский каталог не должен исчезать,
       // если пользовательские объявления временно недоступны гостю по RLS.
       try {
-      const firstPageFallback = new Promise<{ data: Record<string, any>[]; error: null; count: null }>((resolve) => {
-        setTimeout(() => resolve({ data: [], error: null, count: null }), 8_000);
-      });
-      const firstPartnerResult = await Promise.race([firstPartnerPageRequest, firstPageFallback]);
+      const firstPartnerResult = await firstPartnerPageRequest;
       // Первый сетевой ответ используем только как начало тихой синхронизации.
       // Экран продолжает показывать встроенный полный каталог без ожидания.
       if (!firstPartnerResult.error && firstPartnerResult.data?.length) {
+        publishCatalog(firstPartnerResult.data.map(toPartnerPlate));
         clearTimeout(slowNoticeTimeout);
         setCatalogSlowMessage("");
         setCatalogRefreshing(false);
@@ -1253,16 +1267,19 @@ export default function HomeScreen() {
 
       // Полную историю получаем только после быстрого ответа с новинками,
       // чтобы параллельные тяжёлые запросы не мешали старту каталога.
-      const allPartnerPagesRequest = loadAllPartnerListings(firstPartnerResult.data ?? [], firstPartnerResult.count);
+      const allPartnerPagesRequest = firstPartnerResult.error
+        ? Promise.resolve(firstPartnerResult)
+        : loadAllPartnerListings(firstPartnerResult.data ?? [], firstPartnerResult.count);
 
-      const [siteResult, partnerResult] = await Promise.race([Promise.all([
+      const [siteResult, partnerResult] = await Promise.all([
         siteListingsRequest,
         allPartnerPagesRequest,
-      ]), stopSlowRequest]);
+      ]);
       const data = siteResult.data ?? [];
       const partnerData = partnerResult.data ?? [];
+      needsCatalogSync = Boolean(siteResult.error || partnerResult.error);
       if (siteResult.error && partnerResult.error) {
-        setCatalogLoadError("Не удалось обновить каталог. Проверь интернет или VPN и перезапусти приложение.");
+        setCatalogLoadError("Нет связи с каталогом. Сохранённые объявления доступны; обновление повторится автоматически.");
         return;
       }
 
@@ -1306,18 +1323,18 @@ export default function HomeScreen() {
       };
       });
       const partners: Plate[] = partnerData.map(toPartnerPlate);
-      latestPartnerListingRef.current = partners.reduce((latest, plate) => {
+      if (!partnerResult.error) latestPartnerListingRef.current = partners.reduce((latest, plate) => {
         const timestamp = plate.publishedAt ?? plate.createdAt;
         return timestamp > latest ? timestamp : latest;
       }, latestPartnerListingRef.current);
-      latestSiteListingRef.current = data.reduce((latest, item) => {
+      if (!siteResult.error) latestSiteListingRef.current = data.reduce((latest, item) => {
         const timestamp = String(item.updated_at ?? item.created_at ?? "");
         return timestamp > latest ? timestamp : latest;
       }, latestSiteListingRef.current);
 
       // Снимок из APK — надёжная база каталога офлайн. Сетевые данные лишь
       // обновляют его и добавляют свежие объявления, но не могут его уменьшить.
-      const loaded = [...catalogFallback, ...fromDatabase, ...partners];
+      const loaded = [...fromDatabase, ...partners];
       // Один и тот же номер с тем же кодом региона показываем только один раз.
       // Если запись пришла повторно, оставляем самую свежую.
       const uniqueLoaded = deduplicateOffers(loaded);
@@ -1326,15 +1343,14 @@ export default function HomeScreen() {
       // Не меняем тысячу карточек прямо посреди касания/прокрутки: на слабых
       // телефонах это перехватывало нажатия на несколько секунд.
       InteractionManager.runAfterInteractions(() => {
-        setCatalog(uniqueLoaded.length > 0 ? uniqueLoaded : catalogFallback);
-        if (Platform.OS !== "web" && uniqueLoaded.length > 0) void AsyncStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify(uniqueLoaded));
+        publishCatalog(uniqueLoaded);
       });
       } catch {
+        needsCatalogSync = true;
         // Нет сети — это нормальный офлайн-режим: встроенные номера уже
         // отображены. Не пугать пользователя фоновым обновлением каталога.
         setCatalogLoadError("");
       } finally {
-        if (requestTimeout) clearTimeout(requestTimeout);
         clearTimeout(slowNoticeTimeout);
         clearTimeout(refreshIndicatorTimeout);
         setCatalogSlowMessage("");
@@ -1362,16 +1378,25 @@ export default function HomeScreen() {
     // а не дату публикации партнёрского объявления.
     async function checkForCatalogUpdates() {
       if (loadingCatalog) return;
-      const [{ data: partnerRows }, { data: siteRows }] = await Promise.all([
+      if (needsCatalogSync) { void loadCatalog(); return; }
+      if (Date.now() - lastCatalogCheck < 60_000) return;
+      lastCatalogCheck = Date.now();
+      try {
+      const [{ data: partnerRows, error: partnerError }, { data: siteRows, error: siteError }] = await Promise.all([
         client.from("partner_listings").select("created_at").eq("status", "active").order("created_at", { ascending: false }).limit(1),
         client.from("auto_listings").select("updated_at, created_at").eq("status", "active").order("updated_at", { ascending: false }).limit(1),
       ]);
       const latestPartner = partnerRows?.[0]?.created_at;
       const latestSite = siteRows?.[0] ? String(siteRows[0].updated_at ?? siteRows[0].created_at) : "";
-      if ((latestPartner && (!latestPartnerListingRef.current || latestPartner > latestPartnerListingRef.current))
+      // A minute timer also retries failed/partial syncs after network changes.
+      // Do not rely only on a timestamp that could match the first loaded page.
+      if (partnerError || siteError || (latestPartner && (!latestPartnerListingRef.current || latestPartner > latestPartnerListingRef.current))
         || (latestSite && (!latestSiteListingRef.current || latestSite > latestSiteListingRef.current))) void loadCatalog();
+      } catch { void loadCatalog(); }
     }
-    const refreshTimer = setInterval(() => void checkForCatalogUpdates(), 60_000);
+    const refreshTimer = setInterval(() => void checkForCatalogUpdates(), 15_000);
+    const onlineHandler = () => void loadCatalog();
+    if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("online", onlineHandler);
     // Realtime даёт мгновенное обновление, если оно разрешено на стороне
     // Supabase. Минутная проверка выше остаётся надёжным резервом.
     const updatesChannel = client
@@ -1380,18 +1405,20 @@ export default function HomeScreen() {
       .on("postgres_changes", { event: "*", schema: "public", table: "auto_listings" }, () => void loadCatalog())
       .subscribe();
     return () => {
+      catalogEffectActive = false;
       initialCatalogTask.cancel();
       appStateSubscription.remove();
       clearInterval(refreshTimer);
+      if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("online", onlineHandler);
       void client.removeChannel(updatesChannel);
     };
-  }, []);
+  }, [catalogCacheReady]);
 
   useEffect(() => {
     if (!supabase) return;
 
     async function loadPartnerListingStatuses() {
-      const { data } = await supabase
+      const { data } = await publicCatalogClient
         .from("partner_listing_statuses")
         .select("source_url")
         .eq("status", "archived");
@@ -1399,6 +1426,8 @@ export default function HomeScreen() {
     }
 
     void loadPartnerListingStatuses();
+    const timer = setInterval(() => void loadPartnerListingStatuses().catch(() => {}), 60_000);
+    return () => clearInterval(timer);
   }, []);
 
   useEffect(() => {
@@ -1450,8 +1479,14 @@ export default function HomeScreen() {
     // интернетом getUser() может временно вернуть пустой ответ, хотя
     // действующая сессия уже сохранена в AsyncStorage.
     let authEffectActive = true;
+    let authStateVersion = 0;
+    // Display the persisted identity before a slow token refresh. An explicit
+    // sign-out/auth event supersedes this disk read and cannot be undone by it.
+    void readSavedProfile().then(user => {
+      if (authEffectActive && authStateVersion === 0 && user) void setProfile(user);
+    });
     void supabase.auth.getSession().then(({ data, error }) => {
-      if (authEffectActive && !error) void setProfile(data.session?.user ?? null);
+      if (authEffectActive && authStateVersion === 0 && !error && data.session?.user) void setProfile(data.session.user);
     }).catch(() => {
       // Ошибка связи не означает, что пользователь вышел из аккаунта.
     });
@@ -1459,9 +1494,10 @@ export default function HomeScreen() {
       // При кратком обрыве сети или VPN Supabase иногда присылает пустую
       // сессию во время TOKEN_REFRESHED. Это не выход пользователя.
       if (!session?.user && event !== "SIGNED_OUT") return;
+      const eventVersion = ++authStateVersion;
       // Запросы профиля запускаем после завершения события авторизации.
       setTimeout(() => {
-        if (authEffectActive) void setProfile(session?.user ?? null);
+        if (authEffectActive && eventVersion === authStateVersion) void setProfile(session?.user ?? null);
       }, 0);
     });
     // При переходе между Wi‑Fi и мобильной сетью SDK не всегда сам сразу
@@ -1471,10 +1507,11 @@ export default function HomeScreen() {
     const restoreSavedSession = () => {
       if (restoringSession || !authEffectActive) return;
       restoringSession = true;
+      const restoreVersion = authStateVersion;
       // getSession сам обновляет истёкший токен. Принудительный refresh
       // при каждом возвращении создавал лишние запросы при смене сети.
       void supabase.auth.getSession().then(({ data, error }) => {
-        if (authEffectActive && !error && data.session?.user) void setProfile(data.session.user);
+        if (authEffectActive && restoreVersion === authStateVersion && !error && data.session?.user) void setProfile(data.session.user);
       }).catch(() => {
         // Сохранённая сессия остаётся действующей до следующей удачной связи.
       }).finally(() => {
@@ -1482,12 +1519,21 @@ export default function HomeScreen() {
       });
     };
     const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (Platform.OS !== "web") {
+        if (state === "active") supabase.auth.startAutoRefresh();
+        else supabase.auth.stopAutoRefresh();
+      }
       if (state === "active") restoreSavedSession();
     });
+    if (Platform.OS !== "web" && AppState.currentState === "active") supabase.auth.startAutoRefresh();
+    const authRetryTimer = setInterval(() => {
+      if (Platform.OS === "web" || AppState.currentState === "active") restoreSavedSession();
+    }, 30_000);
     const onlineHandler = () => restoreSavedSession();
     if (Platform.OS === "web" && typeof window !== "undefined") window.addEventListener("online", onlineHandler);
     return () => {
       authEffectActive = false;
+      clearInterval(authRetryTimer);
       subscription.subscription.unsubscribe();
       appStateSubscription.remove();
       if (Platform.OS === "web" && typeof window !== "undefined") window.removeEventListener("online", onlineHandler);
