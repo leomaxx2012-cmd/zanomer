@@ -370,6 +370,7 @@ export default function HomeScreen() {
   const [freshOnly, setFreshOnly] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [sourceListExpanded, setSourceListExpanded] = useState(false);
   const [similarFiltersOpen, setSimilarFiltersOpen] = useState(false);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
@@ -2563,7 +2564,12 @@ export default function HomeScreen() {
       </View>}
       {(!compactLayout || filterPanelOpen) && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
-          <Text style={styles.filterControlTitle}>Источники объявлений</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Источники объявлений" accessibilityState={{ expanded: sourceListExpanded }} onPress={() => setSourceListExpanded(current => !current)} style={styles.sourceFilterToggle}>
+            <Text style={styles.filterControlTitle}>Источники объявлений</Text>
+            <Text style={styles.sourceFilterSelection}>{selectedSources.length === 0 ? "Все источники" : selectedSources.length === 1 ? (sourceOptions.find(source => source.id === selectedSources[0])?.label ?? (selectedSources[0] === "site" ? "Объявления пользователей" : selectedSources[0].replace(/^telegram:/, "@"))) : `Выбрано источников: ${selectedSources.length}`}</Text>
+            <Text style={styles.sourceFilterToggleText}>{sourceListExpanded ? "Скрыть список ⌃" : "Выбрать источники ⌄"}</Text>
+          </Pressable>
+          {sourceListExpanded && <>
           <Text style={styles.sourceFilterHint}>Можно выбрать несколько. Числа показывают доступные объявления для выбранного транспорта.</Text>
           <View style={styles.listFilters}>
             <Pressable accessibilityRole="button" accessibilityState={{ selected: selectedSources.length === 0 }} onPress={() => setSelectedSources([])} style={[styles.listFilterButton, selectedSources.length === 0 && styles.listFilterButtonActive]}>
@@ -2577,6 +2583,7 @@ export default function HomeScreen() {
             })}
             {selectedSources.filter(id => !sourceOptions.some(source => source.id === id)).map(id => <Pressable key={id} accessibilityRole="button" onPress={() => setSelectedSources(current => current.filter(source => source !== id))} style={[styles.listFilterButton, styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, styles.listFilterButtonTextActive]}>{id === "site" ? "Объявления пользователей" : id.replace(/^telegram:/, "@")} · 0 ×</Text></Pressable>)}
           </View>
+          </>}
         </View>
         <View style={styles.filterControlDivider} />
         <View style={styles.filterControlGroup}>
@@ -3440,6 +3447,9 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   sourceFilterHint: { color: "#655F7A", fontSize: 13, lineHeight: 19, marginTop: 4 },
+  sourceFilterToggle: { minHeight: 48, paddingVertical: 4, gap: 4 },
+  sourceFilterSelection: { color: "#51486E", fontSize: 13, lineHeight: 19 },
+  sourceFilterToggleText: { color: "#5143C2", fontSize: 13, lineHeight: 19, fontWeight: "800" },
   numberPaymentNotice: { alignSelf: "center", width: "100%", maxWidth: 1100, backgroundColor: "#EEEBFF", borderColor: "#C7BEFF", borderWidth: 2, borderRadius: 18, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 16, marginTop: 8 },
   numberPaymentNoticeTitle: { color: "#352F67", fontSize: 26, lineHeight: 32, fontWeight: "900", textAlign: "center" },
   numberPaymentNoticeTitleCompact: { fontSize: 21, lineHeight: 27 },
