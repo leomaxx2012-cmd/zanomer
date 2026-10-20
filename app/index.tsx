@@ -2617,6 +2617,7 @@ export default function HomeScreen() {
           <Text style={styles.searchLabel}>Найди свой номер</Text>
           <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
         </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={styles.catalogCount}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={styles.catalogCountCaption}>По выбранным{"\n"}фильтрам · открыть →</Text></Pressable>
       </View>
       <View style={styles.vehicleTabs}>
         {([
@@ -2848,7 +2849,7 @@ export default function HomeScreen() {
       </View>}
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
-        {activeTab === "buy" && <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={styles.catalogCount}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={styles.catalogCountCaption}>По выбранным{"\n"}фильтрам · открыть →</Text></Pressable>}
+        {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
       {activeTab === "buy" && <View style={styles.numberPaymentNotice}>
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: paymentNoticeExpanded }} accessibilityLabel="Оплата за номера через сайт не принимается" onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(value => !value); }} style={styles.noticeToggle}>
