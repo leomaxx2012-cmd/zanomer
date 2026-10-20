@@ -17,7 +17,7 @@
     ],
     "android": {
       "package": "ru.zanomer.app",
-      "versionCode": 26,
+      "versionCode": 27,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -35,14 +35,14 @@
         "POST_NOTIFICATIONS"
       ]
     },
-    "version": "1.0.25",
+    "version": "1.0.26",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
       "url": "https://u.expo.dev/4f39246d-f506-4126-9019-4e1a4ebb1586",
       "checkAutomatically": "ON_LOAD",
-      "fallbackToCacheTimeout": 5000,
+      "fallbackToCacheTimeout": 0,
       "requestHeaders": {
         "expo-channel-name": "production"
       }

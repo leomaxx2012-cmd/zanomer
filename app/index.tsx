@@ -32,6 +32,8 @@ import { listingLink, sharedListingId, sharedListingTable } from "../lib/listing
 import { privacyPolicy } from "../lib/privacy-policy";
 import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
 import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion } from "../lib/search-regions";
+import { availableListingSources, matchesListingSources } from "../lib/listing-sources";
+import { createAppUpdateManager } from "../lib/app-updates";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
@@ -323,7 +325,6 @@ export default function HomeScreen() {
     if (!hotOverflow) return;
     hotScrollRef.current?.scrollTo({ x: Math.max(0, Math.min(hotContentWidth - hotViewportWidth, hotScrollX + direction * Math.max(252, hotViewportWidth * 0.8))), animated: true });
   }
-  const downloadedUpdateRef = useRef(false);
   const latestPartnerListingRef = useRef("");
   const latestSiteListingRef = useRef("");
   const handledNotificationRef = useRef("");
@@ -368,6 +369,7 @@ export default function HomeScreen() {
   const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
   const [freshOnly, setFreshOnly] = useState(false);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [selectedSources, setSelectedSources] = useState<string[]>([]);
   const [similarFiltersOpen, setSimilarFiltersOpen] = useState(false);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const [profileName, setProfileName] = useState("");
@@ -543,6 +545,7 @@ export default function HomeScreen() {
     setRegionCode("");
     setVehicle("car");
     setPriceLimit(null);
+    setSelectedSources([]);
     setSpecialFilters([]);
     setFreshOnly(false);
     setSort("date");
@@ -565,35 +568,21 @@ export default function HomeScreen() {
     });
   }
 
-  // Обновление применяется сразу после скачивания. Это надёжнее, чем ждать
-  // сворачивания приложения: на некоторых Android оно не присылает событие
-  // background при закрытии из списка последних приложений.
+  // Обновления скачиваются автоматически, но не прерывают действия пользователя.
+  // Применяем при сворачивании; при холодном запуске это делает expo-updates.
   useEffect(() => {
     if (Platform.OS === "web" || !Updates.isEnabled) return;
-    let mounted = true;
-
-    async function downloadAvailableUpdate() {
-      try {
-        const update = await Updates.checkForUpdateAsync();
-        if (!mounted || !update.isAvailable) return;
-        await Updates.fetchUpdateAsync();
-        if (mounted) await Updates.reloadAsync();
-      } catch {
-        // Обновления не должны мешать каталогу, если сеть временно недоступна.
-      }
-    }
-
-    void downloadAvailableUpdate();
+    const manager = createAppUpdateManager({
+      check: Updates.checkForUpdateAsync,
+      fetch: Updates.fetchUpdateAsync,
+      reload: Updates.reloadAsync,
+    }, AppState.currentState);
+    void manager.check();
     const appStateSubscription = AppState.addEventListener("change", (state) => {
-      if (state !== "background" || !downloadedUpdateRef.current) return;
-      downloadedUpdateRef.current = false;
-      void Updates.reloadAsync().catch(() => {
-        // Если ОС уже приостановила процесс, скачанная версия всё равно
-        // применится при следующем холодном запуске.
-      });
+      void manager.changeState(state);
     });
     return () => {
-      mounted = false;
+      manager.dispose();
       appStateSubscription.remove();
     };
   }, []);
@@ -1751,6 +1740,7 @@ export default function HomeScreen() {
   const seriesListingIds = useMemo(() => new Set(seriesGroupByListingId.keys()), [seriesGroupByListingId]);
 
   const archivedPartnerSourceSet = useMemo(() => new Set(archivedPartnerSources), [archivedPartnerSources]);
+  const sourceOptions = useMemo(() => availableListingSources(catalog, vehicle, archivedPartnerSourceSet), [catalog, vehicle, archivedPartnerSourceSet]);
 
   const plates = useMemo(
     () => {
@@ -1786,7 +1776,7 @@ export default function HomeScreen() {
         });
         const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
-        return isAvailable && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && groupMatches && plate.vehicle === vehicle;
+        return isAvailable && matchesListingSources(plate, selectedSources) && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && groupMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const sameRegionCode = (first: Plate, second: Plate) => first.region.split(" · ")[1]?.trim() === second.region.split(" · ")[1]?.trim();
@@ -1807,7 +1797,7 @@ export default function HomeScreen() {
       });
       return [...grouped.values()].flat();
     },
-    [catalog, archivedPartnerSourceSet, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, similarityFilter, sort, freshOnly, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
+    [catalog, archivedPartnerSourceSet, selectedSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, similarityFilter, sort, freshOnly, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
@@ -1822,7 +1812,7 @@ export default function HomeScreen() {
 
   useEffect(() => {
     setCatalogDisplayLimit(catalogPageSize);
-  }, [activeTab, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, catalogPageSize]);
+  }, [activeTab, selectedSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, catalogPageSize]);
 
   const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
   const sellerProfileIsChannel = sellerProfileListings.length > 0 && sellerProfileListings.every((plate) => !!plate.sourceUrl);
@@ -2572,6 +2562,23 @@ export default function HomeScreen() {
         </Pressable>
       </View>}
       {(!compactLayout || filterPanelOpen) && <View style={styles.filterControlPanel}>
+        <View style={styles.filterControlGroup}>
+          <Text style={styles.filterControlTitle}>Источники объявлений</Text>
+          <Text style={styles.sourceFilterHint}>Можно выбрать несколько. Числа показывают доступные объявления для выбранного транспорта.</Text>
+          <View style={styles.listFilters}>
+            <Pressable accessibilityRole="button" accessibilityState={{ selected: selectedSources.length === 0 }} onPress={() => setSelectedSources([])} style={[styles.listFilterButton, selectedSources.length === 0 && styles.listFilterButtonActive]}>
+              <Text style={[styles.listFilterButtonText, selectedSources.length === 0 && styles.listFilterButtonTextActive]}>Все источники</Text>
+            </Pressable>
+            {sourceOptions.map(source => {
+              const selected = selectedSources.includes(source.id);
+              return <Pressable key={source.id} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={`${source.label}, ${source.count} объявлений`} onPress={() => setSelectedSources(current => current.includes(source.id) ? current.filter(id => id !== source.id) : [...current, source.id])} style={[styles.listFilterButton, selected && styles.listFilterButtonActive]}>
+                <Text style={[styles.listFilterButtonText, selected && styles.listFilterButtonTextActive]}>{selected ? "✓ " : ""}{source.label} · {source.count}</Text>
+              </Pressable>;
+            })}
+            {selectedSources.filter(id => !sourceOptions.some(source => source.id === id)).map(id => <Pressable key={id} accessibilityRole="button" onPress={() => setSelectedSources(current => current.filter(source => source !== id))} style={[styles.listFilterButton, styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, styles.listFilterButtonTextActive]}>{id === "site" ? "Объявления пользователей" : id.replace(/^telegram:/, "@")} · 0 ×</Text></Pressable>)}
+          </View>
+        </View>
+        <View style={styles.filterControlDivider} />
         <View style={styles.filterControlGroup}>
           <View style={styles.filterControlTitleRow}>
             <Text style={styles.filterControlTitle}>Регион и особенности</Text>
@@ -3432,6 +3439,7 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  sourceFilterHint: { color: "#655F7A", fontSize: 13, lineHeight: 19, marginTop: 4 },
   numberPaymentNotice: { alignSelf: "center", width: "100%", maxWidth: 1100, backgroundColor: "#EEEBFF", borderColor: "#C7BEFF", borderWidth: 2, borderRadius: 18, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 16, marginTop: 8 },
   numberPaymentNoticeTitle: { color: "#352F67", fontSize: 26, lineHeight: 32, fontWeight: "900", textAlign: "center" },
   numberPaymentNoticeTitleCompact: { fontSize: 21, lineHeight: 27 },

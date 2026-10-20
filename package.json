@@ -10,6 +10,7 @@
     "web": "expo start --web",
     "build:android:apk": "eas build --platform android --profile preview",
     "build:android:store": "eas build --platform android --profile production",
+    "update:android": "npx eas-cli@24.3.0 update --channel production --platform android --environment production",
     "sync:partners": "node scripts/sync-partner-listings.mjs"
   },
   "dependencies": {
