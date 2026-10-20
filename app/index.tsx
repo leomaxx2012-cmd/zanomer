@@ -292,8 +292,11 @@ const bundledCatalog = bundledCatalogData as Plate[];
 const catalogFallback = deduplicateOffers(bundledCatalog.length > 0 ? bundledCatalog : initialPlates);
 
 export default function HomeScreen() {
-  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
-  const compactLayout = windowWidth < 430;
+  const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
+  const compactLayout = windowWidth < 600 || windowWidth / fontScale < 430;
+  const narrowCards = windowWidth / fontScale < 760;
+  const [hotExpanded, setHotExpanded] = useState(true);
+  const [paymentNoticeExpanded, setPaymentNoticeExpanded] = useState(true);
   // Тяжёлая карточка содержит разметку номера и несколько действий. На
   // телефоне выводим меньшую первую страницу, чтобы прокрутка оставалась
   // отзывчивой даже при каталоге из тысяч объявлений.
@@ -302,6 +305,14 @@ export default function HomeScreen() {
   const catalogPageSize = compactLayout ? 4 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
+  function openFilteredCatalog() {
+    Keyboard.dismiss();
+    setPlatePicker(null);
+    setFilterPanelOpen(false);
+    setCatalogDisplayLimit(catalogPageSize);
+    setCatalogOnly(true);
+    catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }
   const hotScrollRef = useRef<ScrollView>(null);
   const [hotViewportWidth, setHotViewportWidth] = useState(0);
   const [hotContentWidth, setHotContentWidth] = useState(0);
@@ -2367,7 +2378,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.page}>
+    <SafeAreaView style={styles.page} onStartShouldSetResponder={() => { Keyboard.dismiss(); return false; }}>
       <View pointerEvents="none" style={styles.backgroundGlowTop} />
       <View pointerEvents="none" style={styles.backgroundGlowRight} />
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
@@ -2392,7 +2403,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={styles.mainScrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -2524,7 +2535,7 @@ export default function HomeScreen() {
         <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(catalogPageSize); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); }} style={styles.catalogOnlyBack}>
           <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
         </Pressable>
-        <Text style={styles.catalogOnlyTitle}>Все объявления</Text>
+        <Text style={styles.catalogOnlyTitle}>Каталог по выбранным фильтрам</Text>
         <Text style={styles.catalogOnlyCount}>{catalogLoading ? "…" : visiblePlates.length}</Text>
       </View>}
       {activeTab === "buy" && catalogOnly && catalogRefreshing && <View style={styles.catalogUpdateNotice} accessibilityLiveRegion="polite">
@@ -2536,6 +2547,7 @@ export default function HomeScreen() {
 
       {activeTab === "buy" && !catalogOnly && <Pressable
         onPress={() => {
+          Keyboard.dismiss();
           setPlatePicker(null);
           setFilterPanelOpen(false);
           resetSearchAndFilters();
@@ -2605,7 +2617,6 @@ export default function HomeScreen() {
           <Text style={styles.searchLabel}>Найди свой номер</Text>
           <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
         </View>
-        <View style={styles.catalogCount}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={styles.catalogCountCaption}>По выбранным{"\n"}фильтрам</Text></View>
       </View>
       <View style={styles.vehicleTabs}>
         {([
@@ -2813,7 +2824,10 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {activeTab === "buy" && <View style={styles.hotSection}>
-        <View style={styles.hotHeading}><Text style={styles.hotHeadingText}>🔥 Горячие предложения</Text></View>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: hotExpanded }} accessibilityLabel="Горячие предложения" onPress={() => { Keyboard.dismiss(); setHotExpanded(value => !value); }} style={styles.hotHeading}>
+          <Text style={styles.hotHeadingText}>🔥 Горячие предложения</Text><Text style={styles.hotToggleText}>{hotExpanded ? "Свернуть ⌃" : "Развернуть ⌄"}</Text>
+        </Pressable>
+        {hotExpanded && <>
         <View style={styles.hotDivider} />
         {hotPlates.length === 0 ? <Text style={[styles.managementHint, { textAlign: "center" }]}>Пока нет горячих предложений по выбранным параметрам.</Text> : <View style={styles.hotCarousel}>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие предложения: влево" disabled={!hotOverflow || hotScrollX <= 1} onPress={() => scrollHot(-1)} style={[styles.hotArrow, (!hotOverflow || hotScrollX <= 1) && styles.hotArrowDisabled]}><Text style={styles.hotArrowText}>‹</Text></Pressable>
@@ -2830,14 +2844,17 @@ export default function HomeScreen() {
           </ScrollView>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие предложения: вправо" disabled={!hotOverflow || hotScrollX >= hotContentWidth - hotViewportWidth - 1} onPress={() => scrollHot(1)} style={[styles.hotArrow, (!hotOverflow || hotScrollX >= hotContentWidth - hotViewportWidth - 1) && styles.hotArrowDisabled]}><Text style={styles.hotArrowText}>›</Text></Pressable>
         </View>}
+        </>}
       </View>}
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
-        {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
+        {activeTab === "buy" && <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={styles.catalogCount}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={styles.catalogCountCaption}>По выбранным{"\n"}фильтрам · открыть →</Text></Pressable>}
       </View>}
       {activeTab === "buy" && <View style={styles.numberPaymentNotice}>
-        <Text style={[styles.numberPaymentNoticeTitle, compactLayout && styles.numberPaymentNoticeTitleCompact]}>Оплата за номера через сайт не принимается</Text>
-        <Text style={styles.numberPaymentNoticeText}>ЗаНомером — площадка объявлений. Условия сделки и расчёты продавец и покупатель согласуют напрямую вне сервиса. На сайте оплачиваются только подписка и продвижение объявлений после подключения платежей.</Text>
+        <Pressable accessibilityRole="button" accessibilityState={{ expanded: paymentNoticeExpanded }} accessibilityLabel="Оплата за номера через сайт не принимается" onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(value => !value); }} style={styles.noticeToggle}>
+          <Text style={[styles.numberPaymentNoticeTitle, compactLayout && styles.numberPaymentNoticeTitleCompact]}>Оплата за номера через сайт не принимается</Text><Text style={styles.noticeToggleText}>{paymentNoticeExpanded ? "Свернуть ⌃" : "Подробнее ⌄"}</Text>
+        </Pressable>
+        {paymentNoticeExpanded && <Text style={styles.numberPaymentNoticeText}>ЗаНомером — площадка объявлений. Условия сделки и расчёты продавец и покупатель согласуют напрямую вне сервиса. На сайте оплачиваются только подписка и продвижение объявлений после подключения платежей.</Text>}
       </View>}
       {!!catalogLoadError && activeTab === "buy" && !catalogOnly && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
       {similarTo && !catalogOnly && (
@@ -2909,11 +2926,11 @@ export default function HomeScreen() {
               </Pressable>}
             <View style={styles.cardShell}>
             <View style={styles.card}>
-              <View style={[styles.cardMainRow, compactLayout && styles.cardMainRowCompact]}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, compactLayout && styles.cardPlateCompact, windowWidth >= 1000 && styles.cardPlateDesktop, item.vehicle === "motorcycle" && styles.cardPlateMotorcycle]}>
+              <View style={[styles.cardMainRow, narrowCards && styles.cardMainRowCompact]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, narrowCards && styles.cardPlateCompact, windowWidth >= 1000 && !narrowCards && styles.cardPlateDesktop, item.vehicle === "motorcycle" && styles.cardPlateMotorcycle]}>
                   <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} vehicle={item.vehicle} />
                 </Pressable>
-                  <View style={[styles.cardInfo, compactLayout && styles.cardInfoCompact]}>
+                  <View style={[styles.cardInfo, narrowCards && styles.cardInfoCompact]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   </View>
@@ -3414,6 +3431,8 @@ const styles = StyleSheet.create({
   numberPaymentNotice: { alignSelf: "center", width: "100%", maxWidth: 1100, backgroundColor: "#EEEBFF", borderColor: "#C7BEFF", borderWidth: 2, borderRadius: 18, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 16, marginTop: 8 },
   numberPaymentNoticeTitle: { color: "#352F67", fontSize: 26, lineHeight: 32, fontWeight: "900", textAlign: "center" },
   numberPaymentNoticeTitleCompact: { fontSize: 21, lineHeight: 27 },
+  noticeToggle: { minHeight: 48, justifyContent: "center", gap: 6 },
+  noticeToggleText: { color: "#5143C2", fontSize: 13, lineHeight: 19, fontWeight: "700", textAlign: "center" },
   numberPaymentNoticeText: { color: "#51486E", fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 8 },
   siteFooter: { borderTopWidth: 1, borderTopColor: "#DED8FF", marginTop: 28, paddingTop: 20, paddingBottom: 12, gap: 8 },
   siteFooterTitle: { color: "#352F67", fontSize: 15, fontWeight: "800" },
@@ -3423,6 +3442,7 @@ const styles = StyleSheet.create({
   page: { backgroundColor: "#F8F7FC", flex: 1, overflow: "hidden", paddingLeft: 24, paddingRight: 24, width: "100%" },
   mainScroll: { flex: 1, marginHorizontal: -24 },
   mainScrollContent: { paddingBottom: 112, paddingHorizontal: 24 },
+  mainScrollContentCompact: { paddingHorizontal: 12, paddingBottom: 128 },
   backgroundGlowTop: { backgroundColor: "#DDE7FF", borderRadius: 999, height: 250, left: -50, opacity: 0.56, position: "absolute", top: 170, transform: [{ rotate: "-18deg" }], width: 250 },
   backgroundGlowRight: { backgroundColor: "#EADFFF", borderRadius: 999, height: 390, opacity: 0.72, position: "absolute", right: -190, top: 235, width: 440 },
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
@@ -3529,9 +3549,9 @@ const styles = StyleSheet.create({
   searchHeadingText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
   searchLabel: { color: "#24213E", fontSize: 21, fontWeight: "900" },
   searchHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 3 },
-  catalogCount: { alignItems: "center", backgroundColor: "#EEEBFF", borderRadius: 13, flexShrink: 0, minWidth: 58, paddingHorizontal: 8, paddingVertical: 6 },
-  catalogCountText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
-  catalogCountCaption: { color: "#655F7A", fontSize: 10, fontWeight: "700", textAlign: "center" },
+  catalogCount: { alignItems: "center", justifyContent: "center", backgroundColor: "#EEEBFF", borderRadius: 13, flexShrink: 1, minWidth: 96, minHeight: 64, paddingHorizontal: 12, paddingVertical: 9 },
+  catalogCountText: { color: "#5143C2", fontSize: 20, lineHeight: 26, fontWeight: "900" },
+  catalogCountCaption: { color: "#51486E", fontSize: 12, lineHeight: 17, fontWeight: "700", textAlign: "center" },
   vehicleTabs: { alignItems: "stretch", flexDirection: "row", gap: 8, marginBottom: 15, width: "100%" },
   vehicleTab: { alignItems: "center", backgroundColor: "#F2F4F7", borderColor: "#E2E8F0", borderRadius: 16, borderWidth: 1, flex: 1, flexDirection: "row", gap: 6, justifyContent: "center", minWidth: 0, paddingHorizontal: 10, paddingVertical: 11 },
   // На телефоне пиктограмма над подписью, но высота кнопки остаётся прежней.
@@ -3754,7 +3774,8 @@ const styles = StyleSheet.create({
   cardShell: { backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 22, borderWidth: 1, overflow: "hidden", shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   card: { paddingHorizontal: 14, paddingTop: 14 },
   hotSection: { width: "100%", maxWidth: 1100, alignSelf: "center", marginTop: 24, marginBottom: 24, padding: 16, borderRadius: 24, backgroundColor: "#FFF9F2", borderWidth: 1, borderColor: "#F7CDA4", shadowColor: "#9A4B14", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.06, shadowRadius: 14 },
-  hotHeading: { alignSelf: "center", backgroundColor: "#FFE8D1", borderRadius: 18, paddingHorizontal: 18, paddingVertical: 9 },
+  hotHeading: { alignSelf: "stretch", alignItems: "center", justifyContent: "center", backgroundColor: "#FFE8D1", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 10, minHeight: 48, gap: 5 },
+  hotToggleText: { color: "#8A3D14", fontSize: 13, lineHeight: 19, fontWeight: "700" },
   hotHeadingText: { color: "#8A3D14", fontSize: 17, fontWeight: "900", textAlign: "center" },
   hotCarousel: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
   hotDivider: { height: 1, backgroundColor: "#FED7AA", alignSelf: "stretch", marginTop: 12, marginBottom: 4 },
@@ -4092,7 +4113,7 @@ const styles = StyleSheet.create({
   navItemActive: { backgroundColor: "#EFF4FF" },
   navDivider: { backgroundColor: "#D0D5DD", bottom: 7, position: "absolute", right: 0, top: 7, width: 1 },
   navIcon: { fontSize: 20, lineHeight: 22 },
-  navText: { color: "#667085", fontSize: 11, fontWeight: "700", lineHeight: 13, marginTop: 2, textAlign: "center" },
+  navText: { color: "#667085", fontSize: 12, fontWeight: "700", lineHeight: 16, marginTop: 2, textAlign: "center", flexShrink: 1 },
   navTextActive: { color: "#155EEF" },
   toast: { alignSelf: "center", backgroundColor: "#067647", borderRadius: 14, bottom: 82, paddingHorizontal: 18, paddingVertical: 12, position: "absolute" },
   toastText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
