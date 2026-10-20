@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import {
   AppState,
   Image,
@@ -27,6 +28,7 @@ import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase, publicCatalogClient, readSavedProfile } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
 import { deduplicateOffers, mergeCatalogOffers } from "../lib/catalog-offers";
+import { listingLink, sharedListingId, sharedListingTable } from "../lib/listing-links";
 import { privacyPolicy } from "../lib/privacy-policy";
 import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
 import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion } from "../lib/search-regions";
@@ -119,6 +121,19 @@ const plateFormat = (vehicle: VehicleType) => vehicle === "motorcycle"
 
 function formatPlateValue(left: string, digits: string, right: string, vehicle: VehicleType) {
   return vehicle === "motorcycle" ? `${digits} ${right}`.trim() : vehicle === "truck" ? `${left} ${digits}`.trim() : `${left} ${digits} ${right}`.trim();
+}
+
+function mapPartnerListing(item: Record<string, any>): Plate {
+  return {
+    id: item.id,
+    value: formatPlateValue(item.plate_left, item.plate_digits, item.plate_right, item.vehicle_type),
+    leftLetter: item.plate_left, rightLetters: item.plate_right, digits: item.plate_digits,
+    region: item.region, price: `${Number(item.price_rub).toLocaleString("ru-RU")} ₽`,
+    priceValue: Number(item.price_rub), vehicle: item.vehicle_type,
+    seller: item.source_name, createdAt: item.created_at.slice(0, 10), publishedAt: item.created_at,
+    tag: item.tag ?? "Партнёрское объявление", sourceName: "Открыть исходное объявление",
+    sourceUrl: item.source_url, featuredUntil: item.featured_until,
+  };
 }
 
 function TrailerIcon({ active = false }: { active?: boolean }) {
@@ -301,6 +316,15 @@ export default function HomeScreen() {
   const latestSiteListingRef = useRef("");
   const handledNotificationRef = useRef("");
   const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
+  const catalogSnapshotRef = useRef(catalog);
+  catalogSnapshotRef.current = catalog;
+  const sharedParams = useLocalSearchParams<{ listing?: string; kind?: string }>();
+  const incomingListingId = sharedListingId(sharedParams.listing);
+  const incomingListingKind = sharedParams.kind;
+  const handledSharedListingRef = useRef("");
+  const [sharedListingMessage, setSharedListingMessage] = useState("");
+  const [sharedListingAttempt, setSharedListingAttempt] = useState(0);
+  const [shareMessage, setShareMessage] = useState("");
   const [catalogCacheReady, setCatalogCacheReady] = useState(false);
   const catalogWriteRef = useRef(Promise.resolve());
   const [catalogLoading, setCatalogLoading] = useState(false);
@@ -415,6 +439,7 @@ export default function HomeScreen() {
     } else if (comparison.length < 4) {
       setComparison(items => toggleCompared(items, plate));
     } else {
+      setSelectedPlate(null);
       setComparisonOpen(true);
     }
   }
@@ -1024,13 +1049,89 @@ export default function HomeScreen() {
   }
 
   async function shareListing(listing: Plate) {
-    const url = listing.sourceUrl ?? `https://zanomerom.ru/?listing=${encodeURIComponent(listing.id)}`;
+    const url = listingLink(listing.id, listing.isSiteListing);
+    setShareMessage("");
     try {
+      if (Platform.OS === "web" && typeof navigator !== "undefined") {
+        if (typeof navigator.share === "function") {
+          await navigator.share({ title: "Объявление ЗаНомером", text: `${listing.value} · ${listing.price}`, url });
+          return;
+        }
+        if (navigator.clipboard) {
+          await navigator.clipboard.writeText(`${listing.value} · ${listing.price}\n${url}`);
+          setShareMessage("Ссылка на объявление скопирована.");
+          return;
+        }
+      }
       await Share.share({ message: `${listing.value} · ${listing.price}\n${url}`, url });
     } catch {
       // Пользователь мог закрыть системное меню «Поделиться» — это не ошибка.
     }
   }
+
+  // A second tap on the same link must reopen a card that was already closed.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      try {
+        const link = new URL(url);
+        if (link.protocol !== "avtonomer:" && !(link.protocol === "https:" && link.hostname === "zanomerom.ru")) return;
+        if (incomingListingId && sharedListingId(link.searchParams.get("listing")) === incomingListingId) {
+          handledSharedListingRef.current = "";
+          setSharedListingAttempt(value => value + 1);
+        }
+      } catch { /* Ignore unrelated or malformed incoming links. */ }
+    });
+    return () => subscription.remove();
+  }, [incomingListingId]);
+
+  // Expo Router receives both cold-start and running-app links. Resolve the
+  // exact ID rather than relying on the current filter or catalogue page.
+  useEffect(() => {
+    if (!incomingListingId) { handledSharedListingRef.current = ""; return; }
+    const requestKey = `${incomingListingKind ?? ""}:${incomingListingId}`;
+    if (handledSharedListingRef.current === requestKey) return;
+    let active = true;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    const cached = catalogSnapshotRef.current.find(item => item.id === incomingListingId);
+    setActiveTab("buy");
+    setChatOpen(false);
+    setPaymentInfoOpen(false);
+    setComparisonOpen(false);
+    setShareMessage("");
+    if (cached) {
+      setSelectedPlate(cached);
+      handledSharedListingRef.current = requestKey;
+      setSharedListingMessage("");
+    } else setSharedListingMessage("Открываем объявление по ссылке…");
+    const open = async () => {
+      try {
+        const table = sharedListingTable(incomingListingId, incomingListingKind);
+        const query = table === "auto_listings"
+          ? publicCatalogClient.from("auto_listings").select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, updated_at, status, featured_until, photo_url, seller_comment")
+          : publicCatalogClient.from("partner_listings").select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until");
+        const { data, error } = await query.eq("id", incomingListingId).eq("status", "active").maybeSingle();
+        if (error) throw error;
+        if (!active) return;
+        handledSharedListingRef.current = requestKey;
+        if (!data) {
+          setSelectedPlate(current => current?.id === incomingListingId ? null : current);
+          setSharedListingMessage("Объявление снято с публикации или больше недоступно.");
+          return;
+        }
+        const row = data as unknown as Record<string, any>;
+        const listing = table === "auto_listings" ? mapManagedListing(row, cached?.seller ?? "Пользователь ЗаНомером") : mapPartnerListing(row);
+        setSelectedPlate(current => cached ? (current?.id === incomingListingId ? listing : current) : (current && current.id !== incomingListingId ? current : listing));
+        setSharedListingMessage("");
+      } catch {
+        if (!active || cached) return;
+        setSharedListingMessage("Не удалось загрузить объявление. Повторим после восстановления связи.");
+        retryTimer = setTimeout(() => setSharedListingAttempt(value => value + 1), 15_000);
+      }
+    };
+    void open();
+    return () => { active = false; if (retryTimer) clearTimeout(retryTimer); };
+  }, [incomingListingId, incomingListingKind, sharedListingAttempt]);
 
   async function toggleListingLike(listing: Plate) {
     if (!supabase || !currentUserId) {
@@ -1218,24 +1319,7 @@ export default function HomeScreen() {
         return { data: rows, error: null };
       }
 
-      const toPartnerPlate = (item: Record<string, any>): Plate => ({
-        id: item.id,
-        value: formatPlateValue(item.plate_left, item.plate_digits, item.plate_right, item.vehicle_type as Plate["vehicle"]),
-        leftLetter: item.plate_left,
-        rightLetters: item.plate_right,
-        digits: item.plate_digits,
-        region: item.region,
-        price: `${Number(item.price_rub).toLocaleString("ru-RU")} ₽`,
-        priceValue: Number(item.price_rub),
-        vehicle: item.vehicle_type as Plate["vehicle"],
-        seller: item.source_name,
-        createdAt: item.created_at.slice(0, 10),
-        publishedAt: item.created_at,
-        tag: item.tag ?? "Партнёрское объявление",
-        sourceName: "Открыть исходное объявление",
-        sourceUrl: item.source_url,
-        featuredUntil: item.featured_until,
-      });
+      const toPartnerPlate = mapPartnerListing;
 
       const firstPartnerPageRequest = client
         .from("partner_listings")
@@ -2447,6 +2531,7 @@ export default function HomeScreen() {
         <Text style={styles.catalogUpdateNoticeText}>↻ Каталог обновляется…</Text>
       </View>}
       {activeTab === "buy" && !!catalogSlowMessage && <Text accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{catalogSlowMessage}</Text>}
+      {activeTab === "buy" && !!sharedListingMessage && <Text accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{sharedListingMessage}</Text>}
 
       {activeTab === "buy" && !catalogOnly && <Pressable
         onPress={() => {
@@ -3047,8 +3132,11 @@ export default function HomeScreen() {
                 {!!publicCommentMessage && <Text style={styles.publicCommentMessage}>{publicCommentMessage}</Text>}
               </View>}
               <View style={[styles.detailsActionsRow, styles.detailsShareSection]}>
+                <Pressable onPress={() => { if (selectedPlate) toggleComparison(selectedPlate); }} style={[styles.detailsActionButton, comparison.some(item => item.id === selectedPlate?.id) && styles.comparisonSelected]}><Text style={styles.detailsActionText}>{comparison.some(item => item.id === selectedPlate?.id) ? "✓ В сравнении" : "⇄ Сравнить · Плюс"}</Text></Pressable>
                 <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
+                {Platform.OS === "web" && <Pressable onPress={() => { if (selectedPlate) void Linking.openURL(listingLink(selectedPlate.id, selectedPlate.isSiteListing, true)).catch(() => setShareMessage("Установи приложение ЗаНомером, чтобы открыть объявление в нём.")); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>Открыть в приложении ↗</Text></Pressable>}
               </View>
+              {!!shareMessage && <Text accessibilityLiveRegion="polite" style={styles.detailsMuted}>{shareMessage}</Text>}
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
                 {!!selectedPlate.sellerComment && <><Text style={styles.detailsLabel}>Комментарий продавца</Text><Text style={styles.detailsComment}>{selectedPlate.sellerComment}</Text></>}
                 <View style={styles.safeContactCard}>

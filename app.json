@@ -17,7 +17,15 @@
     ],
     "android": {
       "package": "ru.zanomer.app",
-      "versionCode": 24,
+      "versionCode": 25,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [{ "scheme": "https", "host": "zanomerom.ru", "path": "/" }]
+        }
+      ],
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "foregroundImage": "./assets/zanomer-logo.png",
@@ -27,7 +35,7 @@
         "POST_NOTIFICATIONS"
       ]
     },
-    "version": "1.0.23",
+    "version": "1.0.24",
     "runtimeVersion": {
       "policy": "appVersion"
     },

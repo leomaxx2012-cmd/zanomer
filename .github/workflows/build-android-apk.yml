@@ -56,6 +56,9 @@ jobs:
         # Reserve enough heap and metaspace on the GitHub runner for a release build.
         run: ./gradlew assembleRelease --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
 
+      - name: Проверить подпись ссылок приложения
+        run: node scripts/verify-android-links.mjs android/app/build/outputs/apk/release/app-release.apk
+
       - name: Загрузить APK
         uses: actions/upload-artifact@v4
         with:
