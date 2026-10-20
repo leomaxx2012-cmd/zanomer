@@ -310,6 +310,7 @@ export default function HomeScreen() {
     setPlatePicker(null);
     setFilterPanelOpen(false);
     setCatalogDisplayLimit(catalogPageSize);
+    setCatalogScope("filtered");
     setCatalogOnly(true);
     catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
   }
@@ -344,6 +345,7 @@ export default function HomeScreen() {
   const [catalogSlowMessage, setCatalogSlowMessage] = useState("");
   const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => windowWidth < 430 ? 4 : 40);
   const [catalogOnly, setCatalogOnly] = useState(false);
+  const [catalogScope, setCatalogScope] = useState<"all" | "filtered">("all");
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
   const [leftLetter, setLeftLetter] = useState("");
   const [rightLetters, setRightLetters] = useState("");
@@ -1811,9 +1813,9 @@ export default function HomeScreen() {
   const similarTo = catalog.find((plate) => plate.id === similarToId);
   const visiblePlates = useMemo(() => activeTab === "favorites"
     ? catalog.filter((plate) => (saved.includes(plate.id) || (plate.isSiteListing && likedListingIds.includes(plate.id))) && (!plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl)))
-    : catalogOnly
+    : catalogOnly && catalogScope === "all"
       ? [...catalog].filter((plate) => !plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl)).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt))
-      : plates, [activeTab, archivedPartnerSourceSet, catalog, catalogOnly, likedListingIds, plates, saved]);
+      : plates, [activeTab, archivedPartnerSourceSet, catalog, catalogOnly, catalogScope, likedListingIds, plates, saved]);
   // Мобильное приложение не должно строить тысячи тяжёлых карточек за один раз:
   // это блокирует прокрутку и нажатия. Все номера доступны через «Показать ещё».
   const renderedPlates = visiblePlates.slice(0, catalogDisplayLimit);
@@ -2378,7 +2380,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.page} onStartShouldSetResponder={() => { Keyboard.dismiss(); return false; }}>
+    <SafeAreaView style={styles.page} onStartShouldSetResponder={() => { Keyboard.dismiss(); setPlatePicker(null); return false; }}>
       <View pointerEvents="none" style={styles.backgroundGlowTop} />
       <View pointerEvents="none" style={styles.backgroundGlowRight} />
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
@@ -2403,7 +2405,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact]} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact]} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag" onScrollBeginDrag={() => { Keyboard.dismiss(); setPlatePicker(null); }} showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -2535,7 +2537,7 @@ export default function HomeScreen() {
         <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(catalogPageSize); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); }} style={styles.catalogOnlyBack}>
           <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
         </Pressable>
-        <Text style={styles.catalogOnlyTitle}>Каталог по выбранным фильтрам</Text>
+        <Text style={styles.catalogOnlyTitle}>{catalogScope === "filtered" ? "Каталог по выбранным фильтрам" : "Все объявления"}</Text>
         <Text style={styles.catalogOnlyCount}>{catalogLoading ? "…" : visiblePlates.length}</Text>
       </View>}
       {activeTab === "buy" && catalogOnly && catalogRefreshing && <View style={styles.catalogUpdateNotice} accessibilityLiveRegion="polite">
@@ -2551,6 +2553,7 @@ export default function HomeScreen() {
           setPlatePicker(null);
           setFilterPanelOpen(false);
           resetSearchAndFilters();
+          setCatalogScope("all");
           setCatalogOnly(true);
           catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
         }}
