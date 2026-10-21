@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AppState,
   Image,
@@ -297,6 +298,9 @@ export default function HomeScreen() {
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const compactLayout = windowWidth < 600 || windowWidth / fontScale < 430;
   const narrowCards = windowWidth / fontScale < 760;
+  const insets = useSafeAreaInsets();
+  const largeTextNavigation = windowWidth / fontScale < 300;
+  const [navigationHeight, setNavigationHeight] = useState(88);
   const [hotExpanded, setHotExpanded] = useState(true);
   const [paymentNoticeExpanded, setPaymentNoticeExpanded] = useState(true);
   // Тяжёлая карточка содержит разметку номера и несколько действий. На
@@ -2396,7 +2400,7 @@ export default function HomeScreen() {
           </Pressable>
         </View>
       </View>
-      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact]} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag" onScrollBeginDrag={() => { Keyboard.dismiss(); setPlatePicker(null); }} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact, { paddingBottom: navigationHeight + 40 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="on-drag" onScrollBeginDrag={() => { Keyboard.dismiss(); setPlatePicker(null); }} showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -2629,12 +2633,12 @@ export default function HomeScreen() {
         </View>
       </View>}
       <View style={styles.searchArea}>
-      <View style={styles.searchHeading}>
-        <View style={styles.searchHeadingText}>
+      <View style={[styles.searchHeading, compactLayout && styles.searchHeadingCompact]}>
+        <View style={[styles.searchHeadingText, compactLayout && styles.searchHeadingTextCompact]}>
           <Text style={styles.searchLabel}>Найди свой номер</Text>
           <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={styles.catalogCount}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={styles.catalogCountCaption}>По выбранным{"\n"}фильтрам · открыть →</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={[styles.catalogCount, compactLayout && styles.catalogCountCompact]}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={[styles.catalogCountCaption, compactLayout && styles.catalogCountCaptionCompact]}>По выбранным фильтрам · открыть →</Text></Pressable>
       </View>
       <View style={styles.vehicleTabs}>
         {([
@@ -3419,26 +3423,26 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {comparison.length > 0 && hasPlusSubscription && (activeTab === "buy" || activeTab === "favorites") && <View style={[styles.comparisonDock, { width: Math.min(windowWidth - 48, 600), left: (windowWidth - Math.min(windowWidth - 48, 600)) / 2 }]}>
+      {comparison.length > 0 && hasPlusSubscription && (activeTab === "buy" || activeTab === "favorites") && <View style={[styles.comparisonDock, { bottom: navigationHeight + 12, width: Math.min(windowWidth - 48, 600), left: (windowWidth - Math.min(windowWidth - 48, 600)) / 2 }]}>
         <Text style={styles.comparisonBarTitle}>{comparison.length}/4</Text>
         <Pressable disabled={comparison.length < 2} onPress={() => setComparisonOpen(true)} style={[styles.comparisonPrimary, { flex: 1 }, comparison.length < 2 && { opacity: 0.5 }]}><Text style={styles.comparisonPrimaryText}>{comparison.length < 2 ? "Выбери ещё номер" : "⇄ Сравнить выбранные"}</Text></Pressable>
         <Pressable accessibilityLabel="Очистить сравнение" onPress={() => setComparison([])}><Text style={styles.detailsCloseText}>×</Text></Pressable>
       </View>}
-      <View style={styles.bottomNav}>
+      <View onLayout={event => setNavigationHeight(Math.ceil(event.nativeEvent.layout.height))} style={[styles.bottomNav, largeTextNavigation && styles.bottomNavLargeText, { paddingBottom: 8 + insets.bottom }]}>
         {([
           ["buy", "⌕", "Поиск объявлений", "#155EEF"],
           ["sell", "＋", "Разместить объявление", "#F04438"],
           ["favorites", "♡", "Избранное, сохранённое и лайки", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
-        ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
-          <Pressable onPress={() => { setActiveTab(tab); if (tab === "buy") { setCatalogOnly(false); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); } }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
+        ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={[styles.navSlot, largeTextNavigation && styles.navSlotLargeText]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: activeTab === tab }} onPress={() => { setActiveTab(tab); if (tab === "buy") { setCatalogOnly(false); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); } }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
             <Text style={[styles.navIcon, { color }]}>{icon}</Text>
-            <Text numberOfLines={2} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout && tab === "favorites" ? "Сохранённое и лайки" : label}</Text>
+            <Text style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout ? ({ buy: "Поиск", sell: "Разместить", favorites: "Избранное", subscriptions: "Подписка" } as const)[tab] : label}</Text>
           </Pressable>
-          {index < 3 && <View style={styles.navDivider} />}
+          {index < 3 && !largeTextNavigation && <View style={styles.navDivider} />}
         </View>)}
       </View>
-      {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={styles.toast}>
+      {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={[styles.toast, { bottom: navigationHeight + 12 }]}>
         <Text style={styles.toastText}>{subscriptionToastMessage || (hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено")}</Text>
       </Pressable>}
     </SafeAreaView>
@@ -3568,10 +3572,14 @@ const styles = StyleSheet.create({
   logoutText: { color: "#D92D20", fontSize: 13, fontWeight: "700", marginTop: 9 },
   searchArea: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E2DEF7", borderRadius: 28, borderWidth: 1, maxWidth: 760, marginTop: 20, padding: 19, position: "relative", shadowColor: "#5A4FB2", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.12, shadowRadius: 24, width: "100%" },
   searchHeading: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: 14, minWidth: 0 },
+  searchHeadingCompact: { flexDirection: "column", alignItems: "stretch", gap: 12 },
   searchHeadingText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
+  searchHeadingTextCompact: { flex: 0, width: "100%", paddingRight: 0 },
   searchLabel: { color: "#24213E", fontSize: 21, fontWeight: "900" },
   searchHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 3 },
   catalogCount: { alignItems: "center", justifyContent: "center", backgroundColor: "#EEEBFF", borderRadius: 13, flexShrink: 1, minWidth: 96, minHeight: 64, paddingHorizontal: 12, paddingVertical: 9 },
+  catalogCountCompact: { width: "100%", minWidth: 0, flexDirection: "row", gap: 12 },
+  catalogCountCaptionCompact: { flex: 1, minWidth: 0, textAlign: "left" },
   catalogCountText: { color: "#5143C2", fontSize: 20, lineHeight: 26, fontWeight: "900" },
   catalogCountCaption: { color: "#51486E", fontSize: 12, lineHeight: 17, fontWeight: "700", textAlign: "center" },
   vehicleTabs: { alignItems: "stretch", flexDirection: "row", gap: 8, marginBottom: 15, width: "100%" },
@@ -4130,7 +4138,9 @@ const styles = StyleSheet.create({
   safeDealTitle: { color: "#175CD3", fontSize: 13, fontWeight: "900" },
   safeDealText: { color: "#344054", fontSize: 12, lineHeight: 18, marginTop: 5 },
   bottomNav: { backgroundColor: "#FFFFFF", borderTopColor: "#EAECF0", borderTopWidth: 1, bottom: 0, flexDirection: "row", left: 0, paddingBottom: 8, paddingHorizontal: 12, paddingTop: 8, position: "absolute", right: 0 },
+  bottomNavLargeText: { flexWrap: "wrap", rowGap: 4 },
   navSlot: { flex: 1, position: "relative" },
+  navSlotLargeText: { flexGrow: 0, flexShrink: 0, flexBasis: "50%", minWidth: 0 },
   navItem: { alignItems: "center", borderRadius: 12, minHeight: 58, paddingHorizontal: 3, paddingVertical: 5 },
   navItemActive: { backgroundColor: "#EFF4FF" },
   navDivider: { backgroundColor: "#D0D5DD", bottom: 7, position: "absolute", right: 0, top: 7, width: 1 },
