@@ -2,6 +2,7 @@ import { Stack } from "expo-router";
 import Head from "expo-router/head";
 import { StatusBar } from "expo-status-bar";
 import VercelAnalytics from "../lib/vercel-analytics";
+import YandexMetrika from "../lib/yandex-metrika";
 
 export default function RootLayout() {
   return (
@@ -12,6 +13,7 @@ export default function RootLayout() {
         <title>ЗаНомером</title>
       </Head>
       <VercelAnalytics />
+      <YandexMetrika />
       <StatusBar style="dark" />
       <Stack screenOptions={{ headerShown: false }} />
     </>
