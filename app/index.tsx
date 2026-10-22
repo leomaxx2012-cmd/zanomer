@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -26,6 +26,8 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
+import Constants from "expo-constants";
+import { collectCatalogPages } from "../lib/catalog-pages";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
@@ -195,14 +197,22 @@ function getSiteVisitorKey() {
   }
 }
 
+const listingDateFormatter = new Intl.DateTimeFormat("ru-RU", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const listingDateLabels = new Map<string, string>();
+function newestFirst(a: Plate, b: Plate) {
+  const first = a.publishedAt ?? a.createdAt, second = b.publishedAt ?? b.createdAt;
+  return first === second ? 0 : first < second ? 1 : -1;
+}
 function formatListingDate(value?: string) {
   if (!value) return "Дата не указана";
+  const cached = listingDateLabels.get(value);
+  if (cached) return cached;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString("ru-RU", {
-    day: "2-digit", month: "2-digit", year: "numeric",
-    hour: "2-digit", minute: "2-digit",
-  });
+  const label = listingDateFormatter.format(date);
+  if (listingDateLabels.size >= 256) listingDateLabels.delete(listingDateLabels.keys().next().value!);
+  listingDateLabels.set(value, label);
+  return label;
 }
 
 function isRequisitesPage() {
@@ -1324,7 +1334,6 @@ export default function HomeScreen() {
       // Каталог большой для одного ответа на мобильной сети. Догружаем его
       // небольшими порциями и обновляем экран после каждой порции.
       async function loadAllPartnerListings(initialRows: Record<string, any>[] = [], totalCount?: number | null) {
-        const rows: Record<string, any>[] = [...initialRows];
         // Supabase отдаёт до 1000 строк за запрос. Так полный каталог из
         // нескольких тысяч номеров не застревает после первых 370 карточек
         // на медленном мобильном интернете.
@@ -1337,17 +1346,7 @@ export default function HomeScreen() {
           .order("id", { ascending: true })
           .range(start, start + partnerPageSize - 1);
 
-        // Recover ALL missed rows, not just the latest 120. Publish each page
-        // immediately; a later network failure keeps every successful page.
-        for (let start = rows.length; catalogEffectActive && (totalCount == null || start < totalCount); start += partnerPageSize) {
-          const result = await loadPage(start);
-          if (result.error) return { data: rows, error: result.error };
-          const page = result.data ?? [];
-          rows.push(...page);
-          publishCatalog(page.map(toPartnerPlate));
-          if (page.length < partnerPageSize) break;
-        }
-        return { data: rows, error: null };
+        return collectCatalogPages(initialRows, totalCount, partnerPageSize, loadPage, () => catalogEffectActive);
       }
 
       const toPartnerPlate = mapPartnerListing;
@@ -1394,6 +1393,7 @@ export default function HomeScreen() {
       const partnerData = partnerResult.data ?? [];
       needsCatalogSync = Boolean(siteResult.error || partnerResult.error);
       if (siteResult.error && partnerResult.error) {
+        publishCatalog(partnerData.map(toPartnerPlate));
         setCatalogLoadError("Нет связи с каталогом. Сохранённые объявления доступны; обновление повторится автоматически.");
         return;
       }
@@ -1771,15 +1771,22 @@ export default function HomeScreen() {
   const archivedPartnerSourceSet = useMemo(() => new Set(archivedPartnerSources), [archivedPartnerSources]);
   const sourceOptions = useMemo(() => availableListingSources(catalog, vehicle, archivedPartnerSourceSet), [catalog, vehicle, archivedPartnerSourceSet]);
 
-  // Keep key presses urgent; filter the catalogue after the input has painted.
-  const searchCriteria = useDeferredValue(useMemo(() => ({ leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, selectedSources, freshOnly }),
-    [leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, selectedSources, freshOnly]));
+  // Legacy Android roots cannot defer filtering with useDeferredValue.
+  // Paint the typed character first and coalesce rapid key presses.
+  const immediateSearchCriteria = useMemo(() => ({ leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, selectedSources, freshOnly }),
+    [leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, selectedSources, freshOnly]);
+  const [searchCriteria, setSearchCriteria] = useState(immediateSearchCriteria);
+  useEffect(() => {
+    const timer = setTimeout(() => setSearchCriteria(immediateSearchCriteria), 100);
+    return () => clearTimeout(timer);
+  }, [immediateSearchCriteria]);
   const plates = useMemo(
     () => {
       const { leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, selectedSources, freshOnly } = searchCriteria;
       const selectedRegionCodes = regionCode.split(",").map(code => code.trim()).filter(Boolean);
       const filtered = catalog.filter((plate) => {
-        const isAvailable = !plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl);
+        if (plate.vehicle !== vehicle || (plate.sourceUrl && archivedPartnerSourceSet.has(plate.sourceUrl))) return false;
+        if (priceLimit !== null && plate.priceValue > priceLimit) return false;
         const matchesPattern = (value: string, pattern: string) => {
           const clean = pattern.trim().toUpperCase();
           if (!clean) return true;
@@ -1794,7 +1801,7 @@ export default function HomeScreen() {
         // Отдельно отмеченные коды могут относиться к разным регионам.
         // В этом режиме фильтруем именно по кодам, а не по последнему открытому названию региона.
         const regionMatches = selectedRegionCodes.length > 0 || region === "Все" || plate.region.startsWith(region);
-        const plateRegionCodes = extractRegionCodes(plate.region);
+        const plateRegionCodes = selectedRegionCodes.length ? extractRegionCodes(plate.region) : [];
         const regionCodeMatches = selectedRegionCodes.length === 0 || selectedRegionCodes.some((code) => plateRegionCodes.includes(code));
         const priceMatches = priceLimit === null || plate.priceValue <= priceLimit;
         const groupMatches = !similarFiltersOpen || seriesListingIds.has(plate.id);
@@ -1807,9 +1814,9 @@ export default function HomeScreen() {
           if (filter === "similarLetters") return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && candidate.leftLetter === plate.leftLetter && candidate.rightLetters === plate.rightLetters);
           return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && sameRegionCode(candidate));
         });
-        const publishedAt = new Date(plate.publishedAt ?? plate.createdAt).getTime();
+        const publishedAt = freshOnly ? new Date(plate.publishedAt ?? plate.createdAt).getTime() : 0;
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
-        return isAvailable && matchesListingSources(plate, selectedSources) && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && groupMatches && plate.vehicle === vehicle;
+        return matchesListingSources(plate, selectedSources) && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && groupMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const sameRegionCode = (first: Plate, second: Plate) => first.region.split(" · ")[1]?.trim() === second.region.split(" · ")[1]?.trim();
@@ -1819,7 +1826,7 @@ export default function HomeScreen() {
         if (similarityFilter === "letters") return plate.leftLetter === source.leftLetter && plate.rightLetters === source.rightLetters;
         return sameRegionCode(plate, source);
       });
-      const sorted = [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt));
+      const sorted = [...withSimilar].sort((a, b) => sort === "priceAsc" ? a.priceValue - b.priceValue : sort === "priceDesc" ? b.priceValue - a.priceValue : newestFirst(a, b));
       // Карточки одной серии всегда идут рядом, даже когда список отсортирован.
       const grouped = new Map<string, Plate[]>();
       sorted.filter((plate) => !hiddenSeriesGroupKeys.includes(seriesGroupByListingId.get(plate.id)?.key ?? "")).forEach((plate) => {
@@ -1837,7 +1844,7 @@ export default function HomeScreen() {
   const visiblePlates = useMemo(() => activeTab === "favorites"
     ? catalog.filter((plate) => (saved.includes(plate.id) || (plate.isSiteListing && likedListingIds.includes(plate.id))) && (!plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl)))
     : catalogOnly && catalogScope === "all"
-      ? [...catalog].filter((plate) => !plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl)).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt))
+      ? [...catalog].filter((plate) => !plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl)).sort((a, b) => newestFirst(a, b))
       : plates, [activeTab, archivedPartnerSourceSet, catalog, catalogOnly, catalogScope, likedListingIds, plates, saved]);
   // Мобильное приложение не должно строить тысячи тяжёлых карточек за один раз:
   // это блокирует прокрутку и нажатия. Все номера доступны через «Показать ещё».
@@ -1847,7 +1854,7 @@ export default function HomeScreen() {
     setCatalogDisplayLimit(catalogPageSize);
   }, [activeTab, selectedSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, catalogPageSize]);
 
-  const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => (b.publishedAt ?? b.createdAt).localeCompare(a.publishedAt ?? a.createdAt)) : [], [sellerProfile, catalog, archivedPartnerSources]);
+  const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => newestFirst(a, b)) : [], [sellerProfile, catalog, archivedPartnerSources]);
   const sellerProfileIsChannel = sellerProfileListings.length > 0 && sellerProfileListings.every((plate) => !!plate.sourceUrl);
   const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
   const sellerProfileJoinedAt = sellerProfileListings.find((plate) => plate.sellerJoinedAt)?.sellerJoinedAt;
@@ -1874,13 +1881,21 @@ export default function HomeScreen() {
       }))
       .sort((a, b) => a.title.localeCompare(b.title, "ru"));
   }, [catalog]);
-  const regionGroups = useMemo(() => catalogRegionGroups.map(group => {
-    const plates = catalog.filter(plate => plate.vehicle === vehicle
-      && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))
-      && plate.region.split(" · ")[0].trim() === group.title);
-    const codes = group.codes.map(code => ({ ...code, count: plates.filter(plate => extractRegionCodes(plate.region).includes(code.value)).length })).filter(code => code.count > 0);
-    return { ...group, codes, count: plates.length };
-  }).filter(group => group.codes.length > 0), [catalogRegionGroups, catalog, vehicle, archivedPartnerSources]);
+  const regionGroups = useMemo(() => {
+    const counts = new Map<string, { count: number; codes: Map<string, number> }>();
+    for (const plate of catalog) {
+      if (plate.vehicle !== vehicle || (plate.sourceUrl && archivedPartnerSourceSet.has(plate.sourceUrl))) continue;
+      const title = plate.region.split(" · ")[0].trim();
+      const group = counts.get(title) ?? { count: 0, codes: new Map<string, number>() };
+      group.count++;
+      for (const code of extractRegionCodes(plate.region)) group.codes.set(code, (group.codes.get(code) ?? 0) + 1);
+      counts.set(title, group);
+    }
+    return catalogRegionGroups.map(group => ({ ...group,
+      count: counts.get(group.title)?.count ?? 0,
+      codes: group.codes.map(code => ({ ...code, count: counts.get(group.title)?.codes.get(code.value) ?? 0 })).filter(code => code.count > 0),
+    })).filter(group => group.codes.length > 0);
+  }, [catalogRegionGroups, catalog, vehicle, archivedPartnerSourceSet]);
   const vehicleRegionCount = useMemo(() => catalog.filter(plate => plate.vehicle === vehicle && (!plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl))).length, [catalog, vehicle, archivedPartnerSourceSet]);
   const availableRegions = useMemo(() => catalogRegionGroups.flatMap((group) => group.codes.map((code) => ({
     value: code.value,
@@ -2492,6 +2507,7 @@ export default function HomeScreen() {
           </View>
           {isSignedIn && !(authMode === "signup" && authStep === 3) ? (
             <>
+              {Platform.OS !== "web" && <Text selectable style={styles.managementHint}>Версия {Constants.expoConfig?.version ?? Updates.runtimeVersion} · обновление {Updates.updateId?.slice(0, 8) ?? "встроенное"}</Text>}
               <Text style={styles.authHint}>Ты уже вошёл. Пароль нужен только если хочешь изменить его для будущих входов.</Text>
               <Text style={styles.managementTitle}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "Подписка Плюс не активна"}</Text>
               <Text style={styles.managementHint}>Доступно: {promotionBalance.highlights} размещений на 48 часов (включая бонусы Плюса) · {promotionBalance.hot} постоянных размещений. Выбери свой номер ниже. За каждый оплаченный период Плюса начисляется одно размещение на 48 часов.</Text>
