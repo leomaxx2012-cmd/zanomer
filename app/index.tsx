@@ -2434,15 +2434,17 @@ export default function HomeScreen() {
         </View>
         <View style={styles.headerLowerRow}>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={styles.headerHotButton}>
-            <Text numberOfLines={2} style={styles.headerHotText}>🔥 Горячие объявления</Text>
+            <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>🔥 Горячие объявления</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact]}>
+          <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact, compactLayout && windowWidth < 320 && { width: 110 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton]}>
             <Text numberOfLines={1} style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
-        </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={styles.headerReminder}>
           <Text style={styles.headerReminderText}>ⓘ Напоминание</Text>
         </Pressable>
+          </View>
+        </View>
       </View>
       {hotExpanded && <Modal transparent animationType="fade" onRequestClose={() => setHotExpanded(false)}>
         <View style={styles.headerModalOverlay}>
@@ -3524,10 +3526,14 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, elevation: 6, flexDirection: "column", gap: 4, justifyContent: "space-between", marginHorizontal: -24, paddingBottom: 18, paddingHorizontal: 24, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 14 : 18, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, zIndex: 10 },
   headerCompact: { alignItems: "stretch", gap: 4, paddingBottom: 8, paddingHorizontal: 12, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 10 },
   headerTopRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 6 },
-  headerLowerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%", gap: 8, marginTop: 5 },
-  headerHotButton: { flexShrink: 1, minHeight: 44, justifyContent: "center", paddingVertical: 6, paddingRight: 8 },
-  headerHotText: { color: "#A24717", fontSize: 15, lineHeight: 20, fontWeight: "900" },
-  headerReminder: { alignSelf: "flex-end", minHeight: 36, justifyContent: "center", paddingHorizontal: 12, backgroundColor: "#EEF4FF", borderRadius: 12 },
+  headerLowerRow: { flexDirection: "row", alignItems: "stretch", width: "100%", gap: 8, marginTop: 5 },
+  headerHotButton: { flex: 1, minWidth: 0, minHeight: 88, alignItems: "center", justifyContent: "center", padding: 12, backgroundColor: "#FFF0DF", borderColor: "#F2BC88", borderWidth: 1, borderRadius: 12 },
+  headerHotText: { color: "#A24717", fontSize: 22, lineHeight: 28, fontWeight: "900", textAlign: "center" },
+  headerHotTextCompact: { fontSize: 18, lineHeight: 24 },
+  headerUtilityColumn: { width: 134, gap: 6, alignItems: "stretch", justifyContent: "space-between" },
+  headerUtilityColumnCompact: { width: 124 },
+  headerAccountButton: { width: "100%", maxWidth: "100%", alignItems: "center" },
+  headerReminder: { minHeight: 38, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, backgroundColor: "#EEF4FF", borderRadius: 12 },
   headerReminderText: { color: "#4536B8", fontWeight: "700", fontSize: 12, lineHeight: 17 },
   headerModalOverlay: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(16,24,40,0.45)" },
   headerModalPanel: { alignSelf: "center", width: "100%", maxWidth: 620, borderRadius: 22, backgroundColor: "#FFFEFF", padding: 16, flexShrink: 1 },
