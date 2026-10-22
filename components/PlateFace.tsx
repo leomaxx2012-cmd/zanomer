@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 type Vehicle = "car" | "motorcycle" | "truck";
@@ -13,7 +13,7 @@ function Glyph({ value, left, top, width, size, scale }: { value: string; left: 
 }
 
 // Мото: четыре цифры над двумя буквами. Прицеп: две буквы и четыре цифры.
-export function PlateFace({ leftLetter = "", digits = "", rightLetters = "", region = "", vehicle = "car" }: PlateFaceProps) {
+function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", region = "", vehicle = "car" }: PlateFaceProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const base = vehicle === "motorcycle" ? { width: 300, height: 225 } : vehicle === "truck" ? { width: 520, height: 112 } : { width: 520, height: 112 };
   const scale = Math.min(size.width / base.width, size.height / base.height);
@@ -39,6 +39,8 @@ export function PlateFace({ leftLetter = "", digits = "", rightLetters = "", reg
     </View>}
   </View>;
 }
+
+export const PlateFace = memo(PlateFaceContent);
 
 const styles = StyleSheet.create({
   container: { alignItems: "center", flex: 1, justifyContent: "center", overflow: "hidden" },

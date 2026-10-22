@@ -24,5 +24,15 @@ export function deduplicateOffers<T extends Offer>(rows: T[]): T[] {
 
 // New pages extend the last successful catalogue, never an older bundled copy.
 export function mergeCatalogOffers<T extends Offer>(current: T[], incoming: T[]): T[] {
-  return deduplicateOffers([...current, ...incoming]);
+  if (incoming.length === 0) return current;
+  const previous = new Map(current.map(row => [row.id, row]));
+  const merged = deduplicateOffers([...current, ...incoming]).map(row => {
+    const old = previous.get(row.id);
+    if (!old) return row;
+    const keys = Object.keys(row) as (keyof T)[];
+    return keys.length === Object.keys(old).length && keys.every(key => Object.is(row[key], old[key])) ? old : row;
+  });
+  // Background page checks often return unchanged records. Preserve identity
+  // so React skips rebuilding the catalogue and serializing it to storage.
+  return merged.length === current.length && merged.every((row, index) => row === current[index]) ? current : merged;
 }

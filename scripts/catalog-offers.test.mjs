@@ -32,3 +32,19 @@ test('successive pages survive when a subsequent page fails', () => {
   assert.equal(current.length,4);
   assert.equal(mergeCatalogOffers(current, []).length,4);
 });
+
+test('unchanged background pages preserve catalogue identity', () => {
+  const current = [offer];
+  assert.equal(mergeCatalogOffers(current, [{...offer}]), current);
+  assert.equal(mergeCatalogOffers(current, []), current);
+});
+
+test('real metadata and price changes publish without rebuilding unchanged records', () => {
+  const other = {...offer,id:'2',digits:'222',sourceUrl:'https://t.me/runomer/2'};
+  const current = deduplicateOffers([offer,other]);
+  const result = mergeCatalogOffers(current, [{...offer,priceValue:120000,tag:'Новая цена'}]);
+  assert.notEqual(result,current);
+  assert.equal(result.find(row => row.id === '1').priceValue,120000);
+  assert.equal(result.find(row => row.id === '1').tag,'Новая цена');
+  assert.equal(result.find(row => row.id === '2'),other);
+});
