@@ -27,6 +27,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
+import { nextPlateSection } from "../lib/plate-editing";
 import { collectCatalogPages } from "../lib/catalog-pages";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
@@ -338,11 +339,10 @@ const catalogFallback = deduplicateOffers(bundledCatalog.length > 0 ? bundledCat
 export default function HomeScreen() {
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const compactLayout = windowWidth < 600 || windowWidth / fontScale < 430;
-  const [brandRowWidth, setBrandRowWidth] = useState(0);
   const narrowCards = windowWidth / fontScale < 760;
   const insets = useSafeAreaInsets();
-  const largeTextNavigation = windowWidth / fontScale < 300;
   const [navigationHeight, setNavigationHeight] = useState(88);
+  const [expandedListingIds, setExpandedListingIds] = useState<string[]>([]);
   const [hotExpanded, setHotExpanded] = useState(false);
   const [paymentNoticeExpanded, setPaymentNoticeExpanded] = useState(false);
   // Тяжёлая карточка содержит разметку номера и несколько действий. На
@@ -350,7 +350,7 @@ export default function HomeScreen() {
   // отзывчивой даже при каталоге из тысяч объявлений.
   // Рендер нескольких тяжёлых карточек сразу заметно тормозит недорогие
   // Android-устройства. Остальные карточки открываются кнопкой «Показать ещё».
-  const catalogPageSize = compactLayout ? 4 : 40;
+  const catalogPageSize = compactLayout ? 12 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const backgroundTouch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -382,7 +382,7 @@ export default function HomeScreen() {
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
   const [catalogSlowMessage, setCatalogSlowMessage] = useState("");
-  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => compactLayout ? 4 : 40);
+  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => compactLayout ? 12 : 40);
   const [catalogOnly, setCatalogOnly] = useState(false);
   const [catalogScope, setCatalogScope] = useState<"all" | "filtered">("all");
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
@@ -1938,7 +1938,7 @@ export default function HomeScreen() {
   const selectedRegionName = selectedRegionTitles.join(", ") || region;
   const showingWholeRegion = region !== "Все" && !regionCode;
   const showingMultipleRegionCodes = selectedRegionCodes.length > 1;
-  const selectedRegionLabel = region === "Все" ? "77" : selectedRegionCodes.join(", ") || "—";
+  const selectedRegionLabel = region === "Все" ? "—" : selectedRegionCodes.join(", ") || "—";
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionName} · ${selectedRegionLabel}`;
   function toggleRegionValues(values: string[]) {
     const next = toggleSearchRegion(regionGroups, region, regionCode, values);
@@ -2077,18 +2077,17 @@ export default function HomeScreen() {
   }
 
   function choosePlatePart(value: string) {
+    if (!platePicker || platePicker === "region") return;
     const format = plateFormat(vehicle);
-    if (platePicker === "left") {
-      setLeftLetter((current) => format.left <= 1 || current.length >= format.left ? value : `${current}${value}`);
-      return;
-    }
-    if (platePicker === "right") {
-      setRightLetters((current) => current.length >= format.right ? value : `${current}${value}`);
-      return;
-    }
-    if (platePicker === "digits") {
-      setDigits((current) => current.length >= format.digits ? value : `${current}${value}`);
-    }
+    const current = platePicker === "left" ? leftLetter : platePicker === "digits" ? digits : rightLetters;
+    const limit = format[platePicker];
+    const nextValue = limit <= 1 || current.length >= limit ? value : `${current}${value}`;
+    if (platePicker === "left") setLeftLetter(nextValue);
+    else if (platePicker === "digits") setDigits(nextValue);
+    else setRightLetters(nextValue);
+    const next = nextPlateSection(platePicker, nextValue, format);
+    if (next === "region") setRegionPickerGroup(null);
+    setPlatePicker(next);
   }
 
   function erasePlatePart() {
@@ -2429,14 +2428,11 @@ export default function HomeScreen() {
       <View pointerEvents="none" style={styles.backgroundGlowRight} />
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
-        <View style={styles.headerTopRow}>
-          <View style={styles.headerBrand}>
-          <View style={styles.headerBrandRow} onLayout={event => setBrandRowWidth(event.nativeEvent.layout.width)}>
-            <Image source={require("../assets/zanomer-logo.png")} resizeMode="contain" style={[styles.headerAvatar, compactLayout && styles.headerAvatarCompact]} accessibilityLabel="ЗаНомером" />
-            <Text allowFontScaling={false} numberOfLines={1} style={[styles.brand, compactLayout && styles.brandCompact, compactLayout && brandRowWidth > 0 && { fontSize: Math.min(24, Math.max(12, (brandRowWidth - 47) / 6.2)) }]}>ЗаНомером</Text>
-          </View>
-          <Text numberOfLines={2} style={[styles.subtitle, compactLayout && styles.subtitleCompact]}>Красивые номера — без лишнего</Text>
-        </View>
+        <View style={styles.headerLowerRow}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={styles.headerHotButton}>
+            <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>🔥 Горячие объявления</Text>
+          </Pressable>
+          <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact, compactLayout && windowWidth < 320 && { width: 110 }]}>
         <View style={styles.headerActions}>
           <Pressable onPress={openPaymentInfo} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
             <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
@@ -2446,12 +2442,6 @@ export default function HomeScreen() {
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
         </View>
-        </View>
-        <View style={styles.headerLowerRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={styles.headerHotButton}>
-            <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>🔥 Горячие объявления</Text>
-          </Pressable>
-          <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact, compactLayout && windowWidth < 320 && { width: 110 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton]}>
             <Text numberOfLines={1} style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
@@ -2630,23 +2620,7 @@ export default function HomeScreen() {
       {activeTab === "buy" && !!sharedListingMessage && <Text accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{sharedListingMessage}</Text>}
       {activeTab === "buy" && !!shareMessage && !selectedPlate && <Text selectable accessibilityLiveRegion="polite" style={styles.catalogSlowNotice}>{shareMessage}</Text>}
 
-      {activeTab === "buy" && !catalogOnly && <Pressable
-        onPress={() => {
-          Keyboard.dismiss();
-          setPlatePicker(null);
-          setFilterPanelOpen(false);
-          resetSearchAndFilters();
-          setCatalogScope("all");
-          setCatalogOnly(true);
-          catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
-        }}
-        accessibilityRole="button"
-        accessibilityLabel="Перейти ко всем объявлениям"
-        style={[styles.catalogHeroButton, compactLayout && styles.catalogHeroButtonCompact]}
-      >
-        <Text style={styles.catalogHeroButtonText}>▦ Все объявления</Text>
-        <Text style={styles.catalogHeroButtonHint} accessibilityLiveRegion="polite">{catalogLoadError ? "Нет связи с каталогом — проверь интернет" : catalogRefreshing ? "↻ Каталог обновляется… сохранённые номера уже доступны" : `Всего в каталоге: ${catalog.length} · авто, мото и прицепы`}</Text>
-      </Pressable>}
+
 
       {activeTab === "buy" && !catalogOnly && <>
       {compactLayout && <View style={styles.filterToolbar}>
@@ -2742,9 +2716,9 @@ export default function HomeScreen() {
       </View>
       <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.plateSearch, vehicle === "motorcycle" && styles.plateSearchMotorcycle, vehicle === "truck" && styles.plateSearchTrailer]}>
         {vehicle === "motorcycle" && <>
-          <PlateKeyField accessibilityLabel="Четыре цифры мото-номера" value={digits} onChangeText={value => setDigits(normalizePlateDigits(value, 4))} onOpen={() => setPlatePicker("digits")} placeholder="1234" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchDigits]} maxLength={4} />
+          <PlateKeyField accessibilityLabel="Четыре цифры мото-номера" value={digits} onChangeText={value => setDigits(normalizePlateDigits(value, 4))} onOpen={() => setPlatePicker("digits")} placeholder="—" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchDigits]} maxLength={4} />
           <View style={styles.motoSearchBottom}>
-            <PlateKeyField accessibilityLabel="Две буквы мото-номера" value={rightLetters} onChangeText={value => setRightLetters(normalizePlateLetters(value, 2))} onOpen={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchLetters]} autoCapitalize="characters" maxLength={2} />
+            <PlateKeyField accessibilityLabel="Две буквы мото-номера" value={rightLetters} onChangeText={value => setRightLetters(normalizePlateLetters(value, 2))} onOpen={() => setPlatePicker("right")} placeholder="—" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchLetters]} autoCapitalize="characters" maxLength={2} />
             <View style={[styles.plateDivider, { marginTop: 18 }]} />
             <Pressable accessibilityLabel="Выбрать регион мото-номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={[styles.regionCodeBox, styles.motoSearchRegion]}>
               <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
@@ -2754,11 +2728,11 @@ export default function HomeScreen() {
           </View>
         </>}
         {vehicle !== "motorcycle" && <>
-        <PlateKeyField value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, plateFormat(vehicle).left))} onOpen={() => setPlatePicker("left")} placeholder={vehicle === "truck" ? "АА" : "А"} placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={plateFormat(vehicle).left} /><View style={styles.plateDivider} />
-        <PlateKeyField value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, plateFormat(vehicle).digits))} onOpen={() => setPlatePicker("digits")} placeholder={plateFormat(vehicle).digitsPlaceholder} placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={plateFormat(vehicle).digits} />
-        {vehicle !== "truck" && <><View style={styles.plateDivider} /><PlateKeyField value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onOpen={() => setPlatePicker("right")} placeholder="АА" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} /></>}
+        <PlateKeyField accessibilityLabel="Первые буквы номера" value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, plateFormat(vehicle).left))} onOpen={() => setPlatePicker("left")} placeholder="—" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={plateFormat(vehicle).left} /><View style={styles.plateDivider} />
+        <PlateKeyField accessibilityLabel="Цифры номера" value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, plateFormat(vehicle).digits))} onOpen={() => setPlatePicker("digits")} placeholder="—" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={plateFormat(vehicle).digits} />
+        {vehicle !== "truck" && <><View style={styles.plateDivider} /><PlateKeyField accessibilityLabel="Последние буквы номера" value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onOpen={() => setPlatePicker("right")} placeholder="—" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} /></>}
         <View style={styles.plateDivider} />
-        <Pressable onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
+        <Pressable accessibilityLabel="Выбрать регион номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text
             style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputMultiple, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
           >{selectedRegionLabel}</Text>
@@ -2774,7 +2748,7 @@ export default function HomeScreen() {
       {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
         <View style={[styles.regionPickerOverlay, { paddingTop: compactLayout ? 210 : 150 }]}>
           <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
-          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
+          <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
             <View style={styles.platePickerTopRow}>
               <Text style={styles.platePickerTitle}>Выбери регион</Text>
               <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
@@ -2988,8 +2962,9 @@ export default function HomeScreen() {
       {hiddenSeriesGroupKeys.length > 0 && <Pressable onPress={() => setHiddenSeriesGroupKeys([])} style={styles.restoreSeriesButton}>
         <Text style={styles.restoreSeriesButtonText}>Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
       </Pressable>}
-      <View style={styles.list}>
+      <View style={[styles.list, styles.compactOfferList]}>
         {renderedPlates.map((item, index) => {
+          const expanded = expandedListingIds.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
           const seriesGroup = seriesGroupByListingId.get(item.id);
           const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
@@ -3000,13 +2975,21 @@ export default function HomeScreen() {
                 <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
               </Pressable>}
-            <View style={styles.cardShell}>
-            <View style={styles.card}>
-              <View style={[styles.cardMainRow, narrowCards && styles.cardMainRowCompact]}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.cardPlate, narrowCards && styles.cardPlateCompact, windowWidth >= 1000 && !narrowCards && styles.cardPlateDesktop, item.vehicle === "motorcycle" && styles.cardPlateMotorcycle]}>
+            <View style={styles.offerShell}>
+              <View style={styles.offerRow}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Свернуть" : "Раскрыть"} объявление ${item.value}, ${item.region}`} accessibilityState={{ expanded }} onPress={() => setExpandedListingIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])} hitSlop={4} style={styles.offerExpand}>
+                  <Text allowFontScaling={false} style={styles.offerChevron}>{expanded ? "⌃" : "⌄"}</Text>
+                </Pressable>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.offerPlate, item.vehicle === "motorcycle" && styles.offerPlateMotorcycle]}>
                   <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} vehicle={item.vehicle} />
                 </Pressable>
-                  <View style={[styles.cardInfo, narrowCards && styles.cardInfoCompact]}>
+                <View style={[styles.offerSummary, !compactLayout && styles.offerSummaryWide]}>
+                  <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.offerPrice, item.price.length > 11 && styles.offerPriceLong]}>{item.price}</Text>
+                  <Text allowFontScaling={false} style={styles.offerDate}>{formatListingDate(item.publishedAt ?? item.createdAt).split(",")[0]}</Text>
+                </View>
+              </View>
+              {expanded && <View style={styles.offerDetails}>
+                  <View style={[styles.cardInfo, narrowCards && styles.cardInfoCompact, styles.offerInfo]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   </View>
@@ -3015,29 +2998,28 @@ export default function HomeScreen() {
                     <Text style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
                   </View>
                   <View style={styles.cardBadgesSpread}>
-                    <Text style={styles.price}>{item.price}</Text>
+
                     {!!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
                   </View>
                   <View style={styles.cardButtonsSpread}>
-                    <Pressable onPress={() => toggleComparison(item)} style={[styles.cardAction, comparison.some(plate => plate.id === item.id) && styles.comparisonSelected]}><Text style={styles.cardActionText}>{comparison.some(plate => plate.id === item.id) ? "✓ В сравнении" : "⇄ Сравнить · Плюс"}</Text></Pressable>
-                    <Pressable onPress={() => toggleSaved(item.id)} style={styles.cardAction}><Text style={styles.cardActionText}>{saved.includes(item.id) ? "♥ Сохранён" : "♡ В избранное"}</Text></Pressable>
-                    {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={[styles.sourceButton, compactLayout && styles.cardPrimaryActionCompact]}>
-                      <Text style={styles.sourceButtonText}>Открыть объявление ↗</Text>
+                    <Pressable onPress={() => toggleComparison(item)} style={[styles.cardAction, styles.offerAction, comparison.some(plate => plate.id === item.id) && styles.comparisonSelected]}><Text style={[styles.cardActionText, styles.offerActionText]}>{comparison.some(plate => plate.id === item.id) ? "✓ В сравнении" : "⇄ Сравнить · Плюс"}</Text></Pressable>
+                    <Pressable onPress={() => toggleSaved(item.id)} style={[styles.cardAction, styles.offerAction]}><Text style={[styles.cardActionText, styles.offerActionText]}>{saved.includes(item.id) ? "♥ Сохранён" : "♡ В избранное"}</Text></Pressable>
+                    {!!item.sourceUrl && <Pressable onPress={(event) => { event.stopPropagation(); void Linking.openURL(item.sourceUrl!); }} style={[styles.sourceButton, styles.offerAction]}>
+                      <Text style={[styles.sourceButtonText, styles.offerActionText]}>Открыть объявление ↗</Text>
                     </Pressable>}
-                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={styles.cardAction}><Text numberOfLines={1} style={styles.cardActionText}>💬 Комментарии</Text></Pressable>}
-                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, isLiked && styles.cardActionLiked]}><Text numberOfLines={1} style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
-                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={[styles.cardAction, compactLayout && !!item.sourceUrl && styles.cardShareActionChannelCompact, compactLayout && !item.sourceUrl && styles.cardShareActionCompact]}><Text numberOfLines={1} style={styles.cardActionText}>↗ Поделиться</Text></Pressable>
-                    {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarityPickerPlate(item); }} style={[styles.similarButton, compactLayout && styles.similarButtonWideCompact]}>
-                      <Text numberOfLines={1} style={styles.similarButtonText}>Похожие номера ›</Text>
+                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); setSelectedPlate(item); }} style={[styles.cardAction, styles.offerAction]}><Text numberOfLines={1} style={[styles.cardActionText, styles.offerActionText]}>💬 Комментарии</Text></Pressable>}
+                    {item.isSiteListing && <Pressable onPress={(event) => { event.stopPropagation(); void toggleListingLike(item); }} style={[styles.cardAction, styles.offerAction, isLiked && styles.cardActionLiked]}><Text numberOfLines={1} style={[styles.cardActionText, isLiked && styles.cardActionLikedText]}>{isLiked ? "♥ Нравится" : "♡ Лайк"}</Text></Pressable>}
+                    <Pressable onPress={(event) => { event.stopPropagation(); void shareListing(item); }} style={[styles.cardAction, styles.offerAction, styles.offerAction]}><Text numberOfLines={1} style={[styles.cardActionText, styles.offerActionText]}>↗ Поделиться</Text></Pressable>
+                    {activeTab === "buy" && <Pressable onPress={(event) => { event.stopPropagation(); setSimilarityPickerPlate(item); }} style={[styles.similarButton, styles.offerAction]}>
+                      <Text numberOfLines={1} style={[styles.similarButtonText, styles.offerActionText]}>Похожие номера ›</Text>
                     </Pressable>}
                   </View>
                 </View>
-              </View>
-            </View>
             <Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${item.seller}`} onPress={() => setSellerProfile(item.seller)} style={styles.cardFooter}>
               <Text style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text>
             </Pressable>
+              </View>}
             </View>
             </View>
           );
@@ -3482,7 +3464,7 @@ export default function HomeScreen() {
           <Text style={styles.platePickerTitle}>{platePicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
           <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
         </View>
-        <Text style={styles.pickerCurrentValue}>{formatPlateValue(leftLetter || "А", digits || plateFormat(vehicle).digitsPlaceholder, rightLetters || "АА", vehicle)}</Text>
+        <Text style={styles.pickerCurrentValue}>{formatPlateValue(leftLetter || "—", digits || "—", rightLetters || "—", vehicle)}</Text>
         <View style={styles.pickerGrid}>
           {(platePicker === "digits" ? allowedDigits : allowedLetters).map((item) => <Pressable key={item} onPress={() => choosePlatePart(item)} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{item}</Text></Pressable>)}
           <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar]}><Text style={styles.pickerOptionText}>*</Text></Pressable>
@@ -3495,18 +3477,18 @@ export default function HomeScreen() {
         <Pressable disabled={comparison.length < 2} onPress={() => setComparisonOpen(true)} style={[styles.comparisonPrimary, { flex: 1 }, comparison.length < 2 && { opacity: 0.5 }]}><Text style={styles.comparisonPrimaryText}>{comparison.length < 2 ? "Выбери ещё номер" : "⇄ Сравнить выбранные"}</Text></Pressable>
         <Pressable accessibilityLabel="Очистить сравнение" onPress={() => setComparison([])}><Text style={styles.detailsCloseText}>×</Text></Pressable>
       </View>}
-      <View onLayout={event => setNavigationHeight(Math.ceil(event.nativeEvent.layout.height))} style={[styles.bottomNav, largeTextNavigation && styles.bottomNavLargeText, { paddingBottom: 8 + insets.bottom }]}>
+      <View onLayout={event => setNavigationHeight(Math.ceil(event.nativeEvent.layout.height))} style={[styles.bottomNav, { paddingBottom: 8 + insets.bottom }]}>
         {([
           ["buy", "⌕", "Поиск объявлений", "#155EEF"],
           ["sell", "＋", "Разместить объявление", "#F04438"],
           ["favorites", "♡", "Избранное, сохранённое и лайки", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
-        ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={[styles.navSlot, largeTextNavigation && styles.navSlotLargeText]}>
+        ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
           <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: activeTab === tab }} onPress={() => { setPlatePicker(null); setListingPicker(null); setActiveTab(tab); if (tab === "buy") { setCatalogOnly(false); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); } }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
-            <Text style={[styles.navIcon, { color }]}>{icon}</Text>
-            <Text style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{compactLayout ? ({ buy: "Поиск", sell: "Разместить", favorites: "Избранное", subscriptions: "Подписка" } as const)[tab] : label}</Text>
+            <Text allowFontScaling={false} style={[styles.navIcon, { color }]}>{icon}</Text>
+            <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{({ buy: "Поиск", sell: "Разместить", favorites: "Избранное", subscriptions: "Подписка" } as const)[tab]}</Text>
           </Pressable>
-          {index < 3 && !largeTextNavigation && <View style={styles.navDivider} />}
+          {index < 3 && <View style={styles.navDivider} />}
         </View>)}
       </View>
       {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={[styles.toast, { bottom: navigationHeight + 12 }]}>
@@ -3539,18 +3521,18 @@ const styles = StyleSheet.create({
   backgroundGlowTop: { backgroundColor: "#DDE7FF", borderRadius: 999, height: 250, left: -50, opacity: 0.56, position: "absolute", top: 170, transform: [{ rotate: "-18deg" }], width: 250 },
   backgroundGlowRight: { backgroundColor: "#EADFFF", borderRadius: 999, height: 390, opacity: 0.72, position: "absolute", right: -190, top: 235, width: 440 },
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
-  header: { alignItems: "center", backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, elevation: 6, flexDirection: "column", gap: 4, justifyContent: "space-between", marginHorizontal: -24, paddingBottom: 18, paddingHorizontal: 24, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 14 : 18, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, zIndex: 10 },
-  headerCompact: { alignItems: "stretch", gap: 4, paddingBottom: 8, paddingHorizontal: 12, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 9 : 10 },
+  header: { alignItems: "center", backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, elevation: 6, flexDirection: "column", gap: 4, justifyContent: "space-between", marginHorizontal: -24, paddingBottom: 6, paddingHorizontal: 12, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 6 : 6, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, zIndex: 10 },
+  headerCompact: { alignItems: "stretch", gap: 4, paddingBottom: 6, paddingHorizontal: 12, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 6 : 6 },
   headerTopRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 6 },
-  headerLowerRow: { flexDirection: "row", alignItems: "stretch", width: "100%", gap: 8, marginTop: 5 },
-  headerHotButton: { flex: 1, minWidth: 0, minHeight: 88, alignItems: "center", justifyContent: "center", padding: 12, backgroundColor: "#FFF0DF", borderColor: "#F2BC88", borderWidth: 1, borderRadius: 12 },
-  headerHotText: { color: "#A24717", fontSize: 22, lineHeight: 28, fontWeight: "900", textAlign: "center" },
-  headerHotTextCompact: { fontSize: 18, lineHeight: 24 },
-  headerUtilityColumn: { width: 134, gap: 6, alignItems: "stretch", justifyContent: "space-between" },
+  headerLowerRow: { flexDirection: "row", alignItems: "stretch", width: "100%", gap: 8, marginTop: 0 },
+  headerHotButton: { flex: 1, minWidth: 0, minHeight: 74, alignItems: "center", justifyContent: "center", padding: 8, backgroundColor: "#FFF0DF", borderColor: "#F2BC88", borderWidth: 1, borderRadius: 12 },
+  headerHotText: { color: "#A24717", fontSize: 18, lineHeight: 24, fontWeight: "900", textAlign: "center" },
+  headerHotTextCompact: { fontSize: 16, lineHeight: 22 },
+  headerUtilityColumn: { width: 124, gap: 4, alignItems: "stretch", justifyContent: "space-between" },
   headerUtilityColumnCompact: { width: 124 },
-  headerAccountButton: { width: "100%", maxWidth: "100%", alignItems: "center" },
-  headerReminder: { minHeight: 38, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, backgroundColor: "#EEF4FF", borderRadius: 12 },
-  headerReminderText: { color: "#4536B8", fontWeight: "700", fontSize: 12, lineHeight: 17 },
+  headerAccountButton: { width: "100%", maxWidth: "100%", minHeight: 32, paddingVertical: 5, alignItems: "center" },
+  headerReminder: { minHeight: 30, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, backgroundColor: "#EEF4FF", borderRadius: 12 },
+  headerReminderText: { color: "#4536B8", fontWeight: "700", fontSize: 11, lineHeight: 15 },
   headerModalOverlay: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(16,24,40,0.45)" },
   headerModalPanel: { alignSelf: "center", width: "100%", maxWidth: 620, borderRadius: 22, backgroundColor: "#FFFEFF", padding: 16, flexShrink: 1 },
   headerModalTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 8 },
@@ -3569,10 +3551,10 @@ const styles = StyleSheet.create({
   brandCompact: { flexShrink: 1, fontSize: 24, letterSpacing: -0.7 },
   subtitle: { color: "#716A88", fontSize: 14, marginTop: 3 },
   subtitleCompact: { fontSize: 12, lineHeight: 16, marginTop: 2 },
-  headerActions: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: 8 },
-  requisitesHeaderButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 44, justifyContent: "center", width: 44 },
+  headerActions: { alignItems: "center", justifyContent: "center", flexDirection: "row", flexShrink: 0, gap: 6 },
+  requisitesHeaderButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 34, justifyContent: "center", width: 44 },
   requisitesHeaderButtonText: { color: "#5143C2", fontSize: 20, fontWeight: "900" },
-  chatsButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 44, justifyContent: "center", position: "relative", width: 44 },
+  chatsButton: { alignItems: "center", backgroundColor: "#F4F3FA", borderRadius: 14, height: 34, justifyContent: "center", position: "relative", width: 44 },
   chatsButtonText: { fontSize: 18 },
   chatBadge: { alignItems: "center", backgroundColor: "#F04438", borderColor: "#FFFFFF", borderRadius: 10, borderWidth: 2, justifyContent: "center", minHeight: 18, minWidth: 18, paddingHorizontal: 3, position: "absolute", right: -4, top: -4 },
   chatBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "900" },
@@ -3689,7 +3671,7 @@ const styles = StyleSheet.create({
   vehicleLabelActive: { color: "#FFFFFF" },
   plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", minHeight: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
   plateSearchMotorcycle: { alignSelf: "center", width: 240, maxWidth: "100%", height: 180, minHeight: 180, flexDirection: "column" },
-  motoSearchDigits: { flex: 0, height: 88, fontSize: 74, width: "100%", padding: 0 },
+  motoSearchDigits: { flexGrow: 0, flexShrink: 0, flexBasis: 88, height: 88, fontSize: 74, width: "100%", padding: 0 },
   motoSearchBottom: { flexDirection: "row", flex: 1, width: "100%" },
   motoSearchLetters: { flex: 1.2, fontSize: 58, padding: 0, paddingTop: 14 },
   motoSearchRegion: { paddingVertical: 0, justifyContent: "flex-start" },
@@ -3872,6 +3854,22 @@ const styles = StyleSheet.create({
   clearSimilarButton: { alignSelf: "flex-start", marginTop: 8 },
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
+  compactOfferList: { gap: 0, paddingTop: 4, backgroundColor: "#FFFFFF", borderRadius: 10, overflow: "hidden" },
+  offerShell: { borderBottomColor: "#E9E7F0", borderBottomWidth: 1, backgroundColor: "#FFFFFF" },
+  offerRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, paddingRight: 8, minHeight: 82 },
+  offerExpand: { width: 28, minHeight: 54, alignItems: "center", justifyContent: "center" },
+  offerChevron: { color: "#858093", fontSize: 25, lineHeight: 30 },
+  offerPlate: { flex: 1, minWidth: 0, maxWidth: 520, aspectRatio: 520 / 112, minHeight: 34, borderWidth: 1.5, borderColor: "#151B29", borderRadius: 5, backgroundColor: "#FFFFFF", overflow: "hidden" },
+  offerPlateMotorcycle: { aspectRatio: 4 / 3, maxWidth: 160 },
+  offerSummary: { width: 102, alignItems: "flex-end", justifyContent: "center", gap: 6, marginLeft: "auto" },
+  offerSummaryWide: { width: 150 },
+  offerPrice: { color: "#171827", fontSize: 17, fontWeight: "800", textAlign: "right" },
+  offerPriceLong: { fontSize: 14 },
+  offerDate: { color: "#8B8797", fontSize: 10, lineHeight: 15, textAlign: "right" },
+  offerDetails: { paddingHorizontal: 12, paddingBottom: 10, borderTopColor: "#F0EDF7", borderTopWidth: 1 },
+  offerInfo: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", paddingTop: 8 },
+  offerAction: { minHeight: 36, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, justifyContent: "center" },
+  offerActionText: { fontSize: 11, lineHeight: 15 },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   listingItem: { gap: 6 },
   listFilterPlacement: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#D9D3F5", borderRadius: 16, borderWidth: 1, marginBottom: 12, maxWidth: 1100, padding: 12, width: "100%" },
@@ -4224,15 +4222,15 @@ const styles = StyleSheet.create({
   safeDealGuide: { backgroundColor: "#EFF8FF", borderColor: "#B2DDFF", borderRadius: 12, borderWidth: 1, marginTop: 12, padding: 12 },
   safeDealTitle: { color: "#175CD3", fontSize: 13, fontWeight: "900" },
   safeDealText: { color: "#344054", fontSize: 12, lineHeight: 18, marginTop: 5 },
-  bottomNav: { backgroundColor: "#FFFFFF", borderTopColor: "#EAECF0", borderTopWidth: 1, bottom: 0, flexDirection: "row", left: 0, paddingBottom: 8, paddingHorizontal: 12, paddingTop: 8, position: "absolute", right: 0 },
+  bottomNav: { backgroundColor: "#FFFFFF", borderTopColor: "#EAECF0", borderTopWidth: 1, bottom: 0, flexDirection: "row", left: 0, paddingBottom: 8, paddingHorizontal: 4, paddingTop: 4, position: "absolute", right: 0 },
   bottomNavLargeText: { flexWrap: "wrap", rowGap: 4 },
-  navSlot: { flex: 1, position: "relative" },
+  navSlot: { flex: 1, minWidth: 0, position: "relative" },
   navSlotLargeText: { flexGrow: 0, flexShrink: 0, flexBasis: "50%", minWidth: 0 },
-  navItem: { alignItems: "center", borderRadius: 12, minHeight: 58, paddingHorizontal: 3, paddingVertical: 5 },
+  navItem: { alignItems: "center", borderRadius: 10, minHeight: 44, paddingHorizontal: 1, paddingVertical: 3 },
   navItemActive: { backgroundColor: "#EFF4FF" },
   navDivider: { backgroundColor: "#D0D5DD", bottom: 7, position: "absolute", right: 0, top: 7, width: 1 },
-  navIcon: { fontSize: 20, lineHeight: 22 },
-  navText: { color: "#667085", fontSize: 12, fontWeight: "700", lineHeight: 16, marginTop: 2, textAlign: "center", flexShrink: 1 },
+  navIcon: { fontSize: 18, lineHeight: 20 },
+  navText: { color: "#667085", fontSize: 10, fontWeight: "700", lineHeight: 14, marginTop: 2, textAlign: "center", flexShrink: 1 },
   navTextActive: { color: "#155EEF" },
   toast: { alignSelf: "center", backgroundColor: "#067647", borderRadius: 14, bottom: 82, paddingHorizontal: 18, paddingVertical: 12, position: "absolute" },
   toastText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
