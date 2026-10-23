@@ -15,11 +15,8 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  Text as NativeText,
-  type TextProps,
   type TextInputProps,
   type ViewStyle,
-  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -32,6 +29,7 @@ import { publicationSession } from "../lib/publication-session";
 import { collectCatalogPages } from "../lib/catalog-pages";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
+import { Text, TextInput } from "../components/ResponsiveText";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase, publicCatalogClient, readSavedProfile } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
@@ -43,11 +41,6 @@ import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion } from
 import { availableListingSources, matchesListingSources } from "../lib/listing-sources";
 import { createAppUpdateManager } from "../lib/app-updates";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
-
-// Keep large system text readable without letting fixed controls grow beyond their cells.
-function Text(props: TextProps) {
-  return <NativeText maxFontSizeMultiplier={1.3} {...props} />;
-}
 
 // These are buttons, not editable inputs: Android/iOS must never open a second keyboard.
 function PlateKeyField({ value, placeholder, placeholderTextColor, style, accessibilityLabel, onOpen }: TextInputProps & { onOpen: () => void }) {
@@ -64,7 +57,7 @@ function PlateKeyField({ value, placeholder, placeholderTextColor, style, access
     onPress={event => { event.stopPropagation(); Keyboard.dismiss(); onOpen(); }}
     onLayout={event => setFieldWidth(event.nativeEvent.layout.width)}
     style={[fieldStyle as ViewStyle, { justifyContent: "center" }]}>
-    <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{
+    <Text responsive={false} allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{
       color: value ? flat.color : placeholderTextColor,
       fontSize: fittedSize, fontWeight: flat.fontWeight, fontFamily: flat.fontFamily,
       letterSpacing: flat.letterSpacing, textAlign: "center", width: "100%",
@@ -2514,7 +2507,7 @@ export default function HomeScreen() {
               <Text style={styles.authHint}>Ты уже вошёл. Пароль нужен только если хочешь изменить его для будущих входов.</Text>
               <Text style={styles.managementTitle}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "Подписка Плюс не активна"}</Text>
               <Text style={styles.managementHint}>Доступно: {promotionBalance.highlights} размещений на 48 часов (включая бонусы Плюса) · {promotionBalance.hot} постоянных размещений. Выбери свой номер ниже. За каждый оплаченный период Плюса начисляется одно размещение на 48 часов.</Text>
-              <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Придумай пароль (минимум 6 символов)" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry />
+              <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Пароль от 6 символов" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry />
               <Pressable onPress={async () => {
                 if (!supabase) return;
                 if (authPassword.length < 6) return setAuthMessage("Пароль должен быть не короче 6 символов.");
@@ -2596,8 +2589,8 @@ export default function HomeScreen() {
               <Text style={styles.authHint}>{supabase ? authMode === "signup" ? `Шаг ${authStep} из 3` : authMode === "otp" ? (authStep === 1 ? "Укажи почту — пришлём одноразовый код." : "Введи код из письма.") : "Введи почту и пароль от аккаунта" : "Укажи имя — оно будет видно в твоих объявлениях."}</Text>
               {supabase && (authMode === "signup" || authMode === "otp") && authStep === 1 && <TextInput value={authEmail} onChangeText={setAuthEmail} placeholder="Твоя почта" placeholderTextColor="#98A2B3" style={styles.authInput} autoCapitalize="none" keyboardType="email-address" />}
               {supabase && (authMode === "signup" || authMode === "otp") && authStep === 2 && <TextInput value={authCode} onChangeText={setAuthCode} placeholder="Код из письма" placeholderTextColor="#98A2B3" style={styles.authInput} keyboardType="number-pad" autoCapitalize="none" />}
-              {supabase && authMode === "signup" && authStep === 3 && <TextInput value={profileDraft} onChangeText={setProfileDraft} placeholder="Имя для объявлений (необязательно)" placeholderTextColor="#98A2B3" style={styles.authInput} />}
-              {supabase && authMode === "signup" && authStep === 3 && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Придумай пароль (минимум 6 символов)" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
+              {supabase && authMode === "signup" && authStep === 3 && <TextInput value={profileDraft} onChangeText={setProfileDraft} placeholder="Имя для объявлений" placeholderTextColor="#98A2B3" style={styles.authInput} />}
+              {supabase && authMode === "signup" && authStep === 3 && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Пароль от 6 символов" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
               {supabase && authMode === "signin" && <TextInput value={authEmail} onChangeText={setAuthEmail} placeholder="Почта" placeholderTextColor="#98A2B3" style={styles.authInput} autoCapitalize="none" keyboardType="email-address" />}
               {supabase && authMode === "signin" && <TextInput value={authPassword} onChangeText={setAuthPassword} placeholder="Пароль" placeholderTextColor="#98A2B3" style={styles.authInput} secureTextEntry autoCapitalize="none" />}
               {!!authMessage && <Text style={styles.authMessage}>{authMessage}</Text>}
@@ -2853,7 +2846,7 @@ export default function HomeScreen() {
               </Pressable>
               {!!listingPhotoUri && <Image source={{ uri: listingPhotoUri }} style={styles.listingPhotoPreview} />}
               <Text style={styles.contactHint}>Не публикуй документы, VIN, банковские данные или чужие номера телефонов. Связь с покупателем позже будет через внутренний чат.</Text>
-              <TextInput value={listingComment} onChangeText={setListingComment} placeholder="Комментарий продавца (необязательно)" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.commentInput]} multiline />
+              <TextInput value={listingComment} onChangeText={setListingComment} placeholder="Комментарий продавца" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.commentInput]} multiline />
               <Pressable onPress={() => setListingConfirmed((current) => !current)} style={styles.confirmRow}>
                 <View style={[styles.confirmBox, listingConfirmed && styles.confirmBoxActive]}>{listingConfirmed && <Text style={styles.confirmTick}>✓</Text>}</View>
                 <Text style={styles.confirmText}>Подтверждаю, что размещаю объявление о своём предложении и указал верные данные.</Text>
@@ -2916,7 +2909,7 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
-        {(activeTab === "favorites" || similarTo) && <Text numberOfLines={1} style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
+        {(activeTab === "favorites" || similarTo) && <Text style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
       {!!catalogLoadError && activeTab === "buy" && !catalogOnly && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
@@ -2947,7 +2940,7 @@ export default function HomeScreen() {
         ) : savedSearches.map((search) => (
           <View key={search.id} style={styles.savedSearchRow}>
             <Pressable onPress={() => applySavedSearch(search)} style={styles.savedSearchApply}>
-              <Text numberOfLines={1} style={styles.savedSearchName}>🔔 {savedSearchLabel(search)}</Text>
+              <Text style={styles.savedSearchName}>🔔 {savedSearchLabel(search)}</Text>
               <Text style={styles.savedSearchHint}>Уведомления включены · нажми, чтобы применить поиск</Text>
             </Pressable>
             <Pressable onPress={() => void removeSavedSearch(search.id)} hitSlop={8}>
@@ -3145,7 +3138,7 @@ export default function HomeScreen() {
           <ScrollView contentContainerStyle={styles.detailsScroll}>
             <Pressable onPress={(event) => event.stopPropagation()} style={styles.detailsPanel}>
               <View style={styles.detailsHeader}>
-                <View>
+                <View style={styles.flexibleHeading}>
                   <Text style={styles.detailsTitle}>Объявление</Text>
                   <Text style={styles.detailsPrice}>{selectedPlate?.price}</Text>
                 </View>
@@ -3349,7 +3342,7 @@ export default function HomeScreen() {
         <Pressable style={styles.detailsOverlay} onPress={() => setTestPayment(null)}>
           <Pressable onPress={(event) => event.stopPropagation()} style={[styles.paymentPanel, { maxHeight: Math.max(240, windowHeight - 32) }]}>
             <View style={styles.detailsHeader}>
-              <View><Text style={styles.paymentKicker}>ОПЛАТА</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
+              <View style={styles.flexibleHeading}><Text style={styles.paymentKicker}>ОПЛАТА</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
               <Pressable onPress={() => setTestPayment(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
             <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 16 }}>
@@ -3593,11 +3586,11 @@ const styles = StyleSheet.create({
   authHint: { color: "#667085", fontSize: 13, lineHeight: 18, marginTop: 5 },
   authRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "flex-end", marginTop: 10 },
   authInput: { backgroundColor: "#FFFFFF", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, color: "#101828", fontSize: 14, marginTop: 8, paddingHorizontal: 11, paddingVertical: 9 },
-  authSubmit: { alignItems: "center", backgroundColor: "#155EEF", borderRadius: 10, flexGrow: 1, justifyContent: "center", minHeight: 40, paddingHorizontal: 12 },
+  authSubmit: { alignItems: "center", backgroundColor: "#155EEF", borderRadius: 10, flexGrow: 1, flexShrink: 1, minWidth: 0, maxWidth: "100%", justifyContent: "center", minHeight: 40, paddingHorizontal: 12, paddingVertical: 9 },
   authSubmitDisabled: { backgroundColor: "#84ADFF" },
-  authSubmitText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
-  authSwitch: { alignItems: "center", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, flexGrow: 1, justifyContent: "center", minHeight: 40, paddingHorizontal: 10, paddingVertical: 10 },
-  authSwitchText: { color: "#475467", fontSize: 12, fontWeight: "700" },
+  authSubmitText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800", textAlign: "center" },
+  authSwitch: { alignItems: "center", borderColor: "#D0D5DD", borderRadius: 10, borderWidth: 1, flexGrow: 1, flexShrink: 1, minWidth: 0, maxWidth: "100%", justifyContent: "center", minHeight: 40, paddingHorizontal: 10, paddingVertical: 10 },
+  authSwitchText: { color: "#475467", fontSize: 12, fontWeight: "700", textAlign: "center" },
   authMessage: { color: "#B42318", fontSize: 12, lineHeight: 17, marginTop: 8 },
   managementButton: { alignItems: "center", backgroundColor: "#F0EEFF", borderColor: "#D8D1FF", borderRadius: 10, borderWidth: 1, marginTop: 10, paddingVertical: 10 },
   managementButtonText: { color: "#5143C2", fontSize: 13, fontWeight: "900" },
@@ -4077,6 +4070,7 @@ const styles = StyleSheet.create({
   similarityOption: { backgroundColor: "#F7F6FF", borderColor: "#D8D1FF", borderRadius: 14, borderWidth: 1, marginTop: 12, padding: 14 },
   similarityOptionTitle: { color: "#352F67", fontSize: 16, fontWeight: "900" },
   similarityOptionHint: { color: "#667085", fontSize: 12, marginTop: 4 },
+  flexibleHeading: { flex: 1, minWidth: 0, paddingRight: 10 },
   detailsHeader: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between" },
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },

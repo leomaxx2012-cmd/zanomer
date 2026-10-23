@@ -3,6 +3,7 @@ import Head from "expo-router/head";
 import { StatusBar } from "expo-status-bar";
 import VercelAnalytics from "../lib/vercel-analytics";
 import YandexMetrika from "../lib/yandex-metrika";
+import { ResponsiveTypography } from "../components/ResponsiveText";
 
 export default function RootLayout() {
   return (
@@ -15,7 +16,7 @@ export default function RootLayout() {
       <VercelAnalytics />
       <YandexMetrika />
       <StatusBar style="dark" />
-      <Stack screenOptions={{ headerShown: false }} />
+      <ResponsiveTypography><Stack screenOptions={{ headerShown: false }} /></ResponsiveTypography>
     </>
   );
 }
