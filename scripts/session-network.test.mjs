@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
 import { createSessionSafeFetch } from '../lib/network-request.ts';
+import { publicationSession } from '../lib/publication-session.ts';
 
 function fixture(transport) {
   const storageKey = 'test-session';
@@ -21,8 +22,8 @@ test('SDK keeps the saved session across a VPN gateway failure', {timeout:45000}
   let signedOut=false;
   const {data:listener}=client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT')signedOut=true;});
   try {
-    const {error}=await client.auth.getSession();
-    assert.ok(error);
+    const result=await publicationSession(()=>client.auth.getSession());
+    assert.equal(result.status,'unavailable','a VPN refresh failure must keep the publication form open, not demand sign-in');
     assert.ok(stored.has(storageKey),'transient failure must not delete credentials');
     assert.equal(signedOut,false);
   } finally { listener.subscription.unsubscribe(); client.auth.stopAutoRefresh(); }

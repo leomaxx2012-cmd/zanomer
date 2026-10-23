@@ -28,6 +28,7 @@ import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
 import { nextPlateSection } from "../lib/plate-editing";
+import { publicationSession } from "../lib/publication-session";
 import { collectCatalogPages } from "../lib/catalog-pages";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
@@ -2146,6 +2147,7 @@ export default function HomeScreen() {
   }
 
   async function addListing() {
+    setListingMessage("");
     const priceValue = Number(listingPrice.replace(/\D/g, ""));
     const format = plateFormat(listingVehicle);
     const left = listingLeftLetter.toUpperCase();
@@ -2201,13 +2203,24 @@ export default function HomeScreen() {
       // getUser() проверяет пользователя через сеть. При VPN или кратком
       // сбое он может вернуть пустой результат, хотя токен входа уже есть
       // локально. Берём сохранённую сессию и не показываем ложный выход.
-      const { data: sessionData } = await supabase.auth.getSession();
-      const signedInUser = sessionData.session?.user;
-      if (!signedInUser?.id) {
-        setAuthMessage("Сессия входа действительно закончилась. Войди снова, чтобы опубликовать объявление.");
+      const sessionCheck = await publicationSession(() => supabase.auth.getSession());
+      if (sessionCheck.status === "unavailable") {
+        setListingMessage("Не удалось проверить вход из-за связи с сервером. Данные объявления сохранены в форме. Проверь интернет и нажми «Опубликовать» ещё раз.");
+        return;
+      }
+      if (sessionCheck.status === "signed-out") {
+        setIsSignedIn(false);
+        setIsAnonymous(false);
+        setCurrentUserId("");
+        setProfileName("");
+        setSavedSearches([]);
+        setMyListings([]); setModerationListings([]); setIsModerator(false);
+        setAuthMode("signin");
+        setAuthMessage("Войди снова, чтобы опубликовать объявление. Данные объявления сохранены в форме.");
         setAuthOpen(true);
         return;
       }
+      const signedInUser = sessionCheck.session.user;
       let photoUrl: string | null = null;
       if (listingPhotoUri) {
         try {
@@ -2241,7 +2254,7 @@ export default function HomeScreen() {
         status: isModerator ? "active" : "moderation",
       }).select("id, status").single();
       if (error) {
-        setAuthMessage("Не удалось опубликовать. Проверь вход в аккаунт и попробуй ещё раз.");
+        setListingMessage("Не удалось опубликовать объявление. Данные сохранены в форме. Проверь интернет и попробуй ещё раз; если ошибка повторится, сообщи нам.");
         return;
       }
       if (insertedListing?.status === "active") {
