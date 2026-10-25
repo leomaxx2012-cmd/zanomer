@@ -26,6 +26,7 @@ import * as Updates from "expo-updates";
 import Constants from "expo-constants";
 import { nextPlateSection } from "../lib/plate-editing";
 import { publicationSession } from "../lib/publication-session";
+import { saveSearchAlert } from "../lib/save-search-alert";
 import { collectCatalogPages } from "../lib/catalog-pages";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
@@ -37,7 +38,7 @@ import { deduplicateOffers, mergeCatalogOffers } from "../lib/catalog-offers";
 import { listingLink, sharedListingId, sharedListingTable } from "../lib/listing-links";
 import { privacyPolicy } from "../lib/privacy-policy";
 import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
-import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion } from "../lib/search-regions";
+import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion, compactSearchRegions } from "../lib/search-regions";
 import { availableListingSources, matchesListingSources } from "../lib/listing-sources";
 import { createAppUpdateManager } from "../lib/app-updates";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
@@ -1929,11 +1930,10 @@ export default function HomeScreen() {
   }, [catalog, archivedPartnerSources]);
   const selectedRegionCodes = selectedSearchRegionCodes(regionGroups, region, regionCode);
   const selectedRegionTitles = searchRegionNames(regionGroups, selectedRegionCodes);
-  const selectedRegionName = selectedRegionTitles.join(", ") || region;
-  const showingWholeRegion = region !== "Все" && !regionCode;
   const showingMultipleRegionCodes = selectedRegionCodes.length > 1;
-  const selectedRegionLabel = region === "Все" ? "—" : selectedRegionCodes.join(", ") || "—";
-  const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${selectedRegionName} · ${selectedRegionLabel}`;
+  const compactRegion = compactSearchRegions(regionGroups, selectedRegionCodes);
+  const selectedRegionLabel = region === "Все" ? "—" : compactRegion.codes;
+  const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${compactRegion.codes}${compactRegion.names ? ` · ${compactRegion.names}` : ""}`;
   function toggleRegionValues(values: string[]) {
     const next = toggleSearchRegion(regionGroups, region, regionCode, values);
     setRegion(next.region);
@@ -2001,6 +2001,18 @@ export default function HomeScreen() {
     setSubscriptionToastMessage("Сохраняем уведомление…");
     setSubscriptionToast(true);
     try {
+    const sessionCheck = await publicationSession(() => supabase.auth.getSession());
+    if (sessionCheck.status !== "ready") {
+      setSubscriptionToastMessage(sessionCheck.status === "unavailable"
+        ? "Не удалось проверить вход. Проверь интернет и попробуй сохранить поиск ещё раз."
+        : "Войди в аккаунт снова, чтобы сохранить уведомление.");
+      if (sessionCheck.status === "signed-out") {
+        setIsSignedIn(false); setIsAnonymous(false); setCurrentUserId(""); setProfileName("");
+        setSavedSearches([]); setMyListings([]); setModerationListings([]); setIsModerator(false);
+        setAuthMode("signin"); setAuthMessage("Войди снова, чтобы сохранить уведомление. Параметры поиска сохранены."); setAuthOpen(true);
+      }
+      return;
+    }
     const current: SavedSearch = {
       id: `${Date.now()}`,
       title: makeSearchTitle(),
@@ -2020,9 +2032,8 @@ export default function HomeScreen() {
       setSubscriptionToast(true);
       return;
     }
-    const { data, error } = await supabase.from("auto_search_alerts")
-      .upsert({
-        owner_id: currentUserId,
+    const { data, error } = await saveSearchAlert(supabase, {
+        owner_id: sessionCheck.session.user.id,
         left_letter: current.leftLetter,
         right_letters: current.rightLetters,
         digits: current.digits,
@@ -2032,12 +2043,10 @@ export default function HomeScreen() {
         price_limit: current.priceLimit ?? 0,
         enabled: true,
         updated_at: new Date().toISOString(),
-      }, { onConflict: "owner_id,left_letter,right_letters,digits,region,region_code,vehicle_type,price_limit" })
-      .select("id")
-      .single();
+      });
     setSubscriptionSaving(false);
     if (error || !data) {
-      setSubscriptionToastMessage("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
+      setSubscriptionToastMessage(`Не удалось сохранить уведомление${error?.code ? ` (${error.code})` : ""}. Попробуй ещё раз; если ошибка повторится, пришли это сообщение.`);
       setSubscriptionToast(true);
       return;
     }
@@ -2049,6 +2058,8 @@ export default function HomeScreen() {
       setSubscriptionSaving(false);
       setSubscriptionToastMessage("Не удалось сохранить. Проверь интернет и попробуй ещё раз.");
       setSubscriptionToast(true);
+    } finally {
+      setSubscriptionSaving(false);
     }
   }
 
@@ -2728,8 +2739,8 @@ export default function HomeScreen() {
             <View style={[styles.plateDivider, { marginTop: 18 }]} />
             <Pressable accessibilityLabel="Выбрать регион мото-номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={[styles.regionCodeBox, styles.motoSearchRegion]}>
               <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
-              <Text style={[styles.regionCodeInput, styles.motoSearchRegionCode, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputMultiple, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}>{selectedRegionLabel}</Text>
-              {region !== "Все" && <Text style={styles.searchRegionName}>{selectedRegionName}</Text>}
+              <Text style={[styles.regionCodeInput, styles.motoSearchRegionCode, region === "Все" && styles.regionCodePlaceholder, showingMultipleRegionCodes && styles.regionCodeInputMultiple]} numberOfLines={1}>{selectedRegionLabel}</Text>
+              {!!compactRegion.names && <Text numberOfLines={2} style={styles.searchRegionName}>{compactRegion.names}</Text>}
             </Pressable>
           </View>
         </>}
@@ -2740,9 +2751,9 @@ export default function HomeScreen() {
         <View style={styles.plateDivider} />
         <Pressable accessibilityLabel="Выбрать регион номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
           <Text
-            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingWholeRegion && styles.regionCodeInputMultiple, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
-          >{selectedRegionLabel}</Text>
-          {region !== "Все" && <Text style={styles.searchRegionName}>{selectedRegionName}</Text>}
+            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
+           numberOfLines={1}>{selectedRegionLabel}</Text>
+          {!!compactRegion.names && <Text numberOfLines={2} style={styles.searchRegionName}>{compactRegion.names}</Text>}
           <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
         </Pressable>
         </>}
@@ -3497,7 +3508,7 @@ export default function HomeScreen() {
           {index < 3 && <View style={styles.navDivider} />}
         </View>)}
       </View>
-      {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={[styles.toast, { bottom: navigationHeight + 12 }]}>
+      {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={[styles.toast, /^(Не удалось|Войди|Лимит)/.test(subscriptionToastMessage) && styles.toastError, { bottom: navigationHeight + 12 }]}>
         <Text style={styles.toastText}>{subscriptionToastMessage || (hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено")}</Text>
       </Pressable>}
     </SafeAreaView>
@@ -3675,7 +3686,7 @@ const styles = StyleSheet.create({
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
-  plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", minHeight: 84, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
+  plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 96, minHeight: 96, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
   plateSearchMotorcycle: { alignSelf: "center", width: 240, maxWidth: "100%", height: 180, minHeight: 180, flexDirection: "column" },
   motoSearchDigits: { flexGrow: 0, flexShrink: 0, flexBasis: 88, height: 88, fontSize: 74, width: "100%", padding: 0 },
   motoSearchBottom: { flexDirection: "row", flex: 1, width: "100%" },
@@ -3697,9 +3708,9 @@ const styles = StyleSheet.create({
   quickFilterTextActive: { color: "#FFFFFF" },
   regionCodeBox: { alignItems: "center", flex: 1, paddingVertical: 12, justifyContent: "center", minWidth: 0 },
   regionCodeInput: { color: "#111827", fontSize: 18, fontWeight: "900", maxWidth: "100%", textAlign: "center" },
-  searchRegionName: { color: "#4B5563", fontSize: 11, lineHeight: 14, textAlign: "center", paddingHorizontal: 5, marginTop: 3, maxWidth: "100%" },
+  searchRegionName: { color: "#4B5563", fontSize: 10, lineHeight: 12, maxHeight: 24, textAlign: "center", paddingHorizontal: 2, marginTop: 3, maxWidth: "100%" },
   regionCodeInputName: { fontSize: 15, lineHeight: 18, paddingHorizontal: 7 },
-  regionCodeInputMultiple: { fontSize: 16, lineHeight: 18, paddingHorizontal: 7 },
+  regionCodeInputMultiple: { fontSize: 14, lineHeight: 18, paddingHorizontal: 2 },
   regionCodePlaceholder: { color: "#667085" },
   rusLabel: { color: "#344054", fontSize: 10, fontWeight: "800", marginTop: 3 },
   advancedButton: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: 13, paddingVertical: 5 },
@@ -4240,6 +4251,7 @@ const styles = StyleSheet.create({
   navText: { color: "#667085", fontSize: 10, fontWeight: "700", lineHeight: 14, marginTop: 2, textAlign: "center", flexShrink: 1 },
   navTextActive: { color: "#155EEF" },
   toast: { alignSelf: "center", backgroundColor: "#067647", borderRadius: 14, bottom: 82, paddingHorizontal: 18, paddingVertical: 12, position: "absolute" },
+  toastError: { backgroundColor: "#B42318" },
   toastText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
   addButton: { backgroundColor: "#155EEF", borderRadius: 17, bottom: 18, left: 20, paddingVertical: 16, position: "absolute", right: 20, shadowColor: "#155EEF", shadowOpacity: 0.24, shadowRadius: 10 },
   addText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700", textAlign: "center" },

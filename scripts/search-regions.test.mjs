@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion } from '../lib/search-regions.ts';
+import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion, compactSearchRegions } from '../lib/search-regions.ts';
 
 const groups = [
   { title: 'Москва', codes: [{ value: '77' }, { value: '777' }] },
@@ -32,4 +32,12 @@ test('legacy whole-region search is preserved when another region is added', () 
 
 test('names use only the available vehicle-specific groups', () => {
   assert.deepEqual(searchRegionNames(groups.slice(1), ['77', '23']), ['Краснодарский край']);
+});
+
+test('compact labels name only fully selected regions', () => {
+  assert.deepEqual(compactSearchRegions(groups,['77','23']),{codes:'77, 23',names:''});
+  assert.deepEqual(compactSearchRegions(groups,['77','777','23']),{codes:'77 +2',names:'Мск'});
+  assert.equal(compactSearchRegions(groups,['77','777','23','123']).names,'Мск, Краснодар. кр.');
+  assert.deepEqual(compactSearchRegions([],[]),{codes:'—',names:''});
+  assert.equal(compactSearchRegions([{title:'Московская область',codes:[{value:'50'},{value:'750'}]}],['50','750']).names,'МО');
 });
