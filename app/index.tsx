@@ -2436,11 +2436,11 @@ export default function HomeScreen() {
       onPointerDown={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
       onPointerMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onPointerCancel={() => { backgroundTouch.current = null; }}
-      onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
+      onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
       onTouchStart={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
       onTouchMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onTouchCancel={() => { backgroundTouch.current = null; }}
-      onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
+      onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       <View pointerEvents="none" style={styles.backgroundGlowTop} />
       <View pointerEvents="none" style={styles.backgroundGlowRight} />
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
@@ -2763,16 +2763,16 @@ export default function HomeScreen() {
       </Pressable>
 
       {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
-        <View style={[styles.regionPickerOverlay, { paddingTop: compactLayout ? 210 : 150 }]}>
+        <View style={[styles.regionPickerOverlay, { paddingTop: Math.min(compactLayout ? 210 : 150, Math.max(insets.top + 12, windowHeight * 0.2)), paddingBottom: Math.max(insets.bottom, 16) }]}>
           <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
-          <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
+          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
             <View style={styles.platePickerTopRow}>
               <Text style={styles.platePickerTitle}>Выбери регион</Text>
               <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
             </View>
             <View style={styles.regionPickerContent}>
               <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
-              <ScrollView nestedScrollEnabled showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
+              <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
               {!regionPickerGroup ? <>
                 <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{vehicleRegionCount}</Text></Pressable>
                 {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, selectedRegionTitles.includes(item.title) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selectedRegionTitles.includes(item.title) && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, selectedRegionTitles.includes(item.title) && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
@@ -3813,13 +3813,13 @@ const styles = StyleSheet.create({
   regionPickerPanel: { alignSelf: "flex-end", borderColor: "#D8D1FF", maxWidth: "100%", shadowColor: "#5143C2", width: 380, zIndex: 20 },
   regionPickerPanelDesktop: { left: "100%", marginLeft: 185, marginTop: 0, position: "absolute", top: -308, zIndex: 50 },
   regionPickerOverlay: { alignItems: "flex-end", backgroundColor: "transparent", flex: 1, justifyContent: "flex-start", paddingHorizontal: 16 },
-  regionPickerModalPanel: { alignSelf: "flex-end", marginTop: 0 },
+  regionPickerModalPanel: { alignSelf: "flex-end", flexShrink: 1, minHeight: 0, marginTop: 0 },
   platePickerTopRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between", marginBottom: 10 },
   platePickerTitle: { color: "#101828", fontSize: 14, fontWeight: "900" },
   platePickerClose: { color: "#155EEF", fontSize: 13, fontWeight: "800" },
-  regionPickerContent: { gap: 9 },
+  regionPickerContent: { flexShrink: 1, minHeight: 0, gap: 9 },
   regionPickerHint: { color: "#667085", fontSize: 12, lineHeight: 17 },
-  regionPickerScroll: { maxHeight: 470 },
+  regionPickerScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, maxHeight: 470 },
   regionPickerList: { gap: 7, paddingRight: 3 },
   pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pickerOption: { alignItems: "center", backgroundColor: "#F2F6FF", borderColor: "#D5E2FF", borderRadius: 10, borderWidth: 1, justifyContent: "center", minHeight: 44, minWidth: 42, paddingHorizontal: 11, paddingVertical: 9 },
