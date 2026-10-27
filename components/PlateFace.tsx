@@ -1,71 +1,93 @@
 import { memo, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Image, StyleSheet, Text, View } from "react-native";
+import glyphRatios from "../assets/plates/ratios.json";
 
 type Vehicle = "car" | "motorcycle" | "truck";
 type PlateFaceProps = { leftLetter?: string; digits?: string; rightLetters?: string; region?: string; vehicle?: Vehicle };
 
-export function PlateCountry({ scale = 1 }: { scale?: number }) {
-  return <View style={[styles.country, { gap: 4 * scale }]}>
-    <Text allowFontScaling={false} style={[styles.rus, { fontSize: 18 * scale, lineHeight: 21 * scale }]}>RUS</Text>
-    <View style={[styles.flag, { width: 35 * scale, height: 20 * scale, borderWidth: 0.6 * scale }]}>
-      <View style={styles.white} /><View style={styles.blue} /><View style={styles.red} />
+const glyphs: Record<string, number> = {
+  "0": require("../assets/plates/0030.png"), "1": require("../assets/plates/0031.png"),
+  "2": require("../assets/plates/0032.png"), "3": require("../assets/plates/0033.png"),
+  "4": require("../assets/plates/0034.png"), "5": require("../assets/plates/0035.png"),
+  "6": require("../assets/plates/0036.png"), "7": require("../assets/plates/0037.png"),
+  "8": require("../assets/plates/0038.png"), "9": require("../assets/plates/0039.png"),
+  "А": require("../assets/plates/0410.png"), "В": require("../assets/plates/0412.png"),
+  "Е": require("../assets/plates/0415.png"), "К": require("../assets/plates/041a.png"),
+  "М": require("../assets/plates/041c.png"), "Н": require("../assets/plates/041d.png"),
+  "О": require("../assets/plates/041e.png"), "Р": require("../assets/plates/0420.png"),
+  "С": require("../assets/plates/0421.png"), "Т": require("../assets/plates/0422.png"),
+  "У": require("../assets/plates/0423.png"), "Х": require("../assets/plates/0425.png"),
+  "*": require("../assets/plates/star.png"), "—": require("../assets/plates/dash.png"),
+};
+const latin: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
+
+// Images use the actual ink bounds: system font metrics cannot move or clip them.
+function GlyphRun({ value, x, y, width, height, gap, scale }: { value: string; x: number; y: number; width: number; height: number; gap: number; scale: number }) {
+  const chars = Array.from(value.toUpperCase());
+  const known = chars.every(char => glyphs[latin[char] ?? char] != null);
+  return <View style={{ position: "absolute", left: x * scale, top: y * scale, width: width * scale, height: height * scale, flexDirection: "row", gap: gap * scale, overflow: "hidden", alignItems: "center" }}>
+    {known ? chars.map((char, index) => {
+      const normalized = latin[char] ?? char;
+      const inkHeight = char === "*" ? Math.min(height, 32) : height;
+      const ratio = (glyphRatios as Record<string, number>)[normalized] ?? 1;
+      const inkWidth = Math.min((width - gap * (chars.length - 1)) / chars.length, inkHeight * ratio * (/^[0-9]$/.test(char) ? 0.86 : char === "*" ? 1 : 0.83));
+      return <View key={index} style={{ flex: 1, minWidth: 0, height: height * scale, alignItems: "center", justifyContent: "center" }}><Image accessible={false} source={glyphs[normalized]} resizeMode="stretch" style={{ width: inkWidth * scale, height: inkHeight * scale }} /></View>;
+    }) :
+      <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.25} style={{ width: "100%", textAlign: "center", color: "#111", fontSize: Math.min(height, width / Math.max(1, chars.length)) * scale }}>{value}</Text>}
+  </View>;
+}
+
+function Country({ x, y, scale, large = false }: { x: number; y: number; scale: number; large?: boolean }) {
+  const countryScale = (large ? 1.15 : 1) * scale;
+  return <View style={{ position: "absolute", left: x * scale, top: y * scale, flexDirection: "row", alignItems: "center", gap: 4 * countryScale }}>
+    <Text allowFontScaling={false} style={{ color: "#111", fontSize: 18 * countryScale, lineHeight: 22 * countryScale, fontWeight: "400", includeFontPadding: false }}>RUS</Text>
+    <View style={{ width: 35 * countryScale, height: 19 * countryScale, borderWidth: 0.6 * countryScale, borderColor: "#444", overflow: "hidden" }}>
+      <View style={{ flex: 1, backgroundColor: "#fff" }} /><View style={{ flex: 1, backgroundColor: "#0055a4" }} /><View style={{ flex: 1, backgroundColor: "#ef1c25" }} />
     </View>
   </View>;
 }
 
-function Glyph({ value, left, top, width, size, scale }: { value: string; left: number; top: number; width: number; size: number; scale: number }) {
-  return <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}
-    style={[styles.glyph, { left: left * scale, top: top * scale, width: width * scale, fontSize: size * scale, lineHeight: size * 1.2 * scale }]}>{value}</Text>;
-}
-
-// One proportionally scaled face in every preview. "truck" is the existing trailer category.
 function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", region = "", vehicle = "car" }: PlateFaceProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const moto = vehicle === "motorcycle";
   const base = moto ? { width: 288, height: 216 } : { width: 520, height: 112 };
   const scale = Math.min(size.width / base.width, size.height / base.height);
   const label = moto ? `Мотоцикл: ${digits} ${rightLetters}, регион ${region}` : vehicle === "truck" ? `Прицеп: ${leftLetter} ${digits}, регион ${region}` : `${leftLetter} ${digits} ${rightLetters}, регион ${region}`;
-  return <View accessible accessibilityLabel={label} style={styles.container}
-    onLayout={({ nativeEvent: { layout } }) => setSize(old => old.width === layout.width && old.height === layout.height ? old : { width: layout.width, height: layout.height })}>
-    {scale > 0 && <View style={{ width: base.width * scale, height: base.height * scale }}>
-      <View style={[styles.frame, { borderWidth: 2.6 * scale, borderRadius: 11 * scale }]} />
+  const threeDigitRegion = region.length === 3;
+  const divider = threeDigitRegion ? 386 : 397;
+  return <View accessible accessibilityLabel={label} style={styles.container} onLayout={({ nativeEvent: { layout } }) => setSize(old => old.width === layout.width && old.height === layout.height ? old : { width: layout.width, height: layout.height })}>
+    {scale > 0 && <View style={{ width: base.width * scale, height: base.height * scale, overflow: "hidden", borderRadius: 10 * scale }}>
+      <View style={[styles.frame, { borderWidth: 3 * scale, borderRadius: 10 * scale }]} />
+      <View pointerEvents="none" style={{ position: "absolute", left: 4.2 * scale, right: 4.2 * scale, top: 4.2 * scale, bottom: 4.2 * scale, borderWidth: 1.1 * scale, borderColor: "#D1D1D1", borderRadius: 6.5 * scale }} />
       {moto ? <>
-        <Glyph value={digits} left={28} top={-8} width={232} size={106} scale={scale} />
-        <Glyph value={rightLetters} left={18} top={112} width={128} size={94} scale={scale} />
-        <View style={[styles.divider, { left: 153 * scale, top: 139 * scale, width: 2.5 * scale, bottom: 2 * scale }]} />
-        <Glyph value={region} left={165} top={127} width={111} size={region.length > 2 ? 76 : 86} scale={scale} />
-        <View style={{ position: "absolute", left: 151 * scale, top: 112 * scale }}><PlateCountry scale={1.25 * scale} /></View>
-        <View style={[styles.motoNotch, { right: 2 * scale, top: 123 * scale, width: 20 * scale, height: 2.6 * scale }]} />
+        <GlyphRun value={digits} x={36} y={20} width={216} height={68} gap={8} scale={scale} />
+        <GlyphRun value={rightLetters} x={25} y={139} width={112} height={64} gap={10} scale={scale} />
+        <View style={[styles.divider, { left: 153 * scale, top: 139 * scale, bottom: 3 * scale, width: 2.5 * scale }]} />
+        <GlyphRun value={region} x={164} y={140} width={110} height={62} gap={5} scale={scale} />
+        <Country x={152} y={103} scale={scale} large />
+        <View style={[styles.divider, { right: 2 * scale, top: 119 * scale, width: 22 * scale, height: 3 * scale, borderRadius: 2 * scale }]} />
       </> : <>
         {vehicle === "truck" ? <>
-          <Glyph value={leftLetter} left={24} top={23} width={100} size={74} scale={scale} />
-          <Glyph value={digits} left={133} top={-8} width={246} size={100} scale={scale} />
+          <GlyphRun value={leftLetter} x={36} y={35} width={106} height={58} gap={10} scale={scale} />
+          <GlyphRun value={digits} x={155} y={18} width={222} height={76} gap={8} scale={scale} />
         </> : <>
-          <Glyph value={leftLetter} left={24} top={23} width={49} size={74} scale={scale} />
-          <Glyph value={digits} left={81} top={-8} width={174} size={100} scale={scale} />
-          <Glyph value={rightLetters} left={263} top={23} width={116} size={74} scale={scale} />
+          <GlyphRun value={leftLetter} x={36} y={35} width={50} height={58} gap={0} scale={scale} />
+          <GlyphRun value={digits} x={98} y={18} width={168} height={76} gap={8} scale={scale} />
+          <GlyphRun value={rightLetters} x={271} y={35} width={110} height={58} gap={9} scale={scale} />
         </>}
-        <View style={[styles.divider, { left: 394 * scale, top: 2 * scale, bottom: 2 * scale, width: 2.6 * scale }]} />
-        <Glyph value={region} left={402} top={-8} width={110} size={region.length > 2 ? 78 : 86} scale={scale} />
-        <View style={{ position: "absolute", left: 405 * scale, top: 82 * scale }}><PlateCountry scale={scale} /></View>
-        <View style={[styles.bolt, { left: 13 * scale, top: 56 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
-        <View style={[styles.bolt, { right: 13 * scale, top: 56 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
+        <View style={[styles.divider, { left: divider * scale, top: 3 * scale, bottom: 3 * scale, width: 3 * scale }]} />
+        <GlyphRun value={region} x={divider + 9} y={12} width={520 - divider - 19} height={58} gap={4} scale={scale} />
+        <Country x={divider + 10} y={79} scale={scale} />
+        <View style={[styles.bolt, { left: 17 * scale, top: 55 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
+        <View style={[styles.bolt, { right: 16 * scale, top: 55 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
       </>}
     </View>}
   </View>;
 }
-
 export const PlateFace = memo(PlateFaceContent);
-
 const styles = StyleSheet.create({
-  container: { alignItems: "center", flex: 1, justifyContent: "center", overflow: "hidden" },
-  frame: { ...StyleSheet.absoluteFillObject, borderColor: "#080808", backgroundColor: "#FAFAFA" },
-  glyph: { color: "#080808", fontFamily: "PlateNumber", fontWeight: "400", includeFontPadding: false, position: "absolute", textAlign: "center" },
-  divider: { backgroundColor: "#080808", position: "absolute" },
-  country: { alignItems: "center", flexDirection: "row", justifyContent: "center" },
-  rus: { color: "#080808", fontWeight: "400", includeFontPadding: false },
-  flag: { borderColor: "#333333", overflow: "hidden" },
-  white: { backgroundColor: "#FFFFFF", flex: 1 }, blue: { backgroundColor: "#0055A4", flex: 1 }, red: { backgroundColor: "#EF1C25", flex: 1 },
-  bolt: { backgroundColor: "#303030", borderRadius: 99, position: "absolute" },
-  motoNotch: { backgroundColor: "#080808", position: "absolute" },
+  container: { flex: 1, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  frame: { ...StyleSheet.absoluteFillObject, backgroundColor: "#F8F8F8", borderColor: "#090909" },
+  divider: { position: "absolute", backgroundColor: "#090909" },
+  bolt: { position: "absolute", backgroundColor: "#303030", borderRadius: 99 },
 });

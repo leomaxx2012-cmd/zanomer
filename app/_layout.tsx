@@ -4,11 +4,8 @@ import { StatusBar } from "expo-status-bar";
 import VercelAnalytics from "../lib/vercel-analytics";
 import YandexMetrika from "../lib/yandex-metrika";
 import { ResponsiveTypography } from "../components/ResponsiveText";
-import { useFonts } from "expo-font";
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({ PlateNumber: require("../assets/fonts/PlateNumber.ttf") });
-  if (!fontsLoaded && !fontError) return null;
   return (
     <>
       <Head>
