@@ -334,6 +334,7 @@ const catalogFallback = deduplicateOffers(bundledCatalog.length > 0 ? bundledCat
 export default function HomeScreen() {
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const compactLayout = windowWidth < 600 || windowWidth / fontScale < 430;
+  const wideListingCards = !compactLayout && windowWidth / fontScale >= 900;
   const narrowCards = windowWidth / fontScale < 760;
   const insets = useSafeAreaInsets();
   const [navigationHeight, setNavigationHeight] = useState(88);
@@ -2967,7 +2968,7 @@ export default function HomeScreen() {
       </Pressable>}
       <View style={[styles.list, styles.compactOfferList]}>
         {renderedPlates.map((item, index) => {
-          const expanded = expandedListingIds.includes(item.id);
+          const expanded = !compactLayout || expandedListingIds.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
           const seriesGroup = seriesGroupByListingId.get(item.id);
           const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
@@ -2978,20 +2979,20 @@ export default function HomeScreen() {
                 <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
               </Pressable>}
-            <View style={styles.offerShell}>
-              <View style={styles.offerRow}>
-                <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Свернуть" : "Раскрыть"} объявление ${item.value}, ${item.region}`} accessibilityState={{ expanded }} onPress={() => setExpandedListingIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])} hitSlop={4} style={styles.offerExpand}>
+            <View style={[styles.offerShell, wideListingCards && styles.offerShellDesktop]}>
+              <View style={[styles.offerRow, wideListingCards && styles.offerRowDesktop]}>
+                {compactLayout && <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Свернуть" : "Раскрыть"} объявление ${item.value}, ${item.region}`} accessibilityState={{ expanded }} onPress={() => setExpandedListingIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])} hitSlop={4} style={styles.offerExpand}>
                   <Text allowFontScaling={false} style={styles.offerChevron}>{expanded ? "⌃" : "⌄"}</Text>
-                </Pressable>
-                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.offerPlate, item.vehicle === "motorcycle" && styles.offerPlateMotorcycle]}>
+                </Pressable>}
+                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.offerPlate, wideListingCards && styles.offerPlateDesktop, item.vehicle === "motorcycle" && styles.offerPlateMotorcycle]}>
                   <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} vehicle={item.vehicle} />
                 </Pressable>
-                <View style={[styles.offerSummary, !compactLayout && styles.offerSummaryWide]}>
-                  <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.offerPrice, item.price.length > 11 && styles.offerPriceLong]}>{item.price}</Text>
-                  <Text allowFontScaling={false} style={styles.offerDate}>{formatListingDate(item.publishedAt ?? item.createdAt).split(",")[0]}</Text>
+                <View style={[styles.offerSummary, !compactLayout && styles.offerSummaryWide, wideListingCards && styles.offerSummaryDesktop]}>
+                  <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.offerPrice, wideListingCards && styles.offerPriceDesktop, item.price.length > 11 && styles.offerPriceLong]}>{item.price}</Text>
+                  {!wideListingCards && <Text allowFontScaling={false} style={styles.offerDate}>{formatListingDate(item.publishedAt ?? item.createdAt).split(",")[0]}</Text>}
                 </View>
               </View>
-              {expanded && <View style={styles.offerDetails}>
+              {expanded && <View style={[styles.offerDetails, wideListingCards && styles.offerDetailsDesktop]}>
                   <View style={[styles.cardInfo, narrowCards && styles.cardInfoCompact, styles.offerInfo]}>
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
@@ -3860,17 +3861,23 @@ const styles = StyleSheet.create({
   listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
   compactOfferList: { gap: 0, paddingTop: 4, backgroundColor: "#FFFFFF", borderRadius: 10, overflow: "hidden" },
   offerShell: { borderBottomColor: "#E9E7F0", borderBottomWidth: 1, backgroundColor: "#FFFFFF" },
+  offerShellDesktop: { flexDirection: "row", alignItems: "center" },
   offerRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, paddingRight: 8, minHeight: 82 },
+  offerRowDesktop: { width: "42%", flexDirection: "column", alignItems: "flex-start", gap: 14, padding: 18 },
   offerExpand: { width: 28, minHeight: 54, alignItems: "center", justifyContent: "center" },
   offerChevron: { color: "#858093", fontSize: 25, lineHeight: 30 },
   offerPlate: { flex: 1, minWidth: 0, maxWidth: 520, aspectRatio: 520 / 112, minHeight: 34, borderWidth: 0, borderColor: "#151B29", borderRadius: 0, backgroundColor: "transparent", overflow: "hidden" },
   offerPlateMotorcycle: { aspectRatio: 4 / 3, maxWidth: 160 },
+  offerPlateDesktop: { flex: 0, flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: "100%" },
   offerSummary: { width: 102, alignItems: "flex-end", justifyContent: "center", gap: 6, marginLeft: "auto" },
   offerSummaryWide: { width: 150 },
+  offerSummaryDesktop: { width: "100%", marginLeft: 0, alignItems: "flex-start" },
   offerPrice: { color: "#171827", fontSize: 17, fontWeight: "800", textAlign: "right" },
+  offerPriceDesktop: { fontSize: 23 },
   offerPriceLong: { fontSize: 14 },
   offerDate: { color: "#8B8797", fontSize: 10, lineHeight: 15, textAlign: "right" },
   offerDetails: { paddingHorizontal: 12, paddingBottom: 10, borderTopColor: "#F0EDF7", borderTopWidth: 1 },
+  offerDetailsDesktop: { flex: 1, minWidth: 0, borderTopWidth: 0, borderLeftWidth: 1, borderLeftColor: "#F0EDF7", paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8 },
   offerInfo: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", paddingTop: 8 },
   offerAction: { minHeight: 36, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, justifyContent: "center" },
   offerActionText: { fontSize: 11, lineHeight: 15 },
