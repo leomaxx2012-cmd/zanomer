@@ -3391,6 +3391,11 @@ export default function HomeScreen() {
                 <Pressable onPress={() => openLegalDocument("requisites")}><Text style={styles.legalLink}>Реквизиты и контакты</Text></Pressable>
               </View>
               {legalDocument === "overview" && <>
+              <View style={styles.legalCard}>
+                <Text style={styles.legalCardTitle}>Наш другой проект — PubMatch</Text>
+                <Text style={styles.legalText}>PubMatch помогает выбрать футбольный матч и найти бар в Москве, где можно посмотреть трансляцию. На сайте есть карта заведений и расписание матчей.</Text>
+                <Text accessibilityRole="link" style={styles.legalLink} onPress={() => { void Linking.openURL("https://pubmatch.vercel.app/"); }}>Открыть PubMatch ↗</Text>
+              </View>
               <Text style={styles.legalHeading}>Платные услуги</Text>
               <Pressable accessibilityRole="link" onPress={() => openLegalDocument("plus")} style={styles.legalCard}>
                 <Text style={styles.legalCardTitle}>Подписка ЗаНомером Плюс — 199 ₽ в месяц</Text>
