@@ -22,16 +22,16 @@ const glyphs: Record<string, number> = {
 const latin: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
 
 // Images use the actual ink bounds: system font metrics cannot move or clip them.
-function GlyphRun({ value, x, y, width, height, gap, scale }: { value: string; x: number; y: number; width: number; height: number; gap: number; scale: number }) {
+function GlyphRun({ value, x, y, width, height, gap, scale, packed = false }: { value: string; x: number; y: number; width: number; height: number; gap: number; scale: number; packed?: boolean }) {
   const chars = Array.from(value.toUpperCase());
   const known = chars.every(char => glyphs[latin[char] ?? char] != null);
-  return <View style={{ position: "absolute", left: x * scale, top: y * scale, width: width * scale, height: height * scale, flexDirection: "row", gap: gap * scale, overflow: "hidden", alignItems: "center" }}>
+  return <View style={{ position: "absolute", left: x * scale, top: y * scale, width: width * scale, height: height * scale, flexDirection: "row", gap: gap * scale, overflow: "hidden", alignItems: "center", justifyContent: "center" }}>
     {known ? chars.map((char, index) => {
       const normalized = latin[char] ?? char;
       const inkHeight = char === "*" ? Math.min(height, 32) : height;
       const ratio = (glyphRatios as Record<string, number>)[normalized] ?? 1;
       const inkWidth = Math.min((width - gap * (chars.length - 1)) / chars.length, inkHeight * ratio * (/^[0-9]$/.test(char) ? 0.86 : char === "*" ? 1 : 0.83));
-      return <View key={index} style={{ flex: 1, minWidth: 0, height: height * scale, alignItems: "center", justifyContent: "center" }}><Image accessible={false} source={glyphs[normalized]} resizeMode="stretch" style={{ width: inkWidth * scale, height: inkHeight * scale }} /></View>;
+      return <View key={index} style={{ flex: packed ? undefined : 1, width: packed ? inkWidth * scale : undefined, minWidth: 0, height: height * scale, alignItems: "center", justifyContent: "center" }}><Image accessible={false} source={glyphs[normalized]} resizeMode="stretch" style={{ width: inkWidth * scale, height: inkHeight * scale }} /></View>;
     }) :
       <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.25} style={{ width: "100%", textAlign: "center", color: "#111", fontSize: Math.min(height, width / Math.max(1, chars.length)) * scale }}>{value}</Text>}
   </View>;
@@ -63,7 +63,7 @@ function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", reg
         <GlyphRun value={digits} x={36} y={20} width={216} height={68} gap={8} scale={scale} />
         <GlyphRun value={rightLetters} x={25} y={139} width={112} height={64} gap={10} scale={scale} />
         <View style={[styles.divider, { left: 153 * scale, top: 139 * scale, bottom: 3 * scale, width: 2.5 * scale }]} />
-        <GlyphRun value={region} x={164} y={140} width={110} height={62} gap={5} scale={scale} />
+        <GlyphRun value={region} x={164} y={140} width={110} height={62} gap={5} scale={scale} packed={/^\d{2}$/.test(region)} />
         <Country x={152} y={103} scale={scale} large />
         <View style={[styles.divider, { right: 2 * scale, top: 119 * scale, width: 22 * scale, height: 3 * scale, borderRadius: 2 * scale }]} />
       </> : <>
@@ -76,7 +76,7 @@ function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", reg
           <GlyphRun value={rightLetters} x={271} y={35} width={110} height={58} gap={9} scale={scale} />
         </>}
         <View style={[styles.divider, { left: divider * scale, top: 3 * scale, bottom: 3 * scale, width: 3 * scale }]} />
-        <GlyphRun value={region} x={divider + 9} y={12} width={520 - divider - 19} height={58} gap={4} scale={scale} />
+        <GlyphRun value={region} x={divider + 9} y={12} width={520 - divider - 19} height={58} gap={4} scale={scale} packed={/^\d{2}$/.test(region)} />
         <Country x={divider + 10} y={79} scale={scale} />
         <View style={[styles.bolt, { left: 17 * scale, top: 55 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
         <View style={[styles.bolt, { right: 16 * scale, top: 55 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
