@@ -2731,33 +2731,19 @@ export default function HomeScreen() {
           </Pressable>
         ))}
       </View>
-      <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.plateSearch, vehicle === "motorcycle" && styles.plateSearchMotorcycle, vehicle === "truck" && styles.plateSearchTrailer]}>
-        {vehicle === "motorcycle" && <>
-          <PlateKeyField accessibilityLabel="Четыре цифры мото-номера" value={digits} onChangeText={value => setDigits(normalizePlateDigits(value, 4))} onOpen={() => setPlatePicker("digits")} placeholder="—" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchDigits]} maxLength={4} />
-          <View style={styles.motoSearchBottom}>
-            <PlateKeyField accessibilityLabel="Две буквы мото-номера" value={rightLetters} onChangeText={value => setRightLetters(normalizePlateLetters(value, 2))} onOpen={() => setPlatePicker("right")} placeholder="—" placeholderTextColor="#B8C0CC" style={[styles.plateInput, styles.motoSearchLetters]} autoCapitalize="characters" maxLength={2} />
-            <View style={[styles.plateDivider, { marginTop: 18 }]} />
-            <Pressable accessibilityLabel="Выбрать регион мото-номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={[styles.regionCodeBox, styles.motoSearchRegion]}>
-              <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
-              <Text style={[styles.regionCodeInput, styles.motoSearchRegionCode, region === "Все" && styles.regionCodePlaceholder, showingMultipleRegionCodes && styles.regionCodeInputMultiple]} numberOfLines={1}>{selectedRegionLabel}</Text>
-              {!!compactRegion.names && <Text numberOfLines={2} style={styles.searchRegionName}>{compactRegion.names}</Text>}
-            </Pressable>
-          </View>
+      <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.plateSearch, vehicle === "motorcycle" && styles.plateSearchMotorcycle]}>
+        <PlateFace vehicle={vehicle} leftLetter={leftLetter || (vehicle === "truck" ? "**" : "*")} digits={digits || (vehicle === "car" ? "***" : "****")} rightLetters={rightLetters || "**"} region={selectedRegionLabel === "—" ? "*" : selectedRegionLabel} />
+        {vehicle === "motorcycle" ? <>
+          <Pressable accessibilityRole="button" accessibilityLabel="Четыре цифры мото-номера" accessibilityValue={{ text: digits }} onPress={() => setPlatePicker("digits")} style={[styles.plateHitArea, { left: 0, top: 0, width: "100%", height: "51%" }]} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Две буквы мото-номера" accessibilityValue={{ text: rightLetters }} onPress={() => setPlatePicker("right")} style={[styles.plateHitArea, { left: 0, top: "51%", width: "53%", height: "49%" }]} />
+        </> : <>
+          <Pressable accessibilityRole="button" accessibilityLabel="Первые буквы номера" accessibilityValue={{ text: leftLetter }} onPress={() => setPlatePicker("left")} style={[styles.plateHitArea, { left: 0, top: 0, width: vehicle === "truck" ? "25%" : "15%", height: "100%" }]} />
+          <Pressable accessibilityRole="button" accessibilityLabel="Цифры номера" accessibilityValue={{ text: digits }} onPress={() => setPlatePicker("digits")} style={[styles.plateHitArea, { left: vehicle === "truck" ? "25%" : "15%", top: 0, width: vehicle === "truck" ? "51%" : "35%", height: "100%" }]} />
+          {vehicle === "car" && <Pressable accessibilityRole="button" accessibilityLabel="Последние буквы номера" accessibilityValue={{ text: rightLetters }} onPress={() => setPlatePicker("right")} style={[styles.plateHitArea, { left: "50%", top: 0, width: "26%", height: "100%" }]} />}
         </>}
-        {vehicle !== "motorcycle" && <>
-        <PlateKeyField accessibilityLabel="Первые буквы номера" value={leftLetter} onChangeText={(value) => setLeftLetter(normalizePlateLetters(value, plateFormat(vehicle).left))} onOpen={() => setPlatePicker("left")} placeholder="—" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={plateFormat(vehicle).left} /><View style={styles.plateDivider} />
-        <PlateKeyField accessibilityLabel="Цифры номера" value={digits} onChangeText={(value) => setDigits(normalizePlateDigits(value, plateFormat(vehicle).digits))} onOpen={() => setPlatePicker("digits")} placeholder="—" placeholderTextColor="#B8C0CC" style={styles.plateInput} keyboardType="default" maxLength={plateFormat(vehicle).digits} />
-        {vehicle !== "truck" && <><View style={styles.plateDivider} /><PlateKeyField accessibilityLabel="Последние буквы номера" value={rightLetters} onChangeText={(value) => setRightLetters(normalizePlateLetters(value, 2))} onOpen={() => setPlatePicker("right")} placeholder="—" placeholderTextColor="#B8C0CC" style={styles.plateInput} autoCapitalize="characters" maxLength={2} /></>}
-        <View style={styles.plateDivider} />
-        <Pressable accessibilityLabel="Выбрать регион номера" onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={styles.regionCodeBox}>
-          <Text
-            style={[styles.regionCodeInput, region === "Все" && styles.regionCodePlaceholder, showingMultipleRegionCodes && styles.regionCodeInputMultiple]}
-           numberOfLines={1}>{selectedRegionLabel}</Text>
-          {!!compactRegion.names && <Text numberOfLines={2} style={styles.searchRegionName}>{compactRegion.names}</Text>}
-          <Text style={styles.rusLabel}>RUS 🇷🇺</Text>
-        </Pressable>
-        </>}
+        <Pressable accessibilityRole="button" accessibilityLabel={vehicle === "motorcycle" ? "Выбрать регион мото-номера" : "Выбрать регион номера"} accessibilityValue={{ text: selectedRegionLabel }} onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={[styles.plateHitArea, vehicle === "motorcycle" ? { left: "53%", top: "51%", width: "47%", height: "49%" } : { left: "76%", top: 0, width: "24%", height: "100%" }]} />
       </View>
+      {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
       <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
         <Text style={styles.searchResetButtonText}>↺ Сбросить поиск и фильтры</Text>
       </Pressable>
@@ -3686,8 +3672,9 @@ const styles = StyleSheet.create({
   vehicleLabel: { color: "#475467", flexShrink: 1, fontSize: 13, fontWeight: "800" },
   vehicleLabelCompact: { fontSize: 12 },
   vehicleLabelActive: { color: "#FFFFFF" },
-  plateSearch: { alignItems: "stretch", backgroundColor: "#FFFFFF", borderColor: "#202939", borderRadius: 14, borderWidth: 3, flexDirection: "row", height: 96, minHeight: 96, overflow: "hidden", shadowColor: "#101828", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 5, width: "100%" },
-  plateSearchMotorcycle: { alignSelf: "center", width: 240, maxWidth: "100%", height: 180, minHeight: 180, flexDirection: "column" },
+  plateSearch: { alignSelf: "center", width: "100%", maxWidth: 520, aspectRatio: 520 / 112, position: "relative" },
+  plateHitArea: { position: "absolute", cursor: "pointer" },
+  plateSearchMotorcycle: { width: 240, maxWidth: "100%", aspectRatio: 4 / 3 },
   motoSearchDigits: { flexGrow: 0, flexShrink: 0, flexBasis: 88, height: 88, fontSize: 74, width: "100%", padding: 0 },
   motoSearchBottom: { flexDirection: "row", flex: 1, width: "100%" },
   motoSearchLetters: { flex: 1.2, fontSize: 58, padding: 0, paddingTop: 14 },
@@ -3876,7 +3863,7 @@ const styles = StyleSheet.create({
   offerRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, paddingRight: 8, minHeight: 82 },
   offerExpand: { width: 28, minHeight: 54, alignItems: "center", justifyContent: "center" },
   offerChevron: { color: "#858093", fontSize: 25, lineHeight: 30 },
-  offerPlate: { flex: 1, minWidth: 0, maxWidth: 520, aspectRatio: 520 / 112, minHeight: 34, borderWidth: 1.5, borderColor: "#151B29", borderRadius: 5, backgroundColor: "#FFFFFF", overflow: "hidden" },
+  offerPlate: { flex: 1, minWidth: 0, maxWidth: 520, aspectRatio: 520 / 112, minHeight: 34, borderWidth: 0, borderColor: "#151B29", borderRadius: 0, backgroundColor: "transparent", overflow: "hidden" },
   offerPlateMotorcycle: { aspectRatio: 4 / 3, maxWidth: 160 },
   offerSummary: { width: 102, alignItems: "flex-end", justifyContent: "center", gap: 6, marginLeft: "auto" },
   offerSummaryWide: { width: 150 },
@@ -3918,9 +3905,9 @@ const styles = StyleSheet.create({
   hotPlateArea: { minHeight: 94, justifyContent: "center" },
   hotPrice: { color: "#146C4B", fontSize: 22, fontWeight: "900" },
   hotDate: { color: "#7D7169", fontSize: 11, lineHeight: 16, textAlign: "right", marginTop: 5 },
-  hotPlate: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", height: 54, minHeight: 54, borderWidth: 2, backgroundColor: "#FAFBFD" },
+  hotPlate: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", height: 54, minHeight: 54, borderWidth: 0, backgroundColor: "transparent" },
   hotMotoPlate: { width: 120, height: 90, minHeight: 90, alignSelf: "center" },
-  cardPlateMotorcycle: { flex: 0, flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: 240, maxWidth: "100%", height: 180, minHeight: 180, alignSelf: "center", borderRadius: 14 },
+  cardPlateMotorcycle: { flex: 0, flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: 240, maxWidth: "100%", height: 180, minHeight: 180, alignSelf: "center", borderRadius: 0 },
   hotCardMeta: { borderTopWidth: 1, borderTopColor: "#F2E9DF", paddingTop: 10, marginTop: 4 },
   hotArrow: { width: 32, height: 42, borderRadius: 14, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#F0D4B5", alignItems: "center", justifyContent: "center" },
   hotArrowText: { color: "#9A4B14", fontSize: 30, lineHeight: 34 },
@@ -3929,7 +3916,7 @@ const styles = StyleSheet.create({
   // На телефоне сначала показываем номер на всю ширину, затем все сведения
   // в этой же карточке. Так знак никогда не обрезается сбоку.
   cardMainRowCompact: { flexDirection: "column", gap: 12 },
-  cardPlate: { alignItems: "stretch", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 6, borderWidth: 2.5, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden", position: "relative" },
+  cardPlate: { alignItems: "stretch", backgroundColor: "transparent", borderColor: "#131B2A", borderRadius: 0, borderWidth: 0, flex: 1, flexDirection: "row", height: 82, minWidth: 0, overflow: "hidden", position: "relative" },
   cardPlateCompact: { alignSelf: "stretch", flexBasis: "auto", flexGrow: 0, flexShrink: 0, height: 102, width: "100%" },
   // На широком экране номер занимает стабильную левую часть карточки.
   // Раньше фиксированная ширина вместе с блоком сведений могла сжаться до нуля.
@@ -4011,7 +3998,7 @@ const styles = StyleSheet.create({
   comparisonColumns: { gap: 12, paddingVertical: 12 },
   comparisonColumn: { backgroundColor: "#FFFFFF", borderRadius: 18, padding: 12, borderWidth: 1, borderColor: "#E2DDF5" },
   comparisonColumnHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 30 },
-  comparisonPlate: { width: "100%", height: 65, marginVertical: 14, borderWidth: 2, borderRadius: 8, borderColor: "#202737", overflow: "hidden" },
+  comparisonPlate: { width: "100%", height: 65, marginVertical: 14, borderWidth: 0, borderRadius: 0, borderColor: "#202737", overflow: "hidden" },
   comparisonPrice: { color: "#172A24", fontSize: 24, fontWeight: "900" },
   comparisonDifference: { color: "#716A88", fontSize: 11, minHeight: 38, marginTop: 6 },
   comparisonSame: { backgroundColor: "#FFF3DF", borderRadius: 8, padding: 8, color: "#946117", fontSize: 11 },
@@ -4086,7 +4073,7 @@ const styles = StyleSheet.create({
   detailsTitle: { color: "#101828", fontSize: 27, fontWeight: "900" },
   detailsPrice: { color: "#155EEF", fontSize: 19, fontWeight: "900", marginTop: 4 },
   // В полном просмотре — тот же размер стандартного знака 520 × 112.
-  detailsPlatePreview: { alignSelf: "center", backgroundColor: "#F7F8FA", borderColor: "#131B2A", borderRadius: 8, borderWidth: 3, flexDirection: "row", height: 112, marginTop: 20, maxWidth: "100%", overflow: "hidden", position: "relative", width: 520 },
+  detailsPlatePreview: { alignSelf: "center", backgroundColor: "transparent", borderColor: "#131B2A", borderRadius: 0, borderWidth: 0, flexDirection: "row", height: 112, marginTop: 20, maxWidth: "100%", overflow: "hidden", position: "relative", width: 520 },
   detailsPhoto: { borderRadius: 14, height: 230, marginTop: 14, width: "100%" },
   detailsClose: { alignItems: "center", backgroundColor: "#F2F4F7", borderRadius: 16, height: 32, justifyContent: "center", width: 32 },
   detailsCloseText: { color: "#475467", fontSize: 25, lineHeight: 29 },

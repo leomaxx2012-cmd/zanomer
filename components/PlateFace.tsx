@@ -1,41 +1,56 @@
 import { memo, useState } from "react";
-import { Platform, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 type Vehicle = "car" | "motorcycle" | "truck";
 type PlateFaceProps = { leftLetter?: string; digits?: string; rightLetters?: string; region?: string; vehicle?: Vehicle };
 
-function Flag({ scale }: { scale: number }) {
-  return <View style={[styles.flag, { width: 34 * scale, height: 18 * scale }]}><View style={styles.white} /><View style={styles.blue} /><View style={styles.red} /></View>;
+export function PlateCountry({ scale = 1 }: { scale?: number }) {
+  return <View style={[styles.country, { gap: 4 * scale }]}>
+    <Text allowFontScaling={false} style={[styles.rus, { fontSize: 18 * scale, lineHeight: 21 * scale }]}>RUS</Text>
+    <View style={[styles.flag, { width: 35 * scale, height: 20 * scale, borderWidth: 0.6 * scale }]}>
+      <View style={styles.white} /><View style={styles.blue} /><View style={styles.red} />
+    </View>
+  </View>;
 }
 
 function Glyph({ value, left, top, width, size, scale }: { value: string; left: number; top: number; width: number; size: number; scale: number }) {
-  return <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.48} style={[styles.glyph, { left: left * scale, top: top * scale, width: width * scale, fontSize: size * scale, lineHeight: size * scale }]}>{value}</Text>;
+  return <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65}
+    style={[styles.glyph, { left: left * scale, top: top * scale, width: width * scale, fontSize: size * scale, lineHeight: size * 1.2 * scale }]}>{value}</Text>;
 }
 
-// Мото: четыре цифры над двумя буквами. Прицеп: две буквы и четыре цифры.
+// One proportionally scaled face in every preview. "truck" is the existing trailer category.
 function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", region = "", vehicle = "car" }: PlateFaceProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
-  const base = vehicle === "motorcycle" ? { width: 300, height: 225 } : vehicle === "truck" ? { width: 520, height: 112 } : { width: 520, height: 112 };
+  const moto = vehicle === "motorcycle";
+  const base = moto ? { width: 288, height: 216 } : { width: 520, height: 112 };
   const scale = Math.min(size.width / base.width, size.height / base.height);
-  const label = vehicle === "motorcycle" ? `Мотоцикл: ${digits} ${rightLetters}, регион ${region}` : vehicle === "truck" ? `Прицеп: ${leftLetter} ${digits}, регион ${region}` : `${leftLetter} ${digits} ${rightLetters}, регион ${region}`;
-  return <View accessible accessibilityLabel={label} style={styles.container} onLayout={({ nativeEvent: { layout } }) => setSize((old) => old.width === layout.width && old.height === layout.height ? old : { width: layout.width, height: layout.height })}>
+  const label = moto ? `Мотоцикл: ${digits} ${rightLetters}, регион ${region}` : vehicle === "truck" ? `Прицеп: ${leftLetter} ${digits}, регион ${region}` : `${leftLetter} ${digits} ${rightLetters}, регион ${region}`;
+  return <View accessible accessibilityLabel={label} style={styles.container}
+    onLayout={({ nativeEvent: { layout } }) => setSize(old => old.width === layout.width && old.height === layout.height ? old : { width: layout.width, height: layout.height })}>
     {scale > 0 && <View style={{ width: base.width * scale, height: base.height * scale }}>
-      {vehicle === "car" && <>
-        <Glyph value={leftLetter} left={12} top={26} width={72} size={68} scale={scale} /><Glyph value={digits} left={84} top={0} width={180} size={94} scale={scale} /><Glyph value={rightLetters} left={264} top={26} width={122} size={68} scale={scale} /><View style={[styles.divider, { left: 390 * scale }]} />
-        <Glyph value={region} left={396} top={7} width={118} size={region.length > 2 ? 58 : 68} scale={scale} /><View style={[styles.meta, { left: 396 * scale, top: 79 * scale, width: 118 * scale, gap: 5 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 13 * scale }]}>RUS</Text><Flag scale={scale} /></View>
+      <View style={[styles.frame, { borderWidth: 2.6 * scale, borderRadius: 11 * scale }]} />
+      {moto ? <>
+        <Glyph value={digits} left={28} top={-8} width={232} size={106} scale={scale} />
+        <Glyph value={rightLetters} left={18} top={112} width={128} size={94} scale={scale} />
+        <View style={[styles.divider, { left: 153 * scale, top: 139 * scale, width: 2.5 * scale, bottom: 2 * scale }]} />
+        <Glyph value={region} left={165} top={127} width={111} size={region.length > 2 ? 76 : 86} scale={scale} />
+        <View style={{ position: "absolute", left: 151 * scale, top: 112 * scale }}><PlateCountry scale={1.25 * scale} /></View>
+        <View style={[styles.motoNotch, { right: 2 * scale, top: 123 * scale, width: 20 * scale, height: 2.6 * scale }]} />
+      </> : <>
+        {vehicle === "truck" ? <>
+          <Glyph value={leftLetter} left={24} top={23} width={100} size={74} scale={scale} />
+          <Glyph value={digits} left={133} top={-8} width={246} size={100} scale={scale} />
+        </> : <>
+          <Glyph value={leftLetter} left={24} top={23} width={49} size={74} scale={scale} />
+          <Glyph value={digits} left={81} top={-8} width={174} size={100} scale={scale} />
+          <Glyph value={rightLetters} left={263} top={23} width={116} size={74} scale={scale} />
+        </>}
+        <View style={[styles.divider, { left: 394 * scale, top: 2 * scale, bottom: 2 * scale, width: 2.6 * scale }]} />
+        <Glyph value={region} left={402} top={-8} width={110} size={region.length > 2 ? 78 : 86} scale={scale} />
+        <View style={{ position: "absolute", left: 405 * scale, top: 82 * scale }}><PlateCountry scale={scale} /></View>
+        <View style={[styles.bolt, { left: 13 * scale, top: 56 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
+        <View style={[styles.bolt, { right: 13 * scale, top: 56 * scale, width: 3.5 * scale, height: 3.5 * scale }]} />
       </>}
-      {vehicle === "motorcycle" && <>
-        <Glyph value={digits} left={10} top={4} width={280} size={102} scale={scale} />
-        <Glyph value={rightLetters} left={10} top={128} width={146} size={80} scale={scale} />
-        <View style={[styles.divider, { left: 163 * scale, top: 133 * scale }]} />
-        <Glyph value={region} left={171} top={142} width={119} size={region.length > 2 ? 60 : 76} scale={scale} />
-        <View style={[styles.meta, { left: 169 * scale, top: 114 * scale, width: 122 * scale, gap: 6 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 18 * scale }]}>RUS</Text><Flag scale={scale} /></View>
-      </>}
-      {vehicle === "truck" && <>
-        <Glyph value={leftLetter} left={10} top={26} width={114} size={68} scale={scale} /><Glyph value={digits} left={124} top={0} width={260} size={94} scale={scale} /><View style={[styles.divider, { left: 390 * scale }]} />
-        <Glyph value={region} left={396} top={7} width={118} size={region.length > 2 ? 58 : 68} scale={scale} /><View style={[styles.meta, { left: 396 * scale, top: 79 * scale, width: 118 * scale, gap: 5 * scale }]}><Text allowFontScaling={false} style={[styles.rus, { fontSize: 13 * scale }]}>RUS</Text><Flag scale={scale} /></View>
-      </>}
-      <View style={[styles.bolt, { left: 5 * scale, width: 5 * scale, height: 5 * scale }]} /><View style={[styles.bolt, { right: 5 * scale, width: 5 * scale, height: 5 * scale }]} />
     </View>}
   </View>;
 }
@@ -44,8 +59,13 @@ export const PlateFace = memo(PlateFaceContent);
 
 const styles = StyleSheet.create({
   container: { alignItems: "center", flex: 1, justifyContent: "center", overflow: "hidden" },
-  glyph: { color: "#121722", fontFamily: Platform.select({ android: "sans-serif", web: "Arial", default: "System" }), fontWeight: "700", includeFontPadding: false, position: "absolute", textAlign: "center" },
-  divider: { borderLeftColor: "#131B2A", borderLeftWidth: 2, bottom: 0, position: "absolute", top: 0 },
-  meta: { alignItems: "center", flexDirection: "row", justifyContent: "center", position: "absolute" }, metaColumn: { alignItems: "center", gap: 3, position: "absolute" }, rus: { color: "#111827", fontWeight: "900", includeFontPadding: false },
-  flag: { borderColor: "#667085", borderWidth: 0.7, overflow: "hidden" }, white: { backgroundColor: "#FFFFFF", flex: 1 }, blue: { backgroundColor: "#2455A6", flex: 1 }, red: { backgroundColor: "#D52B1E", flex: 1 }, bolt: { backgroundColor: "#1B2430", borderRadius: 99, position: "absolute", top: "50%" },
+  frame: { ...StyleSheet.absoluteFillObject, borderColor: "#080808", backgroundColor: "#FAFAFA" },
+  glyph: { color: "#080808", fontFamily: "PlateNumber", fontWeight: "400", includeFontPadding: false, position: "absolute", textAlign: "center" },
+  divider: { backgroundColor: "#080808", position: "absolute" },
+  country: { alignItems: "center", flexDirection: "row", justifyContent: "center" },
+  rus: { color: "#080808", fontWeight: "400", includeFontPadding: false },
+  flag: { borderColor: "#333333", overflow: "hidden" },
+  white: { backgroundColor: "#FFFFFF", flex: 1 }, blue: { backgroundColor: "#0055A4", flex: 1 }, red: { backgroundColor: "#EF1C25", flex: 1 },
+  bolt: { backgroundColor: "#303030", borderRadius: 99, position: "absolute" },
+  motoNotch: { backgroundColor: "#080808", position: "absolute" },
 });
