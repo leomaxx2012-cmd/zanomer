@@ -2419,11 +2419,11 @@ export default function HomeScreen() {
       onPointerDown={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
       onPointerMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onPointerCancel={() => { backgroundTouch.current = null; }}
-      onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
+      onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
       onTouchStart={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
       onTouchMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onTouchCancel={() => { backgroundTouch.current = null; }}
-      onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
+      onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       {Platform.OS === "web" && !incomingListingId && <Head>
         <title>{region === "Все" ? "ЗаНомером — красивые автомобильные номера" : `Номера: ${region} — ЗаНомером`}</title>
         <meta name="description" content={region === "Все" ? "Поиск автомобильных номеров по региону, буквам, цифрам и цене. Объявления ЗаНомером." : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
@@ -2446,13 +2446,20 @@ export default function HomeScreen() {
             <Text style={styles.chatsButtonText}>💬</Text>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
+        {compactLayout && <>
+        <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={[styles.headerReminder, { minHeight: 28, paddingHorizontal: 8 }]}>
+          <Text style={styles.headerReminderText}>₽</Text>
+        </Pressable>
+        </>}
         </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton]}>
             <Text numberOfLines={1} style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
+        {!compactLayout && <>
         <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={styles.headerReminder}>
           <Text style={styles.headerReminderText}>ⓘ Напоминание</Text>
         </Pressable>
+        </>}
           </View>
         </View>
       </View>
@@ -2627,7 +2634,7 @@ export default function HomeScreen() {
 
 
 
-      {activeTab === "buy" && !catalogOnly && <View style={styles.catalogIntro}>
+      {activeTab === "buy" && !catalogOnly && <View style={[styles.catalogIntro, compactLayout && { paddingTop: 20, paddingBottom: 20 }]}>
         <View style={styles.introCopy}>
           <Text style={styles.introEyebrow}>АВТО · МОТО · ПРИЦЕПЫ</Text>
           <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим характером.</Text>
@@ -2651,9 +2658,9 @@ export default function HomeScreen() {
           ["motorcycle", "🏍️", "Мото"],
           ["truck", "🚛", "Прицеп"],
         ] as const).map(([type, icon, label]) => (
-          <Pressable key={type} onPress={() => { setVehicle(type); setRegion("Все"); setRegionCode(""); setRegionPickerGroup(null); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
-            <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
+          <Pressable key={type} onPress={() => { setVehicle(type); setRegion("Все"); setRegionCode(""); setRegionPickerGroup(null); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, (compactLayout || desktopCatalog) && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
+            <Text style={[styles.vehicleIcon, (compactLayout || desktopCatalog) && styles.vehicleIconCompact]}>{icon}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.vehicleLabel, (compactLayout || desktopCatalog) && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
           </Pressable>
         ))}
       </View>
@@ -2661,7 +2668,7 @@ export default function HomeScreen() {
         onOpen={section => { if (section === "region") setRegionPickerGroup(null); setPlatePicker(section); }} />
       {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
       <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
-        <Text style={styles.searchResetButtonText}>↺ Сбросить поиск и фильтры</Text>
+        <Text style={styles.searchResetButtonText}>↺ Сбросить фильтры</Text>
       </Pressable>
 
       {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
@@ -3520,7 +3527,7 @@ const styles = StyleSheet.create({
   introEyebrow: { color: "#7769C7", fontSize: 10, letterSpacing: 2, fontWeight: "800", marginBottom: 10 },
   introTitle: { color: "#202532", fontSize: 36, lineHeight: 44, letterSpacing: -1.3, fontWeight: "800" },
   introTitleCompact: { fontSize: 27, lineHeight: 34, letterSpacing: -0.8 },
-  introDescription: { color: "#757D8E", fontSize: 14, lineHeight: 22, marginTop: 10, maxWidth: 640 },
+  introDescription: { color: "#757D8E", fontSize: 13, lineHeight: 20, marginTop: 10, maxWidth: 640 },
   introAction: { backgroundColor: "#5C4EC5", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
   introActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   browseLayout: { alignSelf: "center", width: "100%", maxWidth: 1360, gap: 20 },
@@ -3736,8 +3743,8 @@ const styles = StyleSheet.create({
   advancedButtonText: { color: "#155EEF", fontSize: 14, fontWeight: "700" },
   advancedChevron: { color: "#155EEF", fontSize: 22, fontWeight: "600" },
   searchActions: { flexDirection: "row", gap: 9, marginTop: 12 },
-  searchResetButton: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#5143C2", borderRadius: 14, borderWidth: 2, justifyContent: "center", marginTop: 12, minHeight: 48, paddingHorizontal: 18, paddingVertical: 12 },
-  searchResetButtonText: { color: "#5143C2", fontSize: 15, fontWeight: "900" },
+  searchResetButton: { alignItems: "center", backgroundColor: "#FAFAFD", borderColor: "#E4E5EE", borderRadius: 10, borderWidth: 1, justifyContent: "center", marginTop: 12, minHeight: 40, paddingHorizontal: 10, paddingVertical: 9 },
+  searchResetButtonText: { color: "#79728F", fontSize: 12, fontWeight: "700" },
   saveSearchButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, flex: 1, justifyContent: "center", minHeight: 48, paddingHorizontal: 12, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.26, shadowRadius: 9 },
   saveSearchButtonDisabled: { opacity: 0.72 },
   saveSearchText: { color: "#FFFFFF", fontSize: 14, fontWeight: "900" },
@@ -3983,17 +3990,17 @@ const styles = StyleSheet.create({
   price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
   catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, flexShrink: 1, maxWidth: 126, paddingHorizontal: 7, paddingVertical: 4 },
   catalogSourceText: { color: "#5B4CC4", fontSize: 10, fontWeight: "900" },
-  sourceButton: { alignSelf: "flex-start", backgroundColor: "#C4327B", borderRadius: 11, maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
-  sourceButtonText: { color: "#FFFFFF", fontSize: 13, lineHeight: 19, textAlign: "center", fontWeight: "900" },
+  sourceButton: { alignSelf: "flex-start", backgroundColor: "#5C4EC5", borderRadius: 10, maxWidth: "100%", minHeight: 38, paddingHorizontal: 14, paddingVertical: 9 },
+  sourceButtonText: { color: "#FFFFFF", fontSize: 13, lineHeight: 19, textAlign: "center", fontWeight: "700" },
   cardPrimaryActionCompact: { alignItems: "center", width: "100%" },
-  similarButton: { alignSelf: "flex-start", backgroundColor: "#155EEF", borderRadius: 11, maxWidth: "100%", minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
+  similarButton: { alignSelf: "flex-start", backgroundColor: "#F1EEFF", borderRadius: 10, maxWidth: "100%", minHeight: 38, paddingHorizontal: 14, paddingVertical: 9 },
   similarButtonWideCompact: { alignItems: "center", width: "100%" },
-  similarButtonText: { color: "#FFFFFF", fontSize: 13, fontWeight: "900" },
+  similarButtonText: { color: "#6254B9", fontSize: 13, fontWeight: "700" },
   cardActions: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 10 },
-  cardAction: { backgroundColor: "#5143C2", borderColor: "#4338A8", borderRadius: 11, borderWidth: 1, minHeight: 40, paddingHorizontal: 14, paddingVertical: 10 },
+  cardAction: { backgroundColor: "#F5F5FA", borderColor: "#E6E7F0", borderRadius: 10, borderWidth: 1, minHeight: 38, paddingHorizontal: 12, paddingVertical: 9 },
   cardShareActionCompact: { alignItems: "center", minWidth: 122 },
   cardShareActionChannelCompact: { alignItems: "center", width: "100%" },
-  cardActionText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
+  cardActionText: { color: "#5D6275", fontSize: 12, fontWeight: "700" },
   cardActionLiked: { backgroundColor: "#FFF1F3", borderColor: "#FECDD6" },
   cardActionLikedText: { color: "#C01048" },
   heart: { alignItems: "center", backgroundColor: "#F7F5FF", borderColor: "#DDD8FF", borderRadius: 14, borderWidth: 1, height: 42, justifyContent: "center", marginLeft: 2, width: 46 },
