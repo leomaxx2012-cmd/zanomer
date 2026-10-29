@@ -17,8 +17,6 @@ import {
   ScrollView,
   StatusBar,
   StyleSheet,
-  type TextInputProps,
-  type ViewStyle,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -26,12 +24,13 @@ import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
-import { nextPlateSection } from "../lib/plate-editing";
+import { appendPlateCharacter, nextPlateSection } from "../lib/plate-editing";
 import { publicationSession } from "../lib/publication-session";
 import { saveSearchAlert } from "../lib/save-search-alert";
 import { collectCatalogPages } from "../lib/catalog-pages";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { PlateFace } from "../components/PlateFace";
+import { PlateEditor } from "../components/PlateEditor";
 import { Text, TextInput } from "../components/ResponsiveText";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase, publicCatalogClient, readSavedProfile } from "../lib/supabase";
@@ -45,29 +44,6 @@ import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion, compa
 import { availableListingSources, matchesListingSources } from "../lib/listing-sources";
 import { createAppUpdateManager } from "../lib/app-updates";
 import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
-
-// These are buttons, not editable inputs: Android/iOS must never open a second keyboard.
-function PlateKeyField({ value, placeholder, placeholderTextColor, style, accessibilityLabel, onOpen }: TextInputProps & { onOpen: () => void }) {
-  const flat = StyleSheet.flatten(style) ?? {};
-  const [fieldWidth, setFieldWidth] = useState(0);
-  const label = value || placeholder || "";
-  const horizontalPadding = Number(flat.paddingHorizontal ?? flat.padding ?? 0);
-  const fittedSize = fieldWidth > 0 ? Math.min(flat.fontSize ?? 14, Math.max(9, (fieldWidth - horizontalPadding * 2 - 4) / Math.max(1, label.length) / 0.95)) : flat.fontSize;
-  const { color, fontSize, fontWeight, fontFamily, letterSpacing, textAlign, textAlignVertical, cursor, ...fieldStyle } = flat;
-  return <Pressable accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? placeholder}
-    accessibilityValue={{ text: value || placeholder || "" }}
-    onTouchEnd={event => event.stopPropagation()}
-    onPointerUp={event => event.stopPropagation()}
-    onPress={event => { event.stopPropagation(); Keyboard.dismiss(); onOpen(); }}
-    onLayout={event => setFieldWidth(event.nativeEvent.layout.width)}
-    style={[fieldStyle as ViewStyle, { justifyContent: "center" }]}>
-    <Text responsive={false} allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5} style={{
-      color: value ? flat.color : placeholderTextColor,
-      fontSize: fittedSize, fontWeight: flat.fontWeight, fontFamily: flat.fontFamily,
-      letterSpacing: flat.letterSpacing, textAlign: "center", width: "100%",
-    }}>{value || placeholder}</Text>
-  </Pressable>;
-}
 
 type Plate = {
   id: string;
@@ -449,6 +425,7 @@ export default function HomeScreen() {
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [favoriteWatchMessage, setFavoriteWatchMessage] = useState("");
   const [listingPicker, setListingPicker] = useState<PlatePicker>(null);
+  const [listingRegionGroup, setListingRegionGroup] = useState<string | null>(null);
   const [myListings, setMyListings] = useState<Plate[]>([]);
   const [moderationListings, setModerationListings] = useState<Plate[]>([]);
   const [moderationReports, setModerationReports] = useState<MessageReport[]>([]);
@@ -1899,14 +1876,6 @@ export default function HomeScreen() {
     })).filter(group => group.codes.length > 0);
   }, [catalogRegionGroups, catalog, vehicle, archivedPartnerSourceSet]);
   const vehicleRegionCount = useMemo(() => catalog.filter(plate => plate.vehicle === vehicle && (!plate.sourceUrl || !archivedPartnerSourceSet.has(plate.sourceUrl))).length, [catalog, vehicle, archivedPartnerSourceSet]);
-  const availableRegions = useMemo(() => catalogRegionGroups.flatMap((group) => group.codes.map((code) => ({
-    value: code.value,
-    title: `${code.value} (${group.title})`,
-    count: code.count,
-  }))), [catalogRegionGroups]);
-  const popularListingRegions = useMemo(() => [...availableRegions]
-    .sort((first, second) => second.count - first.count || Number(first.value) - Number(second.value))
-    .slice(0, 14), [availableRegions]);
   const catalogAnalytics = useMemo(() => {
     const active = catalog.filter((plate) => !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl));
     const now = Date.now();
@@ -1940,6 +1909,15 @@ export default function HomeScreen() {
   const showingMultipleRegionCodes = selectedRegionCodes.length > 1;
   const compactRegion = compactSearchRegions(regionGroups, selectedRegionCodes);
   const selectedRegionLabel = region === "Все" ? "—" : compactRegion.codes;
+  const desktopCatalog = activeTab === "buy" && !catalogOnly && windowWidth / fontScale >= 1100;
+  const gridCards = wideListingCards && !similarFiltersOpen;
+  const editingListing = activeTab === "sell" && addOpen;
+  const currentPlatePicker = editingListing ? listingPicker : platePicker;
+  const pickerVehicle = editingListing ? listingVehicle : vehicle;
+  const pickerLeft = editingListing ? listingLeftLetter : leftLetter;
+  const pickerDigits = editingListing ? listingDigits : digits;
+  const pickerRight = editingListing ? listingRightLetters : rightLetters;
+
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${compactRegion.codes}${compactRegion.names ? ` · ${compactRegion.names}` : ""}`;
   function toggleRegionValues(values: string[]) {
     const next = toggleSearchRegion(regionGroups, region, regionCode, values);
@@ -2093,7 +2071,7 @@ export default function HomeScreen() {
     const format = plateFormat(vehicle);
     const current = platePicker === "left" ? leftLetter : platePicker === "digits" ? digits : rightLetters;
     const limit = format[platePicker];
-    const nextValue = limit <= 1 || current.length >= limit ? value : `${current}${value}`;
+    const nextValue = appendPlateCharacter(current, value, limit);
     if (platePicker === "left") setLeftLetter(nextValue);
     else if (platePicker === "digits") setDigits(nextValue);
     else setRightLetters(nextValue);
@@ -2109,24 +2087,22 @@ export default function HomeScreen() {
   }
 
   function chooseListingPart(value: string) {
+    if (!listingPicker || listingPicker === "region" || value === "*") return;
     const format = plateFormat(listingVehicle);
-    if (listingPicker === "left") {
-      setListingLeftLetter((current) => format.left <= 1 || current.length >= format.left ? value : `${current}${value}`);
-      return;
-    }
-    if (listingPicker === "right") {
-      setListingRightLetters((current) => current.length >= format.right ? value : `${current}${value}`);
-      return;
-    }
-    if (listingPicker === "digits") {
-      setListingDigits((current) => current.length >= format.digits ? value : `${current}${value}`);
-    }
+    const current = listingPicker === "left" ? listingLeftLetter : listingPicker === "digits" ? listingDigits : listingRightLetters;
+    const nextValue = appendPlateCharacter(current, value, format[listingPicker]);
+    if (listingPicker === "left") setListingLeftLetter(nextValue);
+    else if (listingPicker === "digits") setListingDigits(nextValue);
+    else setListingRightLetters(nextValue);
+    const next = nextPlateSection(listingPicker, nextValue, format);
+    if (next === "region") setListingRegionGroup(null);
+    setListingPicker(next);
   }
 
   function eraseListingPart() {
-    if (listingPicker === "left") setListingLeftLetter("");
-    if (listingPicker === "right") setListingRightLetters((current) => current.slice(0, -1));
-    if (listingPicker === "digits") setListingDigits((current) => current.slice(0, -1));
+    if (listingPicker === "left") setListingLeftLetter(current => current.slice(0, -1));
+    if (listingPicker === "right") setListingRightLetters(current => current.slice(0, -1));
+    if (listingPicker === "digits") setListingDigits(current => current.slice(0, -1));
   }
 
   async function chooseListingPhoto() {
@@ -2452,13 +2428,14 @@ export default function HomeScreen() {
         <title>{region === "Все" ? "ЗаНомером — красивые автомобильные номера" : `Номера: ${region} — ЗаНомером`}</title>
         <meta name="description" content={region === "Все" ? "Поиск автомобильных номеров по региону, буквам, цифрам и цене. Объявления ЗаНомером." : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
       </Head>}
-      <View pointerEvents="none" style={styles.backgroundGlowTop} />
-      <View pointerEvents="none" style={styles.backgroundGlowRight} />
-      <View pointerEvents="none" style={styles.backgroundGlowBottom} />
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
-        <View style={styles.headerLowerRow}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={styles.headerHotButton}>
-            <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>🔥 Горячие объявления</Text>
+        <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { setActiveTab("buy"); setCatalogOnly(false); resetSearchAndFilters(); }} style={styles.brandContainer}>
+            <View style={[styles.brandMark, compactLayout && { width: 32, height: 36 }]}><Text allowFontScaling={false} style={styles.brandMarkText}>З</Text></View>
+            <View style={{ flexShrink: 1 }}><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.brandName, compactLayout && styles.brandNameCompact]}>ЗаНомером</Text>{!compactLayout && <Text style={styles.brandCaption}>Красивые номера. Твой выбор.</Text>}</View>
+          </Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={[styles.headerHotButton, compactLayout && styles.headerHotButtonCompact]}>
+            <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>{compactLayout ? "🔥" : "🔥 Горячие объявления"}</Text>
           </Pressable>
           <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact, compactLayout && windowWidth < 320 && { width: 110 }]}>
         <View style={styles.headerActions}>
@@ -2650,7 +2627,85 @@ export default function HomeScreen() {
 
 
 
-      {activeTab === "buy" && !catalogOnly && <>
+      {activeTab === "buy" && !catalogOnly && <View style={styles.catalogIntro}>
+        <View style={styles.introCopy}>
+          <Text style={styles.introEyebrow}>АВТО · МОТО · ПРИЦЕПЫ</Text>
+          <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим характером.</Text>
+          <Text style={styles.introDescription}>Найди свою комбинацию. Выбирай регион, сравнивай цены и связывайся с продавцом.</Text>
+        </View>
+        {!compactLayout && <Pressable accessibilityRole="button" onPress={() => { setActiveTab("sell"); setAddOpen(true); }} style={styles.introAction}><Text style={styles.introActionText}>＋ Разместить номер</Text></Pressable>}
+      </View>}
+      <View style={[styles.browseLayout, desktopCatalog && styles.browseLayoutDesktop]}>
+      {activeTab === "buy" && !catalogOnly && <View testID="catalog-filters" style={[styles.browseSidebar, desktopCatalog && styles.browseSidebarDesktop]}>
+      <View style={[styles.searchArea, desktopCatalog && styles.searchAreaSidebar]}>
+      <View style={[styles.searchHeading, (compactLayout || desktopCatalog) && styles.searchHeadingCompact]}>
+        <View style={[styles.searchHeadingText, (compactLayout || desktopCatalog) && styles.searchHeadingTextCompact]}>
+          <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.searchLabel}>Найди свой номер</Text>
+          <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
+        </View>
+        <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={[styles.catalogCount, (compactLayout || desktopCatalog) && styles.catalogCountCompact]}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={[styles.catalogCountCaption, (compactLayout || desktopCatalog) && styles.catalogCountCaptionCompact]}>По выбранным фильтрам · открыть →</Text></Pressable>
+      </View>
+      <View style={styles.vehicleTabs}>
+        {([
+          ["car", "🚗", "Авто"],
+          ["motorcycle", "🏍️", "Мото"],
+          ["truck", "🚛", "Прицеп"],
+        ] as const).map(([type, icon, label]) => (
+          <Pressable key={type} onPress={() => { setVehicle(type); setRegion("Все"); setRegionCode(""); setRegionPickerGroup(null); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
+            <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <PlateEditor vehicle={vehicle} leftLetter={leftLetter} digits={digits} rightLetters={rightLetters} region={selectedRegionLabel === "—" ? "*" : selectedRegionLabel}
+        onOpen={section => { if (section === "region") setRegionPickerGroup(null); setPlatePicker(section); }} />
+      {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
+      <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
+        <Text style={styles.searchResetButtonText}>↺ Сбросить поиск и фильтры</Text>
+      </Pressable>
+
+      {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
+        <View style={[styles.regionPickerOverlay, { paddingTop: Math.min(compactLayout ? 210 : 150, Math.max(insets.top + 12, windowHeight * 0.2)), paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
+          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
+            <View style={styles.platePickerTopRow}>
+              <Text style={styles.platePickerTitle}>Выбери регион</Text>
+              <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+            </View>
+            <View style={styles.regionPickerContent}>
+              <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
+              <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
+              {!regionPickerGroup ? <>
+                <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{vehicleRegionCount}</Text></Pressable>
+                {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, selectedRegionTitles.includes(item.title) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selectedRegionTitles.includes(item.title) && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, selectedRegionTitles.includes(item.title) && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
+              </> : <>
+                <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
+                {(() => {
+                  const codes = regionGroups.find(item => item.title === regionPickerGroup)?.codes.map(item => item.value) ?? [];
+                  const selected = codes.length > 0 && codes.every(code => selectedRegionCodes.includes(code));
+                  return <Pressable onPress={() => toggleRegionValues(codes)} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{selected ? "✓" : "□"}</Text></Pressable>;
+                })()}
+                {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
+                  const selected = selectedRegionCodes.includes(item.value);
+                  return <Pressable key={item.value} onPress={() => toggleRegionValues([item.value])} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Регион {item.value}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
+                })}
+              </>}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>}
+
+
+
+      {hasSearchCriteria && <View style={styles.searchActions}>
+        <Pressable disabled={subscriptionSaving} onPress={() => { void subscribeToCurrentSearch(); }} style={[styles.saveSearchButton, subscriptionSaving && styles.saveSearchButtonDisabled]}>
+          <Text style={styles.saveSearchText}>{subscriptionSaving ? "🔔 Сохраняем уведомление…" : "🔔 Сообщить, когда номер появится"}</Text>
+        </Pressable>
+      </View>}
+
+      </View>
+
       {compactLayout && <View style={styles.filterToolbar}>
         <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle}>
           <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть" : "☷ Фильтры"}</Text>
@@ -2722,86 +2777,8 @@ export default function HomeScreen() {
           </View>
         </View>
       </View>}
-      <View style={styles.searchArea}>
-      <View style={[styles.searchHeading, compactLayout && styles.searchHeadingCompact]}>
-        <View style={[styles.searchHeadingText, compactLayout && styles.searchHeadingTextCompact]}>
-          <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.searchLabel}>Найди свой номер</Text>
-          <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
-        </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={[styles.catalogCount, compactLayout && styles.catalogCountCompact]}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={[styles.catalogCountCaption, compactLayout && styles.catalogCountCaptionCompact]}>По выбранным фильтрам · открыть →</Text></Pressable>
-      </View>
-      <View style={styles.vehicleTabs}>
-        {([
-          ["car", "🚗", "Авто"],
-          ["motorcycle", "🏍️", "Мото"],
-          ["truck", "🚛", "Прицеп"],
-        ] as const).map(([type, icon, label]) => (
-          <Pressable key={type} onPress={() => { setVehicle(type); setRegion("Все"); setRegionCode(""); setRegionPickerGroup(null); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, compactLayout && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
-            <Text style={[styles.vehicleIcon, compactLayout && styles.vehicleIconCompact]}>{icon}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.vehicleLabel, compactLayout && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.plateSearch, vehicle === "motorcycle" && styles.plateSearchMotorcycle]}>
-        <PlateFace vehicle={vehicle} leftLetter={leftLetter || (vehicle === "truck" ? "**" : "*")} digits={digits || (vehicle === "car" ? "***" : "****")} rightLetters={rightLetters || "**"} region={selectedRegionLabel === "—" ? "*" : selectedRegionLabel} />
-        {vehicle === "motorcycle" ? <>
-          <Pressable accessibilityRole="button" accessibilityLabel="Четыре цифры мото-номера" accessibilityValue={{ text: digits }} onPress={() => setPlatePicker("digits")} style={[styles.plateHitArea, { left: 0, top: 0, width: "100%", height: "51%" }]} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Две буквы мото-номера" accessibilityValue={{ text: rightLetters }} onPress={() => setPlatePicker("right")} style={[styles.plateHitArea, { left: 0, top: "51%", width: "53%", height: "49%" }]} />
-        </> : <>
-          <Pressable accessibilityRole="button" accessibilityLabel="Первые буквы номера" accessibilityValue={{ text: leftLetter }} onPress={() => setPlatePicker("left")} style={[styles.plateHitArea, { left: 0, top: 0, width: vehicle === "truck" ? "25%" : "15%", height: "100%" }]} />
-          <Pressable accessibilityRole="button" accessibilityLabel="Цифры номера" accessibilityValue={{ text: digits }} onPress={() => setPlatePicker("digits")} style={[styles.plateHitArea, { left: vehicle === "truck" ? "25%" : "15%", top: 0, width: vehicle === "truck" ? "51%" : "35%", height: "100%" }]} />
-          {vehicle === "car" && <Pressable accessibilityRole="button" accessibilityLabel="Последние буквы номера" accessibilityValue={{ text: rightLetters }} onPress={() => setPlatePicker("right")} style={[styles.plateHitArea, { left: "50%", top: 0, width: "26%", height: "100%" }]} />}
-        </>}
-        <Pressable accessibilityRole="button" accessibilityLabel={vehicle === "motorcycle" ? "Выбрать регион мото-номера" : "Выбрать регион номера"} accessibilityValue={{ text: selectedRegionLabel }} onPress={() => { setRegionPickerGroup(null); setPlatePicker("region"); }} style={[styles.plateHitArea, vehicle === "motorcycle" ? { left: "53%", top: "51%", width: "47%", height: "49%" } : { left: "76%", top: 0, width: "24%", height: "100%" }]} />
-      </View>
-      {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
-      <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
-        <Text style={styles.searchResetButtonText}>↺ Сбросить поиск и фильтры</Text>
-      </Pressable>
-
-      {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
-        <View style={[styles.regionPickerOverlay, { paddingTop: Math.min(compactLayout ? 210 : 150, Math.max(insets.top + 12, windowHeight * 0.2)), paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
-          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
-            <View style={styles.platePickerTopRow}>
-              <Text style={styles.platePickerTitle}>Выбери регион</Text>
-              <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
-            </View>
-            <View style={styles.regionPickerContent}>
-              <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
-              <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
-              {!regionPickerGroup ? <>
-                <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{vehicleRegionCount}</Text></Pressable>
-                {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, selectedRegionTitles.includes(item.title) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selectedRegionTitles.includes(item.title) && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, selectedRegionTitles.includes(item.title) && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
-              </> : <>
-                <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
-                {(() => {
-                  const codes = regionGroups.find(item => item.title === regionPickerGroup)?.codes.map(item => item.value) ?? [];
-                  const selected = codes.length > 0 && codes.every(code => selectedRegionCodes.includes(code));
-                  return <Pressable onPress={() => toggleRegionValues(codes)} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{selected ? "✓" : "□"}</Text></Pressable>;
-                })()}
-                {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
-                  const selected = selectedRegionCodes.includes(item.value);
-                  return <Pressable key={item.value} onPress={() => toggleRegionValues([item.value])} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Регион {item.value}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
-                })}
-              </>}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
-      </Modal>}
-
-
-
-      {hasSearchCriteria && <View style={styles.searchActions}>
-        <Pressable disabled={subscriptionSaving} onPress={() => { void subscribeToCurrentSearch(); }} style={[styles.saveSearchButton, subscriptionSaving && styles.saveSearchButtonDisabled]}>
-          <Text style={styles.saveSearchText}>{subscriptionSaving ? "🔔 Сохраняем уведомление…" : "🔔 Сообщить, когда номер появится"}</Text>
-        </Pressable>
       </View>}
-
-      </View>
-      </>}
-
+      <View style={[styles.browseResults, desktopCatalog && { flex: 1 }]}>
       {activeTab === "sell" && <View style={styles.tabScroll}>
         <View style={styles.sellIntro}>
           <Text style={styles.sellTitle}>Продай красивый номер</Text>
@@ -2813,41 +2790,14 @@ export default function HomeScreen() {
         {addOpen && (
           <View style={styles.addPanel}>
             <Text style={styles.addPanelTitle}>Новое объявление</Text>
-            {!profileName ? <Text style={styles.addPanelHint}>Сначала войди через кнопку «Войти» сверху.</Text> : <>
+            {!profileName && <Text style={styles.addPanelHint}>Заполни номер и цену. Для публикации потребуется вход в аккаунт.</Text>}
+            <>
               <Text style={styles.listingTypeLabel}>Тип номера</Text>
               <View style={styles.listingVehicleTabs}>{([ ["car", "🚗", "Авто"], ["motorcycle", "🏍️", "Мото"], ["truck", "🚛", "Прицеп"] ] as const).map(([type, icon, label]) => <Pressable key={type} onPress={() => chooseListingVehicle(type)} style={[styles.listingVehicleTab, listingVehicle === type && styles.listingVehicleTabActive]}><Text style={[styles.listingVehicleTabText, listingVehicle === type && styles.listingVehicleTabTextActive]}>{icon} {label}</Text></Pressable>)}</View>
               <Text style={styles.listingFormatHint}>{listingVehicle === "motorcycle" ? "Мото: 4 цифры сверху и 2 буквы снизу." : listingVehicle === "truck" ? "Прицеп: 2 буквы и 4 цифры." : "Авто: 1 буква, 3 цифры, 2 буквы."}</Text>
-              <View style={[styles.addPlateRow, listingVehicle === "motorcycle" && styles.addMotoPlateRow]}>
-                {listingVehicle !== "motorcycle" && <PlateKeyField value={listingLeftLetter} onOpen={() => setListingPicker("left")} onChangeText={(value) => setListingLeftLetter(normalizePlateLetters(value, plateFormat(listingVehicle).left, false))} placeholder={listingVehicle === "truck" ? "АА" : "А"} placeholderTextColor="#98A2B3" style={[styles.addSmallInput, listingVehicle === "truck" && styles.addLettersInput]} autoCapitalize="characters" maxLength={plateFormat(listingVehicle).left} />}
-                <PlateKeyField value={listingDigits} onOpen={() => setListingPicker("digits")} onChangeText={(value) => setListingDigits(normalizePlateDigits(value, plateFormat(listingVehicle).digits, false))} placeholder={plateFormat(listingVehicle).digitsPlaceholder} placeholderTextColor="#98A2B3" style={styles.addDigitsInput} keyboardType="number-pad" maxLength={plateFormat(listingVehicle).digits} />
-                {listingVehicle !== "truck" && <PlateKeyField value={listingRightLetters} onOpen={() => setListingPicker("right")} onChangeText={(value) => setListingRightLetters(normalizePlateLetters(value, 2, false))} placeholder="АА" placeholderTextColor="#98A2B3" style={styles.addLettersInput} autoCapitalize="characters" maxLength={2} />}
-              </View>
-              {listingPicker && listingPicker !== "region" && <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={styles.listingPickerPanel}>
-                <View style={styles.listingPickerHeader}>
-                  <Text style={styles.listingPickerTitle}>{listingPicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
-                  <Pressable onPress={() => setListingPicker(null)}><Text style={styles.listingPickerDone}>Готово</Text></Pressable>
-                </View>
-                <View style={styles.listingPickerOptions}>
-                  {(listingPicker === "digits" ? allowedDigits : allowedLetters).map((value) => <Pressable key={value} onPress={() => chooseListingPart(value)} style={styles.listingPickerOption}><Text style={styles.listingPickerOptionText}>{value}</Text></Pressable>)}
-                  <Pressable onPress={eraseListingPart} style={[styles.listingPickerOption, styles.listingPickerErase]}><Text style={styles.listingPickerOptionText}>⌫</Text></Pressable>
-                </View>
-              </View>}
-              <View style={styles.listingRegionRow}>
-                <PlateKeyField value={listingRegion} onOpen={() => setListingPicker("region")} onChangeText={(value) => setListingRegion(value.replace(/\D/g, "").slice(0, 3))} placeholder="Регион" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.listingRegionInput]} keyboardType="number-pad" maxLength={3} />
-                <Pressable onPress={() => setListingPicker(listingPicker === "region" ? null : "region")} style={styles.listingRegionButton}><Text style={styles.listingRegionButtonText}>Коды</Text></Pressable>
-              </View>
-              {listingPicker === "region" && <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={styles.listingRegionPicker}>
-                <Text style={styles.listingPickerTitle}>Частые коды регионов</Text>
-                <Text style={styles.listingRegionHint}>Введи код или выбери из списка.</Text>
-                <View style={styles.listingPickerOptions}>
-                  {allowedDigits.map(value => <Pressable key={value} onPress={() => setListingRegion(current => current.length >= 3 ? value : current + value)} style={styles.listingPickerOption}><Text style={styles.listingPickerOptionText}>{value}</Text></Pressable>)}
-                  <Pressable onPress={() => setListingRegion(current => current.slice(0, -1))} style={styles.listingPickerOption}><Text style={styles.listingPickerOptionText}>⌫</Text></Pressable>
-                  <Pressable onPress={() => setListingPicker(null)} style={styles.listingPickerOption}><Text style={styles.listingPickerOptionText}>Готово</Text></Pressable>
-                </View>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.listingRegionOptions}>
-                  {popularListingRegions.map((item) => <Pressable key={item.value} onPress={() => { setListingRegion(item.value); setListingPicker(null); }} style={styles.listingRegionOption}><Text style={styles.listingRegionOptionText}>{item.value}</Text><Text style={styles.listingRegionOptionHint}>{item.title.replace(/^\d+ \((.+)\)$/, "$1")}</Text></Pressable>)}
-                </ScrollView>
-              </View>}
+              <PlateEditor vehicle={listingVehicle} leftLetter={listingLeftLetter} digits={listingDigits} rightLetters={listingRightLetters} region={listingRegion || "*"} labelPrefix="Объявление"
+                onOpen={section => { if (section === "region") setListingRegionGroup(null); setListingPicker(section); }} />
+              {!!listingRegion && <Text style={styles.searchRegionName}>{listingRegionLabel(listingRegion)}</Text>}
               <TextInput value={listingPrice} onChangeText={setListingPrice} placeholder="Цена в рублях" placeholderTextColor="#98A2B3" style={styles.addInput} keyboardType="number-pad" />
               <Pressable onPress={() => { void chooseListingPhoto(); }} style={styles.photoPickerButton}>
                 <Text style={styles.photoPickerText}>{listingPhotoUri ? "✓ Фото добавлено — изменить" : "🖼 Добавить фото номера"}</Text>
@@ -2861,10 +2811,10 @@ export default function HomeScreen() {
               </Pressable>
               {!!listingMessage && <Text style={styles.listingMessage}>{listingMessage}</Text>}
               <View style={styles.addPanelActions}>
-                <Pressable onPress={() => setAddOpen(false)} style={styles.cancelButton}><Text style={styles.cancelText}>Отмена</Text></Pressable>
-                <Pressable onPress={addListing} style={styles.publishButton}><Text style={styles.publishText}>Опубликовать</Text></Pressable>
+                <Pressable onPress={() => { setListingPicker(null); setAddOpen(false); }} style={styles.cancelButton}><Text style={styles.cancelText}>Отмена</Text></Pressable>
+                <Pressable onPress={() => { if (!profileName) { setListingPicker(null); openAccount(); } else { void addListing(); } }} style={styles.publishButton}><Text style={styles.publishText}>{profileName ? "Опубликовать" : "Войти для публикации"}</Text></Pressable>
               </View>
-            </>}
+            </>
           </View>
         )}
         <View style={styles.boostCard}>
@@ -2917,6 +2867,7 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
+        {activeTab === "buy" && !similarTo && <View><Text style={styles.resultsHeading}>Каталог номеров</Text><Text style={styles.resultsCaption}>Выбирай то, что подходит именно тебе</Text></View>}
         {(activeTab === "favorites" || similarTo) && <Text style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
@@ -2976,7 +2927,7 @@ export default function HomeScreen() {
       {hiddenSeriesGroupKeys.length > 0 && <Pressable onPress={() => setHiddenSeriesGroupKeys([])} style={styles.restoreSeriesButton}>
         <Text style={styles.restoreSeriesButtonText}>Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
       </Pressable>}
-      <View style={[styles.list, styles.compactOfferList]}>
+      <View testID="catalog-cards" style={[styles.list, styles.compactOfferList, gridCards && styles.offerGrid]}>
         {renderedPlates.map((item, index) => {
           const expanded = !compactLayout || expandedListingIds.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
@@ -2984,7 +2935,7 @@ export default function HomeScreen() {
           const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
           const isSeriesStart = !!seriesGroup && seriesGroup.key !== previousGroup?.key;
           return (
-            <View key={item.id} style={styles.listingItem}>
+            <View key={item.id} style={[styles.listingItem, gridCards && styles.listingGridItem]}>
               {isSeriesStart && <Pressable accessibilityLabel="Скрыть группу похожих номеров" onPress={() => setHiddenSeriesGroupKeys((current) => current.includes(seriesGroup.key) ? current : [...current, seriesGroup.key])} style={styles.seriesHeader}>
                 <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
@@ -3045,6 +2996,9 @@ export default function HomeScreen() {
       </Pressable>}
       </View>
       </>}
+
+      </View>
+      </View>
 
       {Platform.OS === "web" && <View style={styles.siteFooter} accessibilityRole="summary">
         <Text style={styles.siteFooterTitle}>ЗаНомером — поиск и размещение объявлений</Text>
@@ -3483,16 +3437,47 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {platePicker && platePicker !== "region" && <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.platePickerPanel, styles.platePickerDock, { bottom: navigationHeight + 8, width: Math.min(windowWidth - 24, 760), left: (windowWidth - Math.min(windowWidth - 24, 760)) / 2 }]}>
-        <View style={styles.platePickerTopRow}>
-          <Text style={styles.platePickerTitle}>{platePicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
-          <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+      {editingListing && listingPicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setListingPicker(null)}>
+        <View style={[styles.regionPickerOverlay, { paddingTop: Math.min(compactLayout ? 210 : 150, Math.max(insets.top + 12, windowHeight * 0.2)), paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Pressable accessibilityLabel="Закрыть выбор региона объявления" style={StyleSheet.absoluteFill} onPress={() => setListingPicker(null)} />
+          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
+            <View style={styles.platePickerTopRow}>
+              <Text style={styles.platePickerTitle}>Выбери регион</Text>
+              <Pressable onPress={() => setListingPicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+            </View>
+            <View style={styles.regionPickerContent}>
+              <Text style={styles.regionPickerHint}>Выбери один код для своего номера.{listingRegion ? ` Выбрано: ${listingRegionLabel(listingRegion)}.` : ""}</Text>
+              <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
+                {listingRegionGroup === "manual" ? <>
+                  <Pressable onPress={() => setListingRegionGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
+                  <Text style={styles.pickerCurrentValue}>{listingRegion || "*"}</Text>
+                  <View style={styles.pickerGrid}>
+                    {allowedDigits.map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Код региона: ${value}`} onPress={() => setListingRegion(current => appendPlateCharacter(current, value, 3))} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{value}</Text></Pressable>)}
+                    <Pressable accessibilityRole="button" accessibilityLabel="Удалить цифру региона" onPress={() => setListingRegion(current => current.slice(0, -1))} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
+                  </View>
+                </> : !listingRegionGroup ? <>
+                  <Pressable onPress={() => setListingRegionGroup("manual")} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>Ввести код цифрами</Text></Pressable>
+                  {catalogRegionGroups.map(item => <Pressable key={item.title} onPress={() => setListingRegionGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionTextActive]}>{item.title}</Text></Pressable>)}
+                </> : <>
+                  <Pressable onPress={() => setListingRegionGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
+                  {catalogRegionGroups.find(item => item.title === listingRegionGroup)?.codes.map(item => <Pressable key={item.value} accessibilityRole="radio" accessibilityLabel={`Регион объявления ${item.value}`} accessibilityState={{checked:listingRegion === item.value}} onPress={() => setListingRegion(item.value)} style={[styles.pickerOption, styles.regionPickerOption, listingRegion === item.value && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, listingRegion === item.value && styles.pickerOptionTextActive]}>{item.value}</Text><Text style={[styles.regionPickerCheck, listingRegion === item.value && styles.regionPickerCheckActive]}>{listingRegion === item.value ? "✓" : "○"}</Text></Pressable>)}
+                </>}
+              </ScrollView>
+            </View>
+          </View>
         </View>
-        <Text style={styles.pickerCurrentValue}>{formatPlateValue(leftLetter || (vehicle === "truck" ? "**" : "*"), digits || (vehicle === "car" ? "***" : "****"), rightLetters || "**", vehicle)}</Text>
+      </Modal>}
+
+      {currentPlatePicker && currentPlatePicker !== "region" && <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.platePickerPanel, styles.platePickerDock, { bottom: navigationHeight + 8, width: Math.min(windowWidth - 24, 760), left: (windowWidth - Math.min(windowWidth - 24, 760)) / 2 }]}>
+        <View style={styles.platePickerTopRow}>
+          <Text style={styles.platePickerTitle}>{currentPlatePicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
+          <Pressable onPress={() => editingListing ? setListingPicker(null) : setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+        </View>
+        <Text style={styles.pickerCurrentValue}>{formatPlateValue(pickerLeft || (pickerVehicle === "truck" ? "**" : "*"), pickerDigits || (pickerVehicle === "car" ? "***" : "****"), pickerRight || "**", pickerVehicle)}</Text>
         <View style={styles.pickerGrid}>
-          {(platePicker === "digits" ? allowedDigits : allowedLetters).map((item) => <Pressable key={item} onPress={() => choosePlatePart(item)} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{item}</Text></Pressable>)}
-          <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar]}><Text style={styles.pickerOptionText}>*</Text></Pressable>
-          <Pressable onPress={erasePlatePart} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
+          {(currentPlatePicker === "digits" ? allowedDigits : allowedLetters).map((item) => <Pressable key={item} onPress={() => editingListing ? chooseListingPart(item) : choosePlatePart(item)} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{item}</Text></Pressable>)}
+          {!editingListing && <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar]}><Text style={styles.pickerOptionText}>*</Text></Pressable>}
+          <Pressable onPress={editingListing ? eraseListingPart : erasePlatePart} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
         </View>
       </View>}
 
@@ -3523,6 +3508,32 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  brandContainer: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
+  brandMark: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#5C4EC5", alignItems: "center", justifyContent: "center" },
+  brandMarkText: { color: "#FFFFFF", fontSize: 28, lineHeight: 34, fontWeight: "800" },
+  brandName: { color: "#202532", fontSize: 23, fontWeight: "800", letterSpacing: -0.8 },
+  brandNameCompact: { fontSize: 16, letterSpacing: -0.4 },
+  brandCaption: { color: "#83889A", fontSize: 10, marginTop: 2 },
+  headerHotButtonCompact: { paddingHorizontal: 8, minWidth: 36, minHeight: 36 },
+  catalogIntro: { alignSelf: "center", width: "100%", maxWidth: 1360, flexDirection: "row", alignItems: "center", gap: 24, paddingTop: 34, paddingBottom: 28 },
+  introCopy: { flex: 1, minWidth: 0 },
+  introEyebrow: { color: "#7769C7", fontSize: 10, letterSpacing: 2, fontWeight: "800", marginBottom: 10 },
+  introTitle: { color: "#202532", fontSize: 36, lineHeight: 44, letterSpacing: -1.3, fontWeight: "800" },
+  introTitleCompact: { fontSize: 27, lineHeight: 34, letterSpacing: -0.8 },
+  introDescription: { color: "#757D8E", fontSize: 14, lineHeight: 22, marginTop: 10, maxWidth: 640 },
+  introAction: { backgroundColor: "#5C4EC5", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
+  introActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
+  browseLayout: { alignSelf: "center", width: "100%", maxWidth: 1360, gap: 20 },
+  browseLayoutDesktop: { flexDirection: "row", alignItems: "flex-start", gap: 24 },
+  browseSidebar: { width: "100%" },
+  browseSidebarDesktop: { width: 310, flexShrink: 0 },
+  browseResults: { minWidth: 0, width: "100%" },
+  searchAreaSidebar: { padding: 18, borderRadius: 20 },
+  offerGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "stretch", gap: 16 },
+  listingGridItem: { width: "48.5%", alignSelf: "stretch" },
+  resultsHeading: { color: "#202532", fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
+  resultsCaption: { color: "#9297A5", fontSize: 11, marginTop: 4 },
+
   sourceFilterHint: { color: "#655F7A", fontSize: 13, lineHeight: 19, marginTop: 4 },
   sourceFilterToggle: { minHeight: 48, paddingVertical: 4, gap: 4 },
   sourceFilterSelection: { color: "#51486E", fontSize: 13, lineHeight: 19 },
@@ -3533,29 +3544,29 @@ const styles = StyleSheet.create({
   noticeToggle: { minHeight: 48, justifyContent: "center", gap: 6 },
   noticeToggleText: { color: "#5143C2", fontSize: 13, lineHeight: 19, fontWeight: "700", textAlign: "center" },
   numberPaymentNoticeText: { color: "#51486E", fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 8 },
-  siteFooter: { borderTopWidth: 1, borderTopColor: "#DED8FF", marginTop: 28, paddingTop: 20, paddingBottom: 12, gap: 8 },
+  siteFooter: { alignSelf: "center", width: "100%", maxWidth: 1360, borderTopWidth: 1, borderTopColor: "#E1E4EE", marginTop: 28, paddingTop: 24, paddingBottom: 16, gap: 10 },
   siteFooterTitle: { color: "#352F67", fontSize: 15, fontWeight: "800" },
   siteFooterText: { color: "#667085", fontSize: 12, lineHeight: 18 },
   siteFooterLinks: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
   siteFooterLink: { color: "#4536B8", fontSize: 12, lineHeight: 20, textDecorationLine: "underline" },
-  page: { backgroundColor: "#F8F7FC", flex: 1, overflow: "hidden", paddingLeft: 24, paddingRight: 24, width: "100%" },
+  page: { backgroundColor: "#F5F6FA", flex: 1, overflow: "hidden", paddingLeft: 24, paddingRight: 24, width: "100%" },
   mainScroll: { flex: 1, marginHorizontal: -24 },
-  mainScrollContent: { paddingBottom: 112, paddingHorizontal: 24 },
+  mainScrollContent: { alignSelf: "center", width: "100%", maxWidth: 1416, paddingBottom: 112, paddingHorizontal: 28 },
   mainScrollContentCompact: { paddingHorizontal: 12, paddingBottom: 128 },
   backgroundGlowTop: { backgroundColor: "#DDE7FF", borderRadius: 999, height: 250, left: -50, opacity: 0.56, position: "absolute", top: 170, transform: [{ rotate: "-18deg" }], width: 250 },
   backgroundGlowRight: { backgroundColor: "#EADFFF", borderRadius: 999, height: 390, opacity: 0.72, position: "absolute", right: -190, top: 235, width: 440 },
   backgroundGlowBottom: { backgroundColor: "#D9F4E9", borderRadius: 999, bottom: -270, height: 470, left: "18%", opacity: 0.58, position: "absolute", width: 550 },
-  header: { alignItems: "center", backgroundColor: "#FFFEFF", borderBottomColor: "#E9E6F4", borderBottomWidth: 1, elevation: 6, flexDirection: "column", gap: 4, justifyContent: "space-between", marginHorizontal: -24, paddingBottom: 6, paddingHorizontal: 12, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 6 : 6, shadowColor: "#342E62", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 10, zIndex: 10 },
+  header: { alignItems: "center", backgroundColor: "#FFFFFF", borderBottomColor: "#E7E9F1", borderBottomWidth: 1, flexDirection: "column", marginHorizontal: -24, paddingBottom: 10, paddingHorizontal: 24, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 10 : 10, zIndex: 10 },
   headerCompact: { alignItems: "stretch", gap: 4, paddingBottom: 6, paddingHorizontal: 12, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 6 : 6 },
   headerTopRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 6 },
-  headerLowerRow: { flexDirection: "row", alignItems: "stretch", width: "100%", gap: 8, marginTop: 0 },
-  headerHotButton: { flex: 1, minWidth: 0, minHeight: 74, alignItems: "center", justifyContent: "center", padding: 8, backgroundColor: "#FFF0DF", borderColor: "#F2BC88", borderWidth: 1, borderRadius: 12 },
-  headerHotText: { color: "#A24717", fontSize: 18, lineHeight: 24, fontWeight: "900", textAlign: "center" },
+  headerLowerRow: { flexDirection: "row", alignItems: "center", width: "100%", maxWidth: 1360, gap: 16, minHeight: 54 },
+  headerHotButton: { minWidth: 0, minHeight: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: 15, paddingVertical: 9, backgroundColor: "#FFF5EB", borderColor: "#F8DFC7", borderWidth: 1, borderRadius: 12 },
+  headerHotText: { color: "#A45B23", fontSize: 12, lineHeight: 18, fontWeight: "700", textAlign: "center" },
   headerHotTextCompact: { fontSize: 16, lineHeight: 22 },
-  headerUtilityColumn: { width: 124, gap: 4, alignItems: "stretch", justifyContent: "space-between" },
-  headerUtilityColumnCompact: { width: 124 },
-  headerAccountButton: { width: "100%", maxWidth: "100%", minHeight: 32, paddingVertical: 5, alignItems: "center" },
-  headerReminder: { minHeight: 30, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, backgroundColor: "#EEF4FF", borderRadius: 12 },
+  headerUtilityColumn: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "flex-end" },
+  headerUtilityColumnCompact: { width: 124, flexDirection: "column", alignItems: "stretch", gap: 4 },
+  headerAccountButton: { maxWidth: "100%", minWidth: 70, minHeight: 36, paddingVertical: 7, alignItems: "center" },
+  headerReminder: { minHeight: 36, alignItems: "center", justifyContent: "center", paddingHorizontal: 10, backgroundColor: "#F5F3FF", borderRadius: 10 },
   headerReminderText: { color: "#4536B8", fontWeight: "700", fontSize: 11, lineHeight: 15 },
   headerModalOverlay: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(16,24,40,0.45)" },
   headerModalPanel: { alignSelf: "center", width: "100%", maxWidth: 620, borderRadius: 22, backgroundColor: "#FFFEFF", padding: 16, flexShrink: 1 },
@@ -3661,13 +3672,13 @@ const styles = StyleSheet.create({
   banButton: { alignItems: "center", backgroundColor: "#7A271A", borderRadius: 10, marginTop: 8, paddingHorizontal: 10, paddingVertical: 9 },
   banButtonText: { color: "#FFFFFF", fontSize: 12, fontWeight: "900" },
   logoutText: { color: "#D92D20", fontSize: 13, fontWeight: "700", marginTop: 9 },
-  searchArea: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E2DEF7", borderRadius: 28, borderWidth: 1, maxWidth: 760, marginTop: 20, padding: 19, position: "relative", shadowColor: "#5A4FB2", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.12, shadowRadius: 24, width: "100%" },
+  searchArea: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#E5E7F0", borderRadius: 20, borderWidth: 1, maxWidth: 760, marginTop: 0, padding: 20, position: "relative", width: "100%" },
   searchHeading: { alignItems: "flex-start", flexDirection: "row", justifyContent: "space-between", marginBottom: 14, minWidth: 0 },
   searchHeadingCompact: { flexDirection: "column", alignItems: "stretch", gap: 12 },
   searchHeadingText: { flex: 1, flexShrink: 1, minWidth: 0, paddingRight: 8 },
   searchHeadingTextCompact: { flex: 0, width: "100%", paddingRight: 0 },
-  searchLabel: { color: "#24213E", fontSize: 21, fontWeight: "900" },
-  searchHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 3 },
+  searchLabel: { color: "#202532", fontSize: 20, fontWeight: "800" },
+  searchHint: { color: "#7A8192", fontSize: 12, lineHeight: 18, marginTop: 5 },
   catalogCount: { alignItems: "center", justifyContent: "center", backgroundColor: "#EEEBFF", borderRadius: 13, flexShrink: 1, minWidth: 96, minHeight: 64, paddingHorizontal: 12, paddingVertical: 9 },
   catalogCountCompact: { width: "100%", minWidth: 0, flexDirection: "row", gap: 12 },
   catalogCountCaptionCompact: { flex: 1, minWidth: 0, textAlign: "left" },
@@ -3844,7 +3855,7 @@ const styles = StyleSheet.create({
   pickerErase: { backgroundColor: "#FEF3F2", borderColor: "#FECDCA" },
   listHeader: { alignItems: "center", alignSelf: "center", flexDirection: "row", justifyContent: "space-between", maxWidth: 1100, minWidth: 0, width: "100%" },
   listFilters: { alignSelf: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: 1100, paddingBottom: 3, paddingTop: 10, width: "100%" },
-  filterControlPanel: { alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 18, borderWidth: 1, marginTop: 10, maxWidth: 1100, padding: 13, width: "100%" },
+  filterControlPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#E5E7F0", borderRadius: 20, borderWidth: 1, marginTop: 14, maxWidth: 1100, padding: 16, width: "100%" },
   catalogOnlyToolbar: { alignItems: "center", alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 16, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, maxWidth: 1100, padding: 11, width: "100%" },
   catalogUpdateNotice: { alignSelf: "center", backgroundColor: "#EEF4FF", borderColor: "#B2CCFF", borderRadius: 10, borderWidth: 1, marginTop: 8, maxWidth: 1100, paddingHorizontal: 12, paddingVertical: 7, width: "100%" },
   catalogUpdateNoticeText: { color: "#155EEF", fontSize: 12, fontWeight: "800", textAlign: "center" },
@@ -3868,7 +3879,7 @@ const styles = StyleSheet.create({
   listFilterButtonTextActive: { color: "#FFFFFF" },
   loadMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: "#F0EEFF", borderColor: "#D8D2FF", borderRadius: 14, borderWidth: 1, marginBottom: 18, marginTop: 4, paddingHorizontal: 16, paddingVertical: 11 },
   loadMoreText: { color: "#5143C2", fontSize: 13, fontWeight: "800" },
-  catalogHeaderWithoutTitle: { justifyContent: "flex-end", marginTop: 10 },
+  catalogHeaderWithoutTitle: { justifyContent: "space-between", marginTop: 4, marginBottom: 12 },
   listTitle: { flex: 1, marginRight: 10, minWidth: 0 },
   resultCount: { backgroundColor: "#EEEBFF", borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
   resultCountText: { color: "#5143C2", fontSize: 12, fontWeight: "900" },
@@ -3878,12 +3889,12 @@ const styles = StyleSheet.create({
   counter: { color: "#667085", fontSize: 13, marginTop: 22, textAlign: "right" },
   clearSimilarButton: { alignSelf: "flex-start", marginTop: 8 },
   clearSimilarText: { color: "#155EEF", fontSize: 13, fontWeight: "700" },
-  listContainer: { alignSelf: "center", maxWidth: 1100, width: "100%" },
-  compactOfferList: { gap: 0, paddingTop: 4, backgroundColor: "#FFFFFF", borderRadius: 10, overflow: "hidden" },
-  offerShell: { borderBottomColor: "#E9E7F0", borderBottomWidth: 1, backgroundColor: "#FFFFFF" },
-  offerShellDesktop: { flexDirection: "row", alignItems: "center" },
+  listContainer: { alignSelf: "center", maxWidth: 1360, width: "100%" },
+  compactOfferList: { gap: 14, paddingTop: 4, backgroundColor: "transparent", borderRadius: 0, overflow: "visible" },
+  offerShell: { borderColor: "#E5E7EF", borderWidth: 1, borderRadius: 18, backgroundColor: "#FFFFFF", overflow: "hidden" },
+  offerShellDesktop: { flexDirection: "column", alignItems: "stretch", flex: 1 },
   offerRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, paddingRight: 8, minHeight: 82 },
-  offerRowDesktop: { width: "42%", flexDirection: "column", alignItems: "flex-start", gap: 14, padding: 18 },
+  offerRowDesktop: { width: "100%", flexDirection: "column", alignItems: "stretch", gap: 15, padding: 18 },
   offerExpand: { width: 28, minHeight: 54, alignItems: "center", justifyContent: "center" },
   offerChevron: { color: "#858093", fontSize: 25, lineHeight: 30 },
   offerPlate: { flex: 1, minWidth: 0, maxWidth: 520, aspectRatio: 520 / 112, minHeight: 34, borderWidth: 0, borderColor: "#151B29", borderRadius: 0, backgroundColor: "transparent", overflow: "hidden" },
@@ -3893,13 +3904,13 @@ const styles = StyleSheet.create({
   offerSummaryWide: { width: 150 },
   offerSummaryDesktop: { width: "100%", marginLeft: 0, alignItems: "flex-start" },
   offerPrice: { color: "#171827", fontSize: 17, fontWeight: "800", textAlign: "right" },
-  offerPriceDesktop: { fontSize: 23 },
+  offerPriceDesktop: { fontSize: 25, letterSpacing: -0.5 },
   offerPriceLong: { fontSize: 14 },
   offerDate: { color: "#8B8797", fontSize: 10, lineHeight: 15, textAlign: "right" },
   offerDetails: { paddingHorizontal: 12, paddingBottom: 10, borderTopColor: "#F0EDF7", borderTopWidth: 1 },
-  offerDetailsDesktop: { flex: 1, minWidth: 0, borderTopWidth: 0, borderLeftWidth: 1, borderLeftColor: "#F0EDF7", paddingHorizontal: 18, paddingTop: 8, paddingBottom: 8 },
+  offerDetailsDesktop: { minWidth: 0, width: "100%", borderTopWidth: 1, borderTopColor: "#F0F1F5", borderLeftWidth: 0, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
   offerInfo: { flexGrow: 0, flexShrink: 0, flexBasis: "auto", width: "100%", paddingTop: 8 },
-  offerAction: { minHeight: 36, paddingHorizontal: 8, paddingVertical: 7, borderRadius: 8, justifyContent: "center" },
+  offerAction: { minHeight: 36, paddingHorizontal: 9, paddingVertical: 7, borderRadius: 9, justifyContent: "center" },
   offerActionText: { fontSize: 11, lineHeight: 15 },
   list: { gap: 12, paddingBottom: 96, paddingTop: 12 },
   listingItem: { gap: 6 },
@@ -3952,8 +3963,8 @@ const styles = StyleSheet.create({
   cardInfo: { flex: 1, minWidth: 0 },
   cardInfoCompact: { flexBasis: "auto", flexGrow: 0, flexShrink: 0, width: "100%" },
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
-  tag: { color: "#5143C2", flex: 1, flexShrink: 1, fontSize: 15, fontWeight: "800", minWidth: 0 },
-  cardRegionRow: { alignItems: "flex-start", flexDirection: "row", gap: 8, justifyContent: "space-between" },
+  tag: { color: "#6659C7", flex: 1, flexShrink: 1, fontSize: 12, fontWeight: "700", minWidth: 0 },
+  cardRegionRow: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "space-between" },
   cardRegionName: { flex: 1, minWidth: 0 },
   cardPublishedTop: { color: "#7A738F", flexShrink: 0, fontSize: 10, lineHeight: 16, marginTop: 4, fontWeight: "700", textAlign: "right" },
   region: { color: "#68627D", fontSize: 12, lineHeight: 16, marginTop: 4 },
@@ -3967,7 +3978,7 @@ const styles = StyleSheet.create({
   trustBadgeText: { color: "#18794E", fontSize: 12, fontWeight: "900" },
   cardBadgesSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8 },
   cardButtonsSpread: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  cardFooter: { borderTopColor: "#EEEAF8", borderTopWidth: 1, minHeight: 48, justifyContent: "center", marginTop: 12, paddingBottom: 14, paddingHorizontal: 14, paddingTop: 10 },
+  cardFooter: { borderTopColor: "#ECEEF4", borderTopWidth: 1, minHeight: 44, justifyContent: "center", marginTop: 12, paddingBottom: 8, paddingHorizontal: 0, paddingTop: 8 },
   cardBottomRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 8, minWidth: 0 },
   price: { color: "#166A4C", flexShrink: 0, fontSize: 17, fontWeight: "900" },
   catalogSourceBadge: { backgroundColor: "#F0EEFF", borderRadius: 9, flexShrink: 1, maxWidth: 126, paddingHorizontal: 7, paddingVertical: 4 },
