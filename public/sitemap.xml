@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://zanomerom.ru/</loc>
-  </url>
+  <url><loc>https://zanomerom.ru/</loc></url>
+  <url><loc>https://zanomerom.ru/?region=moskva</loc></url>
+  <url><loc>https://zanomerom.ru/?region=moskovskaya-oblast</loc></url>
+  <url><loc>https://zanomerom.ru/?region=krasnodarskiy-kray</loc></url>
+  <url><loc>https://zanomerom.ru/?region=stavropolskiy-kray</loc></url>
+  <url><loc>https://zanomerom.ru/?region=sverdlovskaya-oblast</loc></url>
+  <url><loc>https://zanomerom.ru/?region=novosibirskaya-oblast</loc></url>
+  <url><loc>https://zanomerom.ru/?region=dagestan</loc></url>
 </urlset>

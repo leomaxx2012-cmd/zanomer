@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams } from "expo-router";
+import Head from "expo-router/head";
+import { linkedRegions, regionFromLink, regionLink } from "../lib/region-links";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AppState,
@@ -318,6 +320,7 @@ const initialPlates: Plate[] = [
 // видел 18 демонстрационных карточек.
 const bundledCatalog = bundledCatalogData as Plate[];
 const catalogFallback = deduplicateOffers(bundledCatalog.length > 0 ? bundledCatalog : initialPlates);
+const regionalSearchLinks = linkedRegions.filter(item => catalogFallback.some(plate => plate.region.split(" · ")[0].trim() === item.title));
 
 export default function HomeScreen() {
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
@@ -353,7 +356,8 @@ export default function HomeScreen() {
   const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
   const catalogSnapshotRef = useRef(catalog);
   catalogSnapshotRef.current = catalog;
-  const sharedParams = useLocalSearchParams<{ listing?: string; kind?: string }>();
+  const sharedParams = useLocalSearchParams<{ listing?: string; kind?: string; region?: string | string[] }>();
+  const incomingRegion = useMemo(() => regionFromLink(sharedParams.region, catalogFallback), [sharedParams.region]);
   const incomingListingId = sharedListingId(sharedParams.listing);
   const incomingListingKind = sharedParams.kind;
   const handledSharedListingRef = useRef("");
@@ -373,8 +377,8 @@ export default function HomeScreen() {
   const [leftLetter, setLeftLetter] = useState("");
   const [rightLetters, setRightLetters] = useState("");
   const [digits, setDigits] = useState("");
-  const [region, setRegion] = useState("Все");
-  const [regionCode, setRegionCode] = useState("");
+  const [region, setRegion] = useState(() => incomingRegion?.region ?? "Все");
+  const [regionCode, setRegionCode] = useState(() => incomingRegion?.regionCode ?? "");
   const [vehicle, setVehicle] = useState<Plate["vehicle"]>("car");
   const [priceLimit, setPriceLimit] = useState<number | null>(null);
   const [specialFilters, setSpecialFilters] = useState<SpecialFilter[]>([]);
@@ -395,6 +399,17 @@ export default function HomeScreen() {
   const [sourceListExpanded, setSourceListExpanded] = useState(false);
   const [similarFiltersOpen, setSimilarFiltersOpen] = useState(false);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
+  const handledRegionLink = useRef(sharedParams.region);
+  useEffect(() => {
+    if (handledRegionLink.current === sharedParams.region) return;
+    handledRegionLink.current = sharedParams.region;
+    setRegion(incomingRegion?.region ?? "Все");
+    setRegionCode(incomingRegion?.regionCode ?? "");
+    setActiveTab("buy"); setCatalogOnly(false);
+    setLeftLetter(""); setDigits(""); setRightLetters("");
+    setPriceLimit(null); setSpecialFilters([]); setSelectedSources([]);
+    setFreshOnly(false); setSimilarToId(null); setSimilarFiltersOpen(false);
+  }, [incomingRegion, sharedParams.region]);
   const [profileName, setProfileName] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -2433,6 +2448,10 @@ export default function HomeScreen() {
       onTouchMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onTouchCancel={() => { backgroundTouch.current = null; }}
       onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
+      {Platform.OS === "web" && !incomingListingId && <Head>
+        <title>{region === "Все" ? "ЗаНомером — красивые автомобильные номера" : `Номера: ${region} — ЗаНомером`}</title>
+        <meta name="description" content={region === "Все" ? "Поиск автомобильных номеров по региону, буквам, цифрам и цене. Объявления ЗаНомером." : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
+      </Head>}
       <View pointerEvents="none" style={styles.backgroundGlowTop} />
       <View pointerEvents="none" style={styles.backgroundGlowRight} />
       <View pointerEvents="none" style={styles.backgroundGlowBottom} />
@@ -3029,6 +3048,11 @@ export default function HomeScreen() {
 
       {Platform.OS === "web" && <View style={styles.siteFooter} accessibilityRole="summary">
         <Text style={styles.siteFooterTitle}>ЗаНомером — поиск и размещение объявлений</Text>
+        <View style={styles.siteFooterLinks}>
+          {regionalSearchLinks.map(item =>
+            <Link key={item.key} href={regionLink(item.title) as "/"} style={styles.siteFooterLink}>Номера: {item.title}</Link>
+          )}
+        </View>
         <Text style={styles.siteFooterText}>Исполнитель цифровых услуг: ИП Леонович Александр Леонидович</Text>
         <Text style={styles.siteFooterText}>ИНН 504406730552 · ОГРНИП 319508100089501</Text>
         <Text style={styles.siteFooterText}>141570, Московская область, пгт Менделеево, ул. Левобережная, д. 1</Text>
