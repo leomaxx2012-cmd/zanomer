@@ -3488,7 +3488,7 @@ export default function HomeScreen() {
           <Text style={styles.platePickerTitle}>{platePicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
           <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
         </View>
-        <Text style={styles.pickerCurrentValue}>{formatPlateValue(leftLetter || "—", digits || "—", rightLetters || "—", vehicle)}</Text>
+        <Text style={styles.pickerCurrentValue}>{formatPlateValue(leftLetter || (vehicle === "truck" ? "**" : "*"), digits || (vehicle === "car" ? "***" : "****"), rightLetters || "**", vehicle)}</Text>
         <View style={styles.pickerGrid}>
           {(platePicker === "digits" ? allowedDigits : allowedLetters).map((item) => <Pressable key={item} onPress={() => choosePlatePart(item)} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{item}</Text></Pressable>)}
           <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar]}><Text style={styles.pickerOptionText}>*</Text></Pressable>
