@@ -34,7 +34,8 @@ import { Text, TextInput } from "../components/ResponsiveText";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase, publicCatalogClient, readSavedProfile } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
-import { deduplicateOffers, mergeCatalogOffers } from "../lib/catalog-offers";
+import { deduplicateOffers, mergeCatalogOffers, mergeCatalogOffersInChunks, mapCatalogChunks, serializeCatalogChunks } from "../lib/catalog-offers";
+import { buildSeriesGroups, buildSimilarityCounts, hasSimilarCatalogOffer } from "../lib/catalog-similarity";
 import { listingLink, sharedListingId, sharedListingTable } from "../lib/listing-links";
 import { privacyPolicy } from "../lib/privacy-policy";
 import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
@@ -155,12 +156,13 @@ function formatPlateValue(left: string, digits: string, right: string, vehicle: 
   return vehicle === "motorcycle" ? `${digits} ${right}`.trim() : vehicle === "truck" ? `${left} ${digits}`.trim() : `${left} ${digits} ${right}`.trim();
 }
 
+const catalogPriceFormatter = new Intl.NumberFormat("ru-RU");
 function mapPartnerListing(item: Record<string, any>): Plate {
   return {
     id: item.id,
     value: formatPlateValue(item.plate_left, item.plate_digits, item.plate_right, item.vehicle_type),
     leftLetter: item.plate_left, rightLetters: item.plate_right, digits: item.plate_digits,
-    region: item.region, price: `${Number(item.price_rub).toLocaleString("ru-RU")} ₽`,
+    region: item.region, price: `${catalogPriceFormatter.format(Number(item.price_rub))} ₽`,
     priceValue: Number(item.price_rub), vehicle: item.vehicle_type,
     seller: item.source_name, createdAt: item.created_at.slice(0, 10), publishedAt: item.created_at,
     tag: item.tag ?? "Партнёрское объявление", sourceName: "Открыть исходное объявление",
@@ -284,20 +286,6 @@ function extractRegionCodes(value: string) {
   return codePart.split(/[,/\s]+/).filter((code) => /^\d{2,3}$/.test(code));
 }
 
-function belongsToSameSeries(first: Plate, second: Plate) {
-  const sameSeller = first.seller.trim().toLocaleLowerCase("ru-RU") === second.seller.trim().toLocaleLowerCase("ru-RU");
-  if (first.id === second.id || !sameSeller || first.vehicle !== second.vehicle) return false;
-  const firstCore = `${first.leftLetter}${first.digits}${first.rightLetters}`;
-  const secondCore = `${second.leftLetter}${second.digits}${second.rightLetters}`;
-  const firstRegion = first.region.split(" · ")[1]?.trim() ?? "";
-  const secondRegion = second.region.split(" · ")[1]?.trim() ?? "";
-
-  // Серия одного продавца: тот же номер в другом регионе либо ровно одно
-  // изменение в номере. Регион при таком изменении может быть любым.
-  if (firstCore === secondCore) return Boolean(firstRegion && secondRegion && firstRegion !== secondRegion);
-  if (firstCore.length !== secondCore.length) return false;
-  return firstCore.split("").filter((symbol, index) => symbol !== secondCore[index]).length === 1;
-}
 // Дублирует серверную проверку из supabase/chat.sql, чтобы посетитель видел
 // причину до отправки сообщения. Серверный фильтр остаётся главным.
 const prohibitedChatPattern = /(?:хуй|хуе|ху[йїіе]|пизд|пізд|еба|їба|йоб|бля|бляд|сука|курва|мраз|гандон|идиот|fuck|f+u+c+k+|shit|bitch|asshole|bastard|cunt|dick|whore|slut|huy|hu[yi]|pizd|pizdets|ebat|yob|blya|suka|kurwa)/iu;
@@ -1271,14 +1259,16 @@ export default function HomeScreen() {
   // сохранённую на устройстве. Проверка свежих данных продолжается в фоне.
   useEffect(() => {
     let mounted = true;
-    void AsyncStorage.getItem(CATALOG_CACHE_KEY).then((saved) => {
+    void AsyncStorage.getItem(CATALOG_CACHE_KEY).then(async (saved) => {
       if (!mounted || !saved) return;
       try {
         const cached = JSON.parse(saved) as Plate[];
         if (Array.isArray(cached) && cached.every(item => item && typeof item.id === "string" && typeof item.region === "string" && typeof item.createdAt === "string")) {
           // Network sync starts only after hydration. The saved price wins
           // over an older bundled copy even if the post date is unchanged.
-          setCatalog(current => mergeCatalogOffers(current, cached));
+          const current = catalogSnapshotRef.current;
+          const merged = await mergeCatalogOffersInChunks(current, cached, { isActive: () => mounted });
+          if (merged && mounted) setCatalog(actual => actual === current ? merged : mergeCatalogOffers(actual, cached));
         }
       } catch {
         // Keep the current catalogue even if a cache entry is malformed.
@@ -1289,15 +1279,18 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!catalogCacheReady) return;
+    let writeActive = true;
     const timer = setTimeout(() => {
-      const saved = JSON.stringify(catalog);
-      // Serialize writes so a slow earlier write cannot overwrite newer data.
-      catalogWriteRef.current = catalogWriteRef.current
-        .catch(() => {})
-        .then(() => AsyncStorage.setItem(CATALOG_CACHE_KEY, saved))
-        .catch(() => {});
+      void serializeCatalogChunks(catalog, { isActive: () => writeActive }).then(saved => {
+        if (saved === null || !writeActive) return;
+        // Serialize writes so a slow earlier write cannot overwrite newer data.
+        catalogWriteRef.current = catalogWriteRef.current
+          .catch(() => {})
+          .then(() => writeActive ? AsyncStorage.setItem(CATALOG_CACHE_KEY, saved) : undefined)
+          .catch(() => {});
+      }).catch(() => {});
     }, 500);
-    return () => clearTimeout(timer);
+    return () => { writeActive = false; clearTimeout(timer); };
   }, [catalog, catalogCacheReady]);
 
   useEffect(() => {
@@ -1307,8 +1300,15 @@ export default function HomeScreen() {
     let needsCatalogSync = true;
     let lastCatalogCheck = 0;
     let catalogEffectActive = true;
-    const publishCatalog = (incoming: Plate[]) => {
-      if (catalogEffectActive && incoming.length) setCatalog(current => mergeCatalogOffers(current, incoming));
+    let publicationVersion = 0;
+    const publishCatalog = async (incoming: Plate[]) => {
+      if (!catalogEffectActive || !incoming.length) return;
+      const version = ++publicationVersion;
+      const current = catalogSnapshotRef.current;
+      const merged = await mergeCatalogOffersInChunks(current, incoming, { isActive: () => catalogEffectActive && version === publicationVersion });
+      if (merged && merged !== current && catalogEffectActive && version === publicationVersion) {
+        setCatalog(actual => actual === current ? merged : mergeCatalogOffers(actual, incoming));
+      }
     };
 
     async function loadCatalog() {
@@ -1369,7 +1369,8 @@ export default function HomeScreen() {
       // Первый сетевой ответ используем только как начало тихой синхронизации.
       // Экран продолжает показывать встроенный полный каталог без ожидания.
       if (!firstPartnerResult.error && firstPartnerResult.data?.length) {
-        publishCatalog(firstPartnerResult.data.map(toPartnerPlate));
+        const firstPage = await mapCatalogChunks(firstPartnerResult.data, toPartnerPlate, { isActive: () => catalogEffectActive });
+        if (firstPage) await publishCatalog(firstPage);
         clearTimeout(slowNoticeTimeout);
         setCatalogSlowMessage("");
         setCatalogRefreshing(false);
@@ -1389,7 +1390,8 @@ export default function HomeScreen() {
       const partnerData = partnerResult.data ?? [];
       needsCatalogSync = Boolean(siteResult.error || partnerResult.error);
       if (siteResult.error && partnerResult.error) {
-        publishCatalog(partnerData.map(toPartnerPlate));
+        const partial = await mapCatalogChunks(partnerData, toPartnerPlate, { isActive: () => catalogEffectActive });
+        if (partial) await publishCatalog(partial);
         setCatalogLoadError("Нет связи с каталогом. Сохранённые объявления доступны; обновление повторится автоматически.");
         return;
       }
@@ -1417,7 +1419,7 @@ export default function HomeScreen() {
         rightLetters: item.plate_right,
         digits: item.plate_digits,
         region: item.region,
-        price: `${Number(item.price_rub).toLocaleString("ru-RU")} ₽`,
+        price: `${catalogPriceFormatter.format(Number(item.price_rub))} ₽`,
         priceValue: Number(item.price_rub),
         vehicle: item.vehicle_type as Plate["vehicle"],
         seller: profilesById.get(item.owner_id)?.username ?? "Пользователь ЗаНомером",
@@ -1433,7 +1435,8 @@ export default function HomeScreen() {
         sellerComment: item.seller_comment ?? undefined,
       };
       });
-      const partners: Plate[] = partnerData.map(toPartnerPlate);
+      const partners = await mapCatalogChunks(partnerData, toPartnerPlate, { isActive: () => catalogEffectActive });
+      if (!partners) return;
       if (!partnerResult.error) latestPartnerListingRef.current = partners.reduce((latest, plate) => {
         const timestamp = plate.publishedAt ?? plate.createdAt;
         return timestamp > latest ? timestamp : latest;
@@ -1448,14 +1451,11 @@ export default function HomeScreen() {
       const loaded = [...fromDatabase, ...partners];
       // Один и тот же номер с тем же кодом региона показываем только один раз.
       // Если запись пришла повторно, оставляем самую свежую.
-      const uniqueLoaded = deduplicateOffers(loaded);
       // Demo cards are useful only before the first database data arrives.
       // Mixing them into a real catalogue inflated the public count.
       // Не меняем тысячу карточек прямо посреди касания/прокрутки: на слабых
       // телефонах это перехватывало нажатия на несколько секунд.
-      InteractionManager.runAfterInteractions(() => {
-        publishCatalog(uniqueLoaded);
-      });
+      await publishCatalog(loaded);
       } catch {
         needsCatalogSync = true;
         // Нет сети — это нормальный офлайн-режим: встроенные номера уже
@@ -1543,7 +1543,10 @@ export default function HomeScreen() {
           .order("source_url")
           .range(start, start + 999), () => statusesActive);
         // Preserve the last complete set on a partial response or network error.
-        if (!error && statusesActive) setArchivedPartnerSources(data.map(item => item.source_url));
+        if (!error && statusesActive) {
+          const next = data.map(item => item.source_url);
+          setArchivedPartnerSources(current => current.length === next.length && current.every((source, index) => source === next[index]) ? current : next);
+        }
       } finally {
         statusesLoading = false;
       }
@@ -1749,33 +1752,11 @@ export default function HomeScreen() {
     // запускался уже на первом кадре и сравнивал каждый из 1327 номеров со
     // всеми остальными, из-за чего слабый телефон мог показать белый экран.
     if (!similarFiltersOpen) return new Map<string, { key: string; size: number }>();
-    const groups = new Map<string, { key: string; size: number }>();
-    const remaining = new Set(catalog.map((plate) => plate.id));
-
-    for (const first of catalog) {
-      if (!remaining.has(first.id)) continue;
-      const component = new Set<string>([first.id]);
-      const queue = [first];
-      remaining.delete(first.id);
-
-      while (queue.length) {
-        const current = queue.shift()!;
-        for (const candidate of catalog) {
-          if (!remaining.has(candidate.id) || !belongsToSameSeries(current, candidate)) continue;
-          component.add(candidate.id);
-          remaining.delete(candidate.id);
-          queue.push(candidate);
-        }
-      }
-
-      if (component.size < 2) continue;
-      const key = [...component].sort()[0];
-      component.forEach((id) => groups.set(id, { key, size: component.size }));
-    }
-    return groups;
+    return buildSeriesGroups(catalog);
   }, [catalog, similarFiltersOpen]);
 
   const seriesListingIds = useMemo(() => new Set(seriesGroupByListingId.keys()), [seriesGroupByListingId]);
+  const similarityCounts = useMemo(() => buildSimilarityCounts(catalog), [catalog]);
 
   const archivedPartnerSourceSet = useMemo(() => new Set(archivedPartnerSources), [archivedPartnerSources]);
   const sourceOptions = useMemo(() => availableListingSources(catalog, vehicle, archivedPartnerSourceSet), [catalog, vehicle, archivedPartnerSourceSet]);
@@ -1818,10 +1799,7 @@ export default function HomeScreen() {
           if (filter === "firstTen") return Number(plate.digits) >= 1 && Number(plate.digits) <= 10;
           if (filter === "roundHundred") return plate.digits.endsWith("00");
           if (filter === "mirror") return plate.digits === plate.digits.split("").reverse().join("");
-          const sameRegionCode = (candidate: Plate) => candidate.region.split(" · ")[1]?.trim() === plate.region.split(" · ")[1]?.trim();
-          if (filter === "similarDigits") return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && candidate.digits === plate.digits);
-          if (filter === "similarLetters") return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && candidate.leftLetter === plate.leftLetter && candidate.rightLetters === plate.rightLetters);
-          return catalog.some((candidate) => candidate.id !== plate.id && candidate.vehicle === plate.vehicle && sameRegionCode(candidate));
+          return hasSimilarCatalogOffer(plate, filter, similarityCounts);
         });
         const publishedAt = freshOnly ? new Date(plate.publishedAt ?? plate.createdAt).getTime() : 0;
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
@@ -1846,7 +1824,7 @@ export default function HomeScreen() {
       });
       return [...grouped.values()].flat();
     },
-    [catalog, archivedPartnerSourceSet, searchCriteria, similarToId, similarityFilter, sort, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys],
+    [catalog, archivedPartnerSourceSet, searchCriteria, similarToId, similarityFilter, sort, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys, similarityCounts],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
