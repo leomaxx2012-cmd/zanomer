@@ -19,6 +19,8 @@ test('a partial sale or contradictory caption cannot archive a multi-offer post'
   assert.equal(classifyAvailability('Продано, но снова в продаже'), 'unknown');
   assert.equal(classifyAvailability('Если номер продан, пост удаляется'), 'unknown');
   assert.equal(classifyAvailability('Пометка «продано» появится позже'), 'unknown');
+  assert.equal(classifyAvailability('ПРОДАНО?'), 'unknown');
+  assert.equal(classifyAvailability('Автомобиль продан, номер в продаже'), 'unknown');
 });
 test('only the requested public widget or explicit Telegram missing-post error is evidence', () => {
   const inspect = (html, status = 200) => inspectTelegramPost({ html, status, handle: 'runomer', postId: '123' });

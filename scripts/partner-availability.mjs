@@ -12,6 +12,8 @@ export function classifyAvailability(text, offerCount = 1) {
     !/(?<!\p{L})не\s*$/iu.test(text.slice(0, match.index)));
   if (!markers.length) return 'active';
   if (markers.some(match => /(?:(?:если|когда)[^.!?\n]{0,60}|(?:пометка|слово|пример)\s*[«"']?\s*)$/iu.test(text.slice(0, match.index)))) return 'unknown';
+  if (markers.some(match => /^\s*\?/u.test(text.slice(match.index + match[0].length)))) return 'unknown';
+  if (/(?:номер(?:а)?\s+(?:(?:ещ[её]|снова)\s+)?(?:в\s+продаже|доступ(?:ен|ны))|(?:машина|автомобиль|авто)\s+продан[ао]?)/iu.test(text)) return 'unknown';
   if (/(?:кроме|не\s+вс[её]|часть\s+номеров|некоторые\s+номера|ещ[её]\s+доступ|остал(?:ись|ся)|снова\s+в\s+продаже)/iu.test(text)) return 'unknown';
   // A sale marker next to one plate must not hide other offers from the same
   // multi-offer post. Only an unambiguous whole-post marker is sufficient.
