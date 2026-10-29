@@ -1528,17 +1528,30 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!supabase) return;
 
+    let statusesActive = true;
+    let statusesLoading = false;
     async function loadPartnerListingStatuses() {
-      const { data } = await publicCatalogClient
-        .from("partner_listing_statuses")
-        .select("source_url")
-        .eq("status", "archived");
-      if (data) setArchivedPartnerSources(data.map((item) => item.source_url));
+      if (statusesLoading) return;
+      statusesLoading = true;
+      try {
+        // Supabase returns at most one page by default. Read every archived
+        // source so older hidden offers cannot reappear after the first 1000.
+        const { data, error } = await collectCatalogPages<{ source_url: string }>([], null, 1000, start => publicCatalogClient
+          .from("partner_listing_statuses")
+          .select("source_url")
+          .eq("status", "archived")
+          .order("source_url")
+          .range(start, start + 999), () => statusesActive);
+        // Preserve the last complete set on a partial response or network error.
+        if (!error && statusesActive) setArchivedPartnerSources(data.map(item => item.source_url));
+      } finally {
+        statusesLoading = false;
+      }
     }
 
-    void loadPartnerListingStatuses();
+    void loadPartnerListingStatuses().catch(() => {});
     const timer = setInterval(() => void loadPartnerListingStatuses().catch(() => {}), 60_000);
-    return () => clearInterval(timer);
+    return () => { statusesActive = false; clearInterval(timer); };
   }, []);
 
   useEffect(() => {

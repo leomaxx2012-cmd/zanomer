@@ -22,7 +22,7 @@ export async function loadCatalogIndex(db) {
   const rows = [];
   for (const table of ['partner_listings', 'auto_listings']) {
     for (let offset = 0; ; offset += 1000) {
-      const columns = 'id,plate_left,plate_digits,plate_right,region,vehicle_type,price_rub,status' + (table === 'partner_listings' ? ',source_url' : '');
+      const columns = 'id,plate_left,plate_digits,plate_right,region,vehicle_type,price_rub,status' + (table === 'partner_listings' ? ',source_url,archive_reason,checked_at' : '');
       const { data, error } = await db.from(table).select(columns).order('id').range(offset, offset + 999);
       if (error) throw error;
       rows.push(...data.map(row => ({ ...row, table })));

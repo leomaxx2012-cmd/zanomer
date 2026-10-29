@@ -10,7 +10,8 @@
  */
 import { createClient } from "@supabase/supabase-js";
 import { createWorker } from "tesseract.js";
-import { loadCatalogIndex } from "./catalog-identity.mjs";
+import { loadCatalogIndex, plateIdentity } from "./catalog-identity.mjs";
+import { classifyAvailability, createTelegramReader, applyPostEvidence, recheckSavedPosts, isAutomaticallyArchived } from "./partner-availability.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -21,10 +22,6 @@ if (!url || !serviceKey) {
 const db = createClient(url, serviceKey, { auth: { persistSession: false } });
 const catalogIndex = await loadCatalogIndex(db);
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
-// Partner sources requested a slow, low-impact nightly scan. One public page
-// is read per source and this pause prevents a burst of requests.
-const SOURCE_REQUEST_DELAY_MS = 8_000;
-const sleep = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const SOURCES = [
   { handle: "runomer", name: "Красивые номера на авто" },
   { handle: "runomer23", name: "Красивые номера Краснодар" },
@@ -36,6 +33,9 @@ const SOURCES = [
   { handle: "specznak", name: "Красивые госномера Specznak" },
   { handle: "jelezki77", name: "Железки77" },
 ];
+// One shared limiter covers both channel feeds and saved-post checks, including
+// transitions between channels. Never burst requests or follow redirects.
+const readTelegram = createTelegramReader({ sources: SOURCES });
 
 function matchesSearchAlert(row, alert) {
   const regionCode = row.region.split(" · ").at(-1)?.trim() ?? "";
@@ -239,7 +239,7 @@ function extractPosts(html, source) {
       .map((match) => decodeUrl(match[1]));
     // Archive only explicit availability changes. "Продам" is deliberately
     // absent: it means the plate is offered, not sold.
-    const sold = /\b(продан[аоы]?|продали|забронирован[аоы]?|зарезервирован[аоы]?|в резерве|снят[аоы]? с продажи|нет в наличии)\b/i.test(text);
+    const sold = classifyAvailability(text) === "sold";
     posts.push({ postId, text, photoUrls, postedAt: datetime, sold });
   }
   return posts;
@@ -259,56 +259,60 @@ function wasPublishedWithinLastDay(postedAt) {
 async function syncSource(source) {
   // A changing query parameter bypasses Telegram's CDN cache. Without it a
   // runner can receive a channel page from the previous day.
-  const response = await fetch(`https://t.me/s/${source.handle}?check=${Date.now()}`, {
-    headers: {
-      "user-agent": "ZaNomer catalog checker/1.0",
-      "cache-control": "no-cache",
-    },
-  });
+  const response = await readTelegram(`https://t.me/s/${source.handle}?check=${Date.now()}`);
   if (!response.ok) throw new Error(`${source.handle}: HTTP ${response.status}`);
   const posts = extractPosts(await response.text(), source);
   let added = 0;
   let archived = 0;
+  let restored = 0;
   let updated = 0;
   let skippedDuplicates = 0;
   for (const post of posts) {
     const sourceUrl = `https://t.me/${source.handle}/${post.postId}`;
-    if (post.sold) {
-      const { error } = await db.from("partner_listings").update({ status: "archived", archive_reason: "В исходном посте указано, что номер продан или забронирован", checked_at: new Date().toISOString() }).eq("source_url", sourceUrl);
-      if (error) throw error;
-      await db.from("partner_listing_statuses").upsert({ source_url: sourceUrl, status: "archived", archive_reason: "В исходном посте указано, что номер продан или забронирован", checked_at: new Date().toISOString(), updated_at: new Date().toISOString() });
-      archived += 1;
+    const savedRows = catalogIndex.rows.filter(row => row.table === "partner_listings" && row.source_url === sourceUrl);
+    const parsedRows = parsePost(post.text, source, post.postId, post.postedAt);
+    const offerCount = new Set([...savedRows, ...parsedRows].map(plateIdentity)).size || 1;
+    const availability = classifyAvailability(post.text, offerCount);
+    if (availability === "unknown") continue;
+    if (availability === "sold") {
+      const changes = await applyPostEvidence({ db, catalogIndex, post: { sourceUrl, rows: savedRows.filter(row => row.status === "active" || isAutomaticallyArchived(row)) }, evidence: { state: "sold", reason: "Telegram: в исходном посте указано, что номер продан или забронирован" }, checkedAt: new Date().toISOString() });
+      archived += changes.archived;
       continue;
     }
     // Telegram may show older posts on the public channel page. Do not import
     // them retroactively: only genuinely recent publications enter the catalog.
     if (!wasPublishedWithinLastDay(post.postedAt)) continue;
-    let rows = parsePost(post.text, source, post.postId, post.postedAt);
+    let rows = parsedRows;
     if (!rows.length && post.photoUrls.length) {
       const photoText = await recognisePhotos(post.photoUrls);
       rows = parsePost(`${post.text}\n${photoText}`, source, post.postId, post.postedAt);
     }
     if (!rows.length) continue;
     const newlyAddedRows = [];
+    let savedCount = 0;
     for (const row of rows) {
       const known = catalogIndex.sameSource(row);
+      if (known?.status === "archived" && !isAutomaticallyArchived(known)) continue;
       if (!known && catalogIndex.duplicate(row)) { skippedDuplicates++; continue; }
       const savedRow = known ? { ...row, id: known.id } : row;
       const { error } = await db.from("partner_listings").upsert(savedRow, { onConflict: "id" });
       if (error) throw error;
+      savedCount++;
       if (!known) { added++; newlyAddedRows.push(savedRow); }
       else if (Number(known.price_rub) !== row.price_rub || known.status !== row.status) updated++;
+      if (known?.status === "archived") restored++;
       catalogIndex.remember(savedRow);
     }
+    if (!savedCount) continue;
     await notifySearchAlerts(newlyAddedRows);
-    await db.from("partner_listing_statuses").upsert({ source_url: sourceUrl, status: "active", archive_reason: null, checked_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    const { error: statusError } = await db.from("partner_listing_statuses").upsert({ source_url: sourceUrl, status: "active", archive_reason: null, checked_at: new Date().toISOString(), updated_at: new Date().toISOString() });
+    if (statusError) throw statusError;
   }
-  return { source: source.name, posts: posts.length, added, updated, archived, skippedDuplicates };
+  return { source: source.name, posts: posts.length, added, updated, restored, archived, skippedDuplicates };
 }
 
 const result = [];
-for (const [index, source] of SOURCES.entries()) {
-  if (index > 0) await sleep(SOURCE_REQUEST_DELAY_MS);
+for (const source of SOURCES) {
   try {
     result.push(await syncSource(source));
   } catch (error) {
@@ -318,5 +322,9 @@ for (const [index, source] of SOURCES.entries()) {
     result.push({ source: source.name, error: error.message, added: 0, archived: 0 });
   }
 }
-console.log(JSON.stringify({ checkedAt: new Date().toISOString(), result }, null, 2));
+// Revisit old saved posts independently of the newest channel page. The oldest
+// checked posts go first, in bounded batches, so the catalog is covered over
+// successive scheduled runs without a long, aggressive full-channel crawl.
+const savedPostChecks = await recheckSavedPosts({ db, catalogIndex, sources: SOURCES, readTelegram });
+console.log(JSON.stringify({ checkedAt: new Date().toISOString(), result, savedPostChecks }, null, 2));
 if (ocrWorkerPromise) (await ocrWorkerPromise).terminate();
