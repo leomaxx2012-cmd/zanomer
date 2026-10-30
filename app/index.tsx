@@ -109,8 +109,8 @@ type SavedSearchRow = {
   price_limit: number;
 };
 
-type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
-type SpecialFilter = GeneralSpecialFilter | "repeatDigits" | "repeatLetters" | "similarDigits" | "similarLetters" | "similarRegion";
+type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror" | "repeatDigits" | "repeatLetters";
+type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
 type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites" | "plus" | "highlight" | "hot" | "highlight-pack" | "hot-pack" | "security" | "payment-methods";
@@ -119,6 +119,8 @@ const specialFilterLabels: Record<GeneralSpecialFilter, string> = {
   firstTen: "Первая десятка",
   roundHundred: "Ровная сотня",
   mirror: "Зеркальный",
+  repeatDigits: "Одинаковые цифры",
+  repeatLetters: "Одинаковые буквы",
 };
 
 const CATALOG_CACHE_KEY = "zanomer.catalog.v1";
@@ -329,7 +331,7 @@ export default function HomeScreen() {
     setCatalogDisplayLimit(catalogPageSize);
     setCatalogScope("filtered");
     setCatalogOnly(true);
-    if (Platform.OS === "web") router.push({ pathname: "/catalog", params: catalogSearchParams(currentSearch()) } as never);
+    if (Platform.OS === "web") router.navigate({ pathname: "/catalog", params: catalogSearchParams(currentSearch()) } as never);
     catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
   }
   const latestPartnerListingRef = useRef("");
@@ -400,7 +402,7 @@ export default function HomeScreen() {
   function currentSearch(): CatalogSearch { return {leftLetter,rightLetters,digits,region,regionCode,vehicle,priceLimit,specialFilters,selectedSources,freshOnly,groupSeries:similarFiltersOpen,sort}; }
   function returnToSearch() {
     setCatalogOnly(false); setCatalogDisplayLimit(catalogPageSize); setActiveTab("buy"); setPlatePicker(null);
-    if (Platform.OS === "web" && isCatalogRoute) router.push({pathname:"/",params:catalogSearchParams(currentSearch())} as never);
+    if (Platform.OS === "web" && isCatalogRoute) router.navigate({pathname:"/",params:catalogSearchParams(currentSearch())} as never);
     catalogScrollRef.current?.scrollTo({y:0,animated:true});
   }
   function openCollection(changes: Partial<CatalogSearch>) {
@@ -408,7 +410,7 @@ export default function HomeScreen() {
     setLeftLetter(next.leftLetter);setRightLetters(next.rightLetters);setDigits(next.digits);setSpecialFilters(next.specialFilters as SpecialFilter[]);
     setRegion(next.region);setRegionCode(next.regionCode);setCatalogOnly(true);setCatalogScope("filtered");
     setPlatePicker(null);setFilterPanelOpen(false);setSimilarFiltersOpen(next.groupSeries);
-    if(Platform.OS === "web")router.push({pathname:"/catalog",params:catalogSearchParams(next)} as never);
+    if(Platform.OS === "web")router.navigate({pathname:"/catalog",params:catalogSearchParams(next)} as never);
     catalogScrollRef.current?.scrollTo({y:0,animated:false});
   }
   const [profileName, setProfileName] = useState("");
@@ -2671,7 +2673,7 @@ export default function HomeScreen() {
           <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим<Text style={{color:"#B9A5FF"}}> характером.</Text></Text>
           <Text style={styles.introDescription}>Найди свою комбинацию. Выбирай регион, сравнивай цены и связывайся с продавцом.</Text>
         </View>
-        {!compactLayout && <Pressable accessibilityRole="button" onPress={() => { setActiveTab("sell"); setAddOpen(true); }} style={styles.introAction}><Text style={styles.introActionText}>＋ Разместить номер</Text></Pressable>}
+
       </View>}
 
       {activeTab === "buy" && (!catalogOnly || filterPanelOpen) && <View testID="catalog-filters" style={[styles.browseSidebar, styles.landingSearchWrap]}>
@@ -3568,12 +3570,12 @@ const styles = StyleSheet.create({
   landingStageCompact: {borderRadius:22,marginTop:12,marginBottom:24,paddingHorizontal:14,paddingBottom:24},
   landingSearchWrap: {maxWidth:780,alignSelf:"center",width:"100%"},
   landingSearchCard: {maxWidth:780,width:"100%",marginTop:0,borderRadius:24,padding:24,shadowOpacity:0.1},
-  catalogIntro: {alignSelf:"center",width:"100%",maxWidth:1000,alignItems:"center",gap:20,paddingTop:48,paddingBottom:32},
+  catalogIntro: {alignSelf:"center",width:"100%",maxWidth:1000,alignItems:"center",gap:16,paddingTop:32,paddingBottom:24},
   introCopy: {alignItems:"center",width:"100%"},
   introEyebrow: {color:"#B9A5FF",fontSize:10,letterSpacing:2,fontWeight:"800",marginBottom:16,textAlign:"center"},
-  introTitle: {color:"#FFFFFF",fontSize:54,lineHeight:62,letterSpacing:-2,fontWeight:"800",textAlign:"center",maxWidth:780},
+  introTitle: {color:"#FFFFFF",fontSize:46,lineHeight:54,letterSpacing:-1.6,fontWeight:"800",textAlign:"center",maxWidth:1000},
   introTitleCompact: {fontSize:34,lineHeight:40,letterSpacing:-1},
-  introDescription: {color:"#B9BECE",fontSize:15,lineHeight:23,marginTop:16,maxWidth:580,textAlign:"center"},
+  introDescription: {color:"#B9BECE",fontSize:15,lineHeight:23,marginTop:12,maxWidth:700,textAlign:"center"},
   searchAvailability: {color:"#7E739F",fontSize:12,fontWeight:"700"},
   findNumberButton: {backgroundColor:"#6551D3",borderRadius:14,minHeight:52,alignItems:"center",justifyContent:"center",marginTop:20},
   findNumberText: {color:"white",fontSize:17,fontWeight:"800"},
