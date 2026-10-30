@@ -50,7 +50,7 @@ function plateKey(row: Offer) {
 const newestFirst = (a: Offer, b: Offer) => { const first = a.publishedAt ?? a.createdAt, second = b.publishedAt ?? b.createdAt; return first === second ? 0 : first < second ? 1 : -1; };
 function sameFields<T extends Offer>(first: T, second: T) {
   const keys = Object.keys(first) as (keyof T)[];
-  return keys.length === Object.keys(second).length && keys.every(key => Object.is(first[key], second[key]));
+  return keys.length === Object.keys(second).length && keys.every(key => Object.is(first[key], second[key]) || ((String(key) === "saleDetails" || String(key) === "photoUrls") && JSON.stringify(first[key]) === JSON.stringify(second[key])));
 }
 export function deduplicateOffers<T extends Offer>(rows: T[]): T[] {
   // Сетевой ответ идёт после снимка: новая цена того же поста заменяет старую.
@@ -108,4 +108,9 @@ export async function mergeCatalogOffersInChunks<T extends Offer>(current: T[], 
   const merged = [...offers.values()].sort(newestFirst);
   if (!await forEachCatalogChunk(merged, (row, index) => { const old = previous.get(row.id); if (old && sameFields(row, old)) merged[index] = old; }, options)) return null;
   return merged.length === current.length && merged.every((row, index) => row === current[index]) ? current : merged;
+}
+
+// Only a complete, successful active-site snapshot can remove cached site offers.
+export function retainActiveSiteOffers<T extends {id:string;isSiteListing?:boolean}>(rows:T[],activeIds:ReadonlySet<string>|undefined):T[]{
+ if(!activeIds)return rows;const next=rows.filter(row=>!row.isSiteListing||activeIds.has(row.id));return next.length===rows.length?rows:next;
 }

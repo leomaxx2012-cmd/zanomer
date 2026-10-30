@@ -1,6 +1,10 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import Head from "expo-router/head";
+import { SellerOptions } from "../components/SellerOptions";
+import { ListingPhotos } from "../components/ListingPhotos";
+import { SellerBulkImport } from "../components/SellerBulkImport";
+import { emptySaleDetails, saleDetails, storageLabels, transferLabels, plateCategories, hasSellerContacts, importKey, restoredSellerDraft, type SaleDetails, type ImportListing } from "../lib/seller-listing";
 import { LivingBackdrop } from "../components/LivingBackdrop";
 import { catalogSearchParams, readCatalogSearch, type CatalogSearch } from "../lib/catalog-navigation";
 import { linkedRegions, regionFromLink, regionLink } from "../lib/region-links";
@@ -37,7 +41,7 @@ import { Text, TextInput } from "../components/ResponsiveText";
 import bundledCatalogData from "../assets/catalog-snapshot.json";
 import { supabase, publicCatalogClient, readSavedProfile } from "../lib/supabase";
 import { waitForAuth } from "../lib/auth-request";
-import { deduplicateOffers, mergeCatalogOffers, mergeCatalogOffersInChunks, mapCatalogChunks, serializeCatalogChunks } from "../lib/catalog-offers";
+import { deduplicateOffers, retainActiveSiteOffers, mergeCatalogOffers, mergeCatalogOffersInChunks, mapCatalogChunks, serializeCatalogChunks } from "../lib/catalog-offers";
 import { buildSeriesGroups, buildSimilarityCounts, hasSimilarCatalogOffer } from "../lib/catalog-similarity";
 import { listingLink, sharedListingId, sharedListingTable } from "../lib/listing-links";
 import { privacyPolicy } from "../lib/privacy-policy";
@@ -71,6 +75,8 @@ type Plate = {
   listingStatus?: "active" | "moderation" | "archived";
   ownerId?: string;
   photoUrl?: string;
+  photoUrls?: string[];
+  saleDetails?: SaleDetails;
 };
 
 type PricePoint = {
@@ -445,11 +451,40 @@ export default function HomeScreen() {
   const [listingRegion, setListingRegion] = useState("");
   const [listingPrice, setListingPrice] = useState("");
   const [listingComment, setListingComment] = useState("");
-  const [listingPhotoUri, setListingPhotoUri] = useState("");
+  const [listingPhotoUris, setListingPhotoUris] = useState<string[]>([]);
+  const [listingDetails, setListingDetails] = useState<SaleDetails>({...emptySaleDetails});
+  const [listingPreview, setListingPreview] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [listingSubmitting, setListingSubmitting] = useState(false);
+  const listingSubmittingRef = useRef(false);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [listingOpens, setListingOpens] = useState<Record<string,number>>({});
+  const openedThisSession = useRef(new Set<string>());
+  useEffect(() => {
+    let alive=true;
+    void AsyncStorage.getItem("zanomer.seller-draft.v1").then(raw => {
+      if(!alive)return;
+      try { const draft=raw?restoredSellerDraft(JSON.parse(raw)):null;
+        if(draft){setListingVehicle(draft.vehicle);setListingLeftLetter(draft.left);setListingDigits(draft.digits);setListingRightLetters(draft.right);setListingRegion(draft.region);setListingPrice(draft.price);setListingComment(draft.comment);setListingDetails(draft.details);setDraftMessage("Черновик восстановлен на этом устройстве. Фотографии при необходимости добавь снова.");}
+      }catch{} finally {setDraftLoaded(true);}
+    }).catch(()=>{if(alive)setDraftLoaded(true);});
+    return()=>{alive=false;};
+  },[]);
+  useEffect(() => {
+    if(!draftLoaded)return;
+    const timer=setTimeout(()=>{
+      const draft={vehicle:listingVehicle,left:listingLeftLetter,digits:listingDigits,right:listingRightLetters,region:listingRegion,price:listingPrice,comment:listingComment,details:listingDetails};
+      const hasContent=!!(draft.left||draft.digits||draft.right||draft.region||draft.price||draft.comment||draft.details.city||draft.details.negotiable||draft.details.storage!=="unspecified"||draft.details.transfer!=="discuss"||draft.details.sellerType!=="private");
+      if(hasContent)void AsyncStorage.setItem("zanomer.seller-draft.v1",JSON.stringify(draft)).catch(()=>setDraftMessage("Не удалось сохранить черновик на устройстве. Не закрывай заполненную форму."));
+    },500);
+    return()=>clearTimeout(timer);
+  },[draftLoaded,listingVehicle,listingLeftLetter,listingDigits,listingRightLetters,listingRegion,listingPrice,listingComment,listingDetails]);
   const [listingConfirmed, setListingConfirmed] = useState(false);
   const [listingMessage, setListingMessage] = useState("");
   const [selectedPlate, setSelectedPlate] = useState<Plate | null>(null);
   const [sellerProfile, setSellerProfile] = useState<string | null>(null);
+
   const [priceHistory, setPriceHistory] = useState<PricePoint[]>([]);
   const [comparison, setComparison] = useState<Plate[]>([]);
   const [comparisonOpen, setComparisonOpen] = useState(false);
@@ -463,6 +498,11 @@ export default function HomeScreen() {
   const [isModerator, setIsModerator] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
+  useEffect(()=>{
+    if(!selectedPlate?.isSiteListing||!selectedPlate.id||selectedPlate.ownerId===currentUserId||openedThisSession.current.has(selectedPlate.id))return;
+    openedThisSession.current.add(selectedPlate.id);
+    void publicCatalogClient.rpc("record_listing_open",{target:selectedPlate.id}).then(()=>{});
+  },[selectedPlate?.id,currentUserId]);
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editingPrice, setEditingPrice] = useState("");
   const [chatOpen, setChatOpen] = useState(false);
@@ -735,6 +775,8 @@ export default function HomeScreen() {
       featuredUntil: item.featured_until === "infinity" ? "9999-12-31T23:59:59Z" : item.featured_until,
       photoUrl: item.photo_url ?? undefined,
       sellerComment: item.seller_comment ?? undefined,
+      saleDetails: item.sale_details&&Object.keys(item.sale_details).length?saleDetails(item.sale_details):undefined,
+      photoUrls: item.photo_urls ?? [],
     };
   }
 
@@ -743,10 +785,12 @@ export default function HomeScreen() {
     const client = supabase;
     const { data: own } = await client
       .from("auto_listings")
-      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url, seller_comment")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, featured_until, photo_url, seller_comment, sale_details, photo_urls")
       .eq("owner_id", userId)
       .order("created_at", { ascending: false });
     setMyListings((own ?? []).map((item) => mapManagedListing(item, ownerName)));
+    const {data:opens,error:opensError}=await client.rpc("my_listing_open_counts");
+    if(!opensError&&opens)setListingOpens(Object.fromEntries(opens.map((item:{listing_id:string;opens:number})=>[item.listing_id,Number(item.opens)])));
 
     const { data: moderator } = await client.from("auto_moderators").select("user_id").eq("user_id", userId).maybeSingle();
     const canModerate = Boolean(moderator);
@@ -756,7 +800,7 @@ export default function HomeScreen() {
     if (traffic?.[0]) setSiteTraffic(traffic[0] as SiteTrafficAnalytics);
     const { data: pending } = await client
       .from("auto_listings")
-      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
+      .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment, sale_details, photo_urls")
       .eq("status", "moderation")
       .order("created_at", { ascending: true });
     setModerationListings((pending ?? []).map((item) => mapManagedListing(item, "Пользователь ЗаНомером")));
@@ -787,6 +831,13 @@ export default function HomeScreen() {
     await loadManagement(data.user?.id, profileName);
   }
 
+  async function restoreMyListing(listing:Plate){
+    if(listing.ownerId!==currentUserId)return;
+    const {error}=await supabase.from("auto_listings").update({status:"moderation"}).eq("id",listing.id).eq("owner_id",currentUserId).select("id").single();
+    if(error){setAuthMessage("Не удалось вернуть объявление. Проверь, нет ли уже такого предложения среди активных или ожидающих проверки.");return;}
+    setAuthMessage("Объявление отправлено на повторную проверку.");await loadManagement(currentUserId,profileName);
+  }
+
   async function updateMyListingPrice(listing: Plate) {
     if (!supabase || !currentUserId || listing.ownerId !== currentUserId) return;
     const nextPrice = Number(editingPrice.replace(/[^0-9]/g, ""));
@@ -796,9 +847,9 @@ export default function HomeScreen() {
     }
     const { error } = await supabase
       .from("auto_listings")
-      .update({ price_rub: nextPrice })
+      .update({ price_rub: nextPrice, status: isModerator ? "active" : "moderation" })
       .eq("id", listing.id)
-      .eq("owner_id", currentUserId);
+      .eq("owner_id", currentUserId).select("id").single();
     if (error) {
       setAuthMessage("Не удалось изменить цену. Попробуй ещё раз.");
       return;
@@ -807,7 +858,8 @@ export default function HomeScreen() {
     setSelectedPlate((item) => item?.id === listing.id ? { ...item, priceValue: nextPrice, price: `${nextPrice.toLocaleString("ru-RU")} ₽` } : item);
     setEditingPriceId(null);
     setEditingPrice("");
-    setAuthMessage("Цена объявления обновлена.");
+    if(!isModerator){setCatalog(items=>items.filter(item=>item.id!==listing.id));setSelectedPlate(item=>item?.id===listing.id?null:item);}
+    setAuthMessage(isModerator?"Цена объявления обновлена.":"Новая цена сохранена. Объявление снова на проверке и появится после одобрения.");
     await loadManagement(currentUserId, profileName);
   }
 
@@ -940,7 +992,7 @@ export default function HomeScreen() {
     if (!listing) {
       const { data } = await supabase
         .from("auto_listings")
-        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment, sale_details, photo_urls")
         .eq("id", listingId)
         .maybeSingle();
       if (data) {
@@ -959,7 +1011,7 @@ export default function HomeScreen() {
     if (!listing) {
       const { data } = await supabase
         .from("auto_listings")
-        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, status, photo_url, seller_comment, sale_details, photo_urls")
         .eq("id", listingId)
         .maybeSingle();
       if (data) {
@@ -1155,7 +1207,7 @@ export default function HomeScreen() {
       try {
         const table = sharedListingTable(incomingListingId, incomingListingKind);
         const query = table === "auto_listings"
-          ? publicCatalogClient.from("auto_listings").select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, updated_at, status, featured_until, photo_url, seller_comment")
+          ? publicCatalogClient.from("auto_listings").select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, updated_at, status, featured_until, photo_url, seller_comment, sale_details, photo_urls")
           : publicCatalogClient.from("partner_listings").select("id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, tag, source_name, source_url, featured_until");
         const { data, error } = await query.eq("id", incomingListingId).eq("status", "active").maybeSingle();
         if (error) throw error;
@@ -1323,13 +1375,13 @@ export default function HomeScreen() {
     let lastCatalogCheck = 0;
     let catalogEffectActive = true;
     let publicationVersion = 0;
-    const publishCatalog = async (incoming: Plate[]) => {
-      if (!catalogEffectActive || !incoming.length) return;
+    const publishCatalog = async (incoming: Plate[], activeSiteIds?:ReadonlySet<string>) => {
+      if (!catalogEffectActive || (!incoming.length&&!activeSiteIds)) return;
       const version = ++publicationVersion;
       const current = catalogSnapshotRef.current;
-      const merged = await mergeCatalogOffersInChunks(current, incoming, { isActive: () => catalogEffectActive && version === publicationVersion });
+      const merged = await mergeCatalogOffersInChunks(retainActiveSiteOffers(current,activeSiteIds), incoming, { isActive: () => catalogEffectActive && version === publicationVersion });
       if (merged && merged !== current && catalogEffectActive && version === publicationVersion) {
-        setCatalog(actual => actual === current ? merged : mergeCatalogOffers(actual, incoming));
+        setCatalog(actual => actual === current ? merged : mergeCatalogOffers(retainActiveSiteOffers(actual,activeSiteIds), incoming));
       }
     };
 
@@ -1380,7 +1432,7 @@ export default function HomeScreen() {
         .range(0, 119);
       const siteListingsRequest = client
         .from("auto_listings")
-        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, updated_at, status, featured_until, photo_url, seller_comment")
+        .select("id, owner_id, plate_left, plate_digits, plate_right, region, vehicle_type, price_rub, created_at, updated_at, status, featured_until, photo_url, seller_comment, sale_details, photo_urls",{count:"exact"})
         .eq("status", "active")
         .order("created_at", { ascending: false });
 
@@ -1455,6 +1507,8 @@ export default function HomeScreen() {
         featuredUntil: item.featured_until,
         photoUrl: item.photo_url ?? undefined,
         sellerComment: item.seller_comment ?? undefined,
+      saleDetails: item.sale_details&&Object.keys(item.sale_details).length?saleDetails(item.sale_details):undefined,
+      photoUrls: item.photo_urls ?? [],
       };
       });
       const partners = await mapCatalogChunks(partnerData, toPartnerPlate, { isActive: () => catalogEffectActive });
@@ -1477,7 +1531,8 @@ export default function HomeScreen() {
       // Mixing them into a real catalogue inflated the public count.
       // Не меняем тысячу карточек прямо посреди касания/прокрутки: на слабых
       // телефонах это перехватывало нажатия на несколько секунд.
-      await publishCatalog(loaded);
+      const activeSiteIds=!siteResult.error&&siteResult.count===data.length?new Set(data.map(item=>item.id)):undefined;
+      await publishCatalog(loaded,activeSiteIds);
       } catch {
         needsCatalogSync = true;
         // Нет сети — это нормальный офлайн-режим: встроенные номера уже
@@ -2139,18 +2194,11 @@ export default function HomeScreen() {
   }
 
   async function chooseListingPhoto() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setListingMessage("Разреши доступ к галерее, чтобы добавить фото номера.");
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.75,
-    });
-    if (!result.canceled) setListingPhotoUri(result.assets[0]?.uri ?? "");
+    if(listingPhotoUris.length>=6){setListingMessage("Можно добавить до 6 фотографий. Убери одну, чтобы заменить её.");return;}
+    const permission=await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if(!permission.granted){setListingMessage("Разреши доступ к галерее, чтобы добавить фото номера.");return;}
+    const result=await ImagePicker.launchImageLibraryAsync({mediaTypes:["images"],allowsMultipleSelection:true,selectionLimit:6-listingPhotoUris.length,quality:0.75});
+    if(!result.canceled){setListingPhotoUris(current=>[...new Set([...current,...result.assets.map(asset=>asset.uri)])].slice(0,6));setListingMessage("");}
   }
 
   function listingRegionLabel(regionCode: string) {
@@ -2167,6 +2215,12 @@ export default function HomeScreen() {
   }
 
   async function addListing() {
+    if(listingSubmittingRef.current)return;
+    listingSubmittingRef.current=true;setListingSubmitting(true);
+    try{await submitListing();}catch{setListingMessage("Не удалось отправить объявление. Поля сохранены — попробуй ещё раз.");}
+    finally{listingSubmittingRef.current=false;setListingSubmitting(false);}
+  }
+  async function submitListing() {
     setListingMessage("");
     const priceValue = Number(listingPrice.replace(/\D/g, ""));
     const format = plateFormat(listingVehicle);
@@ -2177,16 +2231,17 @@ export default function HomeScreen() {
       setListingMessage(`Введи номер формата «${format.description}», цену и подтверди объявление.`);
       return;
     }
-    const normalizedRegionCode = listingRegion.replace(/\D/g, "").slice(0, 3);
+    const rawRegionCode = listingRegion.replace(/\D/g, "").slice(0, 3);
+    const normalizedRegionCode = rawRegionCode?String(Number(rawRegionCode)):"";
     const normalizedRegion = listingRegionLabel(normalizedRegionCode);
     const normalizedPlate = formatPlateValue(left, listingDigits, right, listingVehicle);
-    const hasForbiddenContact = /(https?:\/\/|www\.|t\.me\/|telegram|whatsapp|\+?\d[\d\s()\-]{8,}|[\w.+-]+@[\w-]+\.[\w.-]+)/i.test(listingComment);
-    const duplicate = catalog.some((item) => item.isSiteListing && item.seller === profileName && item.vehicle === listingVehicle && item.value === normalizedPlate && item.region.toLowerCase() === normalizedRegion.toLowerCase());
+    const hasForbiddenContact = hasSellerContacts(listingComment + " " + listingDetails.city);
+    const duplicate = [...catalog,...myListings.filter(item=>item.listingStatus!=="archived")].some(item=>importKey({vehicle:item.vehicle,left:item.leftLetter,digits:item.digits,right:item.rightLetters,region:item.region,price:item.priceValue})===importKey({vehicle:listingVehicle,left,digits:listingDigits,right,region:normalizedRegionCode,price:priceValue}));
     if (![...left, ...right].every((letter) => allowedLetters.includes(letter))) {
       setListingMessage("В номере можно использовать только разрешённые буквы российского госномера.");
       return;
     }
-    if (!/^\d{1,3}$/.test(normalizedRegionCode)) {
+    if (!/^\d{1,3}$/.test(normalizedRegionCode)||Number(normalizedRegionCode)===0) {
       setListingMessage("Введи код региона: от 1 до 3 цифр, например 77 или 999.");
       return;
     }
@@ -2195,13 +2250,14 @@ export default function HomeScreen() {
       return;
     }
     if (duplicate) {
-      setListingMessage("Такой номер с этим регионом уже есть в каталоге. Если это твоё объявление, оно появится в разделе «Мои объявления» после запуска этого раздела.");
+      setListingMessage("Такое предложение с этим номером, регионом и ценой уже есть. Свои объявления можно посмотреть в профиле.");
       return;
     }
     if (hasForbiddenContact) {
       setListingMessage("Не добавляй в комментарий ссылки, Telegram, почту или телефон. Для безопасности связь с покупателем будет через сайт.");
       return;
     }
+    if(listingDetails.city.length>80||listingComment.length>2000){setListingMessage("Город — до 80 символов, описание — до 2 000.");return;}
     const entry: Plate = {
       id: `${Date.now()}`,
       value: normalizedPlate,
@@ -2218,6 +2274,7 @@ export default function HomeScreen() {
       isSiteListing: true,
       sellerRating: null,
       sellerComment: listingComment.trim(),
+      saleDetails: saleDetails(listingDetails),
     };
     if (supabase) {
       // getUser() проверяет пользователя через сеть. При VPN или кратком
@@ -2241,25 +2298,21 @@ export default function HomeScreen() {
         return;
       }
       const signedInUser = sessionCheck.session.user;
-      let photoUrl: string | null = null;
-      if (listingPhotoUri) {
-        try {
-          // В Android React Native Blob передаётся в Supabase нестабильно:
-          // он выглядит валидным, но запрос к Storage завершается ошибкой.
-          // ArrayBuffer работает одинаково для фото из галереи и камеры.
-          const response = await fetch(listingPhotoUri);
-          if (!response.ok) throw new Error("Не удалось прочитать выбранное фото.");
-          const image = await response.arrayBuffer();
-          if (!image.byteLength) throw new Error("Фото получилось пустым.");
-          const path = `${signedInUser.id}/${Date.now()}.jpg`;
-          const upload = await supabase.storage.from("listing-photos").upload(path, image, { contentType: "image/jpeg", upsert: false });
-          if (upload.error) throw upload.error;
-          photoUrl = supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl;
-        } catch (error) {
-          const detail = error instanceof Error ? error.message : "Неизвестная ошибка загрузки.";
-          setListingMessage(`Фото не загрузилось: ${detail}`);
-          return;
-        }
+      const photoUrls:string[]=[];
+      const uploadedPaths:string[]=[];
+      for(const [index,uri] of listingPhotoUris.entries()){
+        try{
+          const response=await fetch(uri);if(!response.ok)throw new Error("Не удалось прочитать фотографию.");
+          const image=await response.arrayBuffer();if(!image.byteLength||image.byteLength>8_000_000)throw new Error("Фотография должна быть не больше 8 МБ.");
+          const rawType=(response.headers.get("content-type")??"image/jpeg").split(";")[0];
+          const contentType=["image/jpeg","image/png","image/webp"].includes(rawType)?rawType:"image/jpeg";
+          const extension=contentType==="image/png"?"png":contentType==="image/webp"?"webp":"jpg";
+          const path=`${signedInUser.id}/${Date.now()}-${index}.${extension}`;
+          const upload=await supabase.storage.from("listing-photos").upload(path,image,{contentType,upsert:false});
+          if(upload.error)throw upload.error;
+          uploadedPaths.push(path);
+          photoUrls.push(supabase.storage.from("listing-photos").getPublicUrl(path).data.publicUrl);
+        }catch(error){if(uploadedPaths.length)await supabase.storage.from("listing-photos").remove(uploadedPaths);setListingMessage(`Фото ${index+1} не загрузилось: ${error instanceof Error?error.message:"проверь соединение"}. Данные формы сохранены.`);return;}
       }
       const { data: insertedListing, error } = await supabase.from("auto_listings").insert({
         owner_id: signedInUser.id,
@@ -2269,11 +2322,14 @@ export default function HomeScreen() {
         region: entry.region,
         vehicle_type: entry.vehicle,
         price_rub: entry.priceValue,
-        photo_url: photoUrl,
+        photo_url: photoUrls[0]??null,
+        photo_urls: photoUrls,
+        sale_details: saleDetails(listingDetails),
         seller_comment: listingComment.trim() || null,
         status: isModerator ? "active" : "moderation",
       }).select("id, status").single();
       if (error) {
+        if(uploadedPaths.length)await supabase.storage.from("listing-photos").remove(uploadedPaths);
         setListingMessage("Не удалось опубликовать объявление. Данные сохранены в форме. Проверь интернет и попробуй ещё раз; если ошибка повторится, сообщи нам.");
         return;
       }
@@ -2284,11 +2340,26 @@ export default function HomeScreen() {
     setAddOpen(false);
     setListingVehicle("car"); setListingLeftLetter(""); setListingDigits(""); setListingRightLetters(""); setListingRegion(""); setListingPrice("");
     setListingComment("");
-    setListingPhotoUri("");
+    setListingPhotoUris([]);setListingDetails({...emptySaleDetails});setListingPreview(false);setDraftMessage("");
+    void AsyncStorage.removeItem("zanomer.seller-draft.v1").catch(()=>{});
     setListingConfirmed(false);
     setListingMessage(isModerator
       ? "✓ Объявление опубликовано: твой аккаунт подтверждён как модератор."
       : "✓ Объявление принято: проверим номер, регион, цену и повторные публикации. После одобрения оно появится в разделе «Поиск объявлений».");
+  }
+
+  const sellerExistingKeys=useMemo(()=>new Set([...catalog,...myListings.filter(item=>item.listingStatus!=="archived")].map(item=>importKey({vehicle:item.vehicle,left:item.leftLetter,digits:item.digits,right:item.rightLetters,region:item.region,price:item.priceValue}))),[catalog,myListings]);
+  async function publishImportedListings(rows:ImportListing[]):Promise<string>{
+    const session=await publicationSession(()=>supabase.auth.getSession());
+    if(session.status!=="ready"){openAccount();return "Войди в аккаунт, затем повтори отправку списка.";}
+    // Recheck immediately before the atomic batch write; a failed request keeps the draft.
+    const freshRows=rows.filter(row=>!sellerExistingKeys.has(importKey(row)));
+    if(!freshRows.length)return "Все эти предложения уже есть в каталоге или твоих объявлениях.";
+    const payload=freshRows.map(row=>({owner_id:session.session.user.id,plate_left:row.left,plate_digits:row.digits,plate_right:row.right,region:listingRegionLabel(row.region),vehicle_type:row.vehicle,price_rub:row.price,seller_comment:row.comment||null,sale_details:row.details,status:"moderation"}));
+    const {data,error}=await supabase.from("auto_listings").insert(payload).select("id");
+    if(error)return error.code==="23505"?"Одно из предложений уже размещено. Обнови свои объявления и проверь список ещё раз; повторные записи не добавлены.":"Не удалось отправить список. Все строки сохранены — проверь соединение и повтори.";
+    await loadManagement(session.session.user.id,profileName);
+    return `На проверку отправлено: ${data?.length??freshRows.length}. После одобрения объявления появятся в каталоге.`;
   }
 
   async function submitAuth() {
@@ -2576,6 +2647,10 @@ export default function HomeScreen() {
                     </View>}
                     {promotionListing === listing.id && listing.listingStatus !== "active" && <Text style={styles.managementHint}>Размещение доступно после одобрения объявления.</Text>}
                   </Pressable>
+                  <Text style={styles.managementHint}>{listingOpens[listing.id]===undefined?"Счётчик открытий пока недоступен":`Открытия карточки после подключения счётчика: ${listingOpens[listing.id]}`}</Text>
+                  {listing.listingStatus!=="archived"&&<Pressable accessibilityRole="button" onPress={()=>{setEditingPriceId(listing.id);setEditingPrice(String(listing.priceValue));}} style={styles.editPriceButton}><Text style={styles.editPriceButtonText}>Изменить цену</Text></Pressable>}
+                  {editingPriceId===listing.id&&<View style={{gap:8}}><TextInput accessibilityLabel="Новая цена объявления" value={editingPrice} onChangeText={setEditingPrice} keyboardType="number-pad" style={styles.addInput}/><Text style={styles.managementHint}>После изменения цены объявление снова проходит проверку.</Text><Pressable accessibilityRole="button" onPress={()=>void updateMyListingPrice(listing)} style={styles.managementButton}><Text style={styles.managementButtonText}>Сохранить новую цену</Text></Pressable><Pressable onPress={()=>setEditingPriceId(null)}><Text style={styles.cancelText}>Отмена</Text></Pressable></View>}
+                  {listing.listingStatus==="archived"&&<Pressable accessibilityRole="button" onPress={()=>void restoreMyListing(listing)} style={styles.managementButton}><Text style={styles.managementButtonText}>Вернуть на проверку</Text></Pressable>}
                   {listing.listingStatus !== "archived" && <View style={styles.managementActions}>
                     <Pressable onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
                   </View>}
@@ -2836,15 +2911,18 @@ export default function HomeScreen() {
       {activeTab === "sell" && <View style={styles.tabScroll}>
         <View style={styles.sellIntro}>
           <Text style={styles.sellTitle}>Продай красивый номер</Text>
-          <Text style={styles.sellHint}>После входа добавь номер, регион и цену. Каждое новое объявление сначала проверяется вручную.</Text>
-          <Pressable onPress={() => setAddOpen(true)} style={styles.sellButton}>
+          <Text style={styles.sellHint}>Добавь номер, фотографии и условия предложения. Можно заполнить одно объявление или загрузить сразу список из Excel. Публикации проходят проверку.</Text>
+          <Pressable onPress={() => {setBulkOpen(false);setAddOpen(true);}} style={styles.sellButton}>
             <Text style={styles.sellButtonText}>＋ Выставить объявление</Text>
           </Pressable>
         </View>
+        <Pressable accessibilityRole="button" onPress={()=>{setBulkOpen(value=>!value);setAddOpen(false);setListingPicker(null);}} style={styles.searchResetButton}><Text style={styles.searchResetButtonText}>{bulkOpen?"Скрыть загрузку списка":"▦ Загрузить список из Excel / CSV"}</Text></Pressable>
+        {bulkOpen&&<SellerBulkImport existing={sellerExistingKeys} signedIn={!!profileName} onLogin={openAccount} onSubmit={publishImportedListings}/>}
         {addOpen && (
           <View style={styles.addPanel}>
             <Text style={styles.addPanelTitle}>Новое объявление</Text>
             {!profileName && <Text style={styles.addPanelHint}>Заполни номер и цену. Для публикации потребуется вход в аккаунт.</Text>}
+            <Text style={styles.sellerDraftHint}>{draftMessage||"Черновик автоматически сохраняется на этом устройстве. Фотографии хранятся только до закрытия формы."}</Text>
             <>
               <Text style={styles.listingTypeLabel}>Тип номера</Text>
               <View style={styles.listingVehicleTabs}>{([ ["car", "🚗", "Авто"], ["motorcycle", "🏍️", "Мото"], ["truck", "🚛", "Прицеп"] ] as const).map(([type, icon, label]) => <Pressable key={type} onPress={() => chooseListingVehicle(type)} style={[styles.listingVehicleTab, listingVehicle === type && styles.listingVehicleTabActive]}><Text style={[styles.listingVehicleTabText, listingVehicle === type && styles.listingVehicleTabTextActive]}>{icon} {label}</Text></Pressable>)}</View>
@@ -2852,13 +2930,17 @@ export default function HomeScreen() {
               <PlateEditor vehicle={listingVehicle} leftLetter={listingLeftLetter} digits={listingDigits} rightLetters={listingRightLetters} region={listingRegion || "*"} labelPrefix="Объявление"
                 onOpen={section => { if (section === "region") setListingRegionGroup(null); setListingPicker(section); }} />
               {!!listingRegion && <Text style={styles.searchRegionName}>{listingRegionLabel(listingRegion)}</Text>}
+              <View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View>
+              <SellerOptions value={listingDetails} onChange={setListingDetails}/>
+              <Text style={styles.listingTypeLabel}>Цена предложения</Text>
               <TextInput value={listingPrice} onChangeText={setListingPrice} placeholder="Цена в рублях" placeholderTextColor="#98A2B3" style={styles.addInput} keyboardType="number-pad" />
               <Pressable onPress={() => { void chooseListingPhoto(); }} style={styles.photoPickerButton}>
-                <Text style={styles.photoPickerText}>{listingPhotoUri ? "✓ Фото добавлено — изменить" : "🖼 Добавить фото номера"}</Text>
+                <Text style={styles.photoPickerText}>{`🖼 Добавить фотографии · ${listingPhotoUris.length}/6`}</Text>
               </Pressable>
-              {!!listingPhotoUri && <Image source={{ uri: listingPhotoUri }} style={styles.listingPhotoPreview} />}
-              <Text style={styles.contactHint}>Не публикуй документы, VIN, банковские данные или чужие номера телефонов. Связь с покупателем позже будет через внутренний чат.</Text>
-              <TextInput value={listingComment} onChangeText={setListingComment} placeholder="Комментарий продавца" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.commentInput]} multiline />
+              <ListingPhotos urls={listingPhotoUris} onChange={setListingPhotoUris}/>
+              <Text style={styles.contactHint}>Не публикуй документы, VIN, банковские данные или чужие номера телефонов. Покупатель сможет написать тебе во внутреннем чате.</Text>
+              <TextInput value={listingComment} onChangeText={setListingComment} maxLength={2000} placeholder="Описание предложения" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.commentInput]} multiline />
+              <Pressable accessibilityRole="button" onPress={()=>{setListingPicker(null);setListingPreview(true);}} style={styles.searchResetButton}><Text style={styles.searchResetButtonText}>Посмотреть объявление перед отправкой</Text></Pressable>
               <Pressable onPress={() => setListingConfirmed((current) => !current)} style={styles.confirmRow}>
                 <View style={[styles.confirmBox, listingConfirmed && styles.confirmBoxActive]}>{listingConfirmed && <Text style={styles.confirmTick}>✓</Text>}</View>
                 <Text style={styles.confirmText}>Подтверждаю, что размещаю объявление о своём предложении и указал верные данные.</Text>
@@ -2866,7 +2948,7 @@ export default function HomeScreen() {
               {!!listingMessage && <Text style={styles.listingMessage}>{listingMessage}</Text>}
               <View style={styles.addPanelActions}>
                 <Pressable onPress={() => { setListingPicker(null); setAddOpen(false); }} style={styles.cancelButton}><Text style={styles.cancelText}>Отмена</Text></Pressable>
-                <Pressable onPress={() => { if (!profileName) { setListingPicker(null); openAccount(); } else { void addListing(); } }} style={styles.publishButton}><Text style={styles.publishText}>{profileName ? "Опубликовать" : "Войти для публикации"}</Text></Pressable>
+                <Pressable disabled={listingSubmitting} onPress={() => { if (!profileName) { setListingPicker(null); openAccount(); } else { void addListing(); } }} style={styles.publishButton}><Text style={styles.publishText}>{listingSubmitting?"Отправляем…":profileName ? "Отправить на проверку" : "Войти для публикации"}</Text></Pressable>
               </View>
             </>
           </View>
@@ -3013,10 +3095,11 @@ export default function HomeScreen() {
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   </View>
                   <View style={styles.cardRegionRow}>
-                    <Text style={[styles.region, styles.cardRegionName]}>{item.region}</Text>
+                    <Text style={[styles.region, styles.cardRegionName]}>{item.saleDetails?.city?`${item.region} · ${item.saleDetails.city}`:item.region}</Text>
                     <Text style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
                   </View>
                   <View style={styles.cardBadgesSpread}>
+                    {item.saleDetails?.negotiable&&<Text style={styles.sellerCategory}>Торг</Text>}{item.saleDetails?.storage==="storage"&&<Text style={styles.sellerCategory}>На хранении</Text>}
 
                     {!!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
@@ -3167,9 +3250,11 @@ export default function HomeScreen() {
               <View style={[styles.detailsPlatePreview, selectedPlate?.vehicle === "motorcycle" && styles.cardPlateMotorcycle]}>
                 <PlateFace leftLetter={selectedPlate?.leftLetter} digits={selectedPlate?.digits} rightLetters={selectedPlate?.rightLetters} region={selectedPlate?.region.split(" · ")[1] ?? ""} vehicle={selectedPlate?.vehicle} />
               </View>
-              {!!selectedPlate?.photoUrl && <Image source={{ uri: selectedPlate.photoUrl }} style={styles.detailsPhoto} resizeMode="cover" />}
+              {selectedPlate&&<ListingPhotos urls={selectedPlate.photoUrls?.length?selectedPlate.photoUrls:selectedPlate.photoUrl?[selectedPlate.photoUrl]:[]}/>}
               <View style={styles.detailsBlock}>
                 <Text style={styles.detailsLabel}>Регион</Text><Text style={styles.detailsValue}>{selectedPlate?.region}</Text>
+                {!!selectedPlate?.saleDetails?.city&&<><Text style={styles.detailsLabel}>Город</Text><Text style={styles.detailsValue}>{selectedPlate.saleDetails.city}</Text></>}
+                {selectedPlate?.saleDetails&&<><Text style={styles.detailsLabel}>Условия предложения</Text><Text style={styles.detailsValue}>{[selectedPlate.saleDetails.negotiable?"Возможен торг":"",selectedPlate.saleDetails.storage!=="unspecified"?storageLabels[selectedPlate.saleDetails.storage]:"",transferLabels[selectedPlate.saleDetails.transfer],selectedPlate.saleDetails.sellerType==="dealer"?"Дилер":"Частный продавец"].filter(Boolean).join(" · ")}</Text></>}
                 <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
                 <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate?.seller}</Text>
               </View>
@@ -3553,6 +3638,7 @@ export default function HomeScreen() {
           {index < 3 && <View style={styles.navDivider} />}
         </View>)}
       </View>
+      {listingPreview&&<Modal transparent animationType="fade" onRequestClose={()=>setListingPreview(false)}><View style={styles.regionPickerOverlay}><Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Закрыть предпросмотр" onPress={()=>setListingPreview(false)}/><View style={[styles.addPanel,{width:"94%",maxWidth:650,maxHeight:"88%",alignSelf:"center"}]}><ScrollView keyboardShouldPersistTaps="handled"><Text style={styles.addPanelTitle}>Предпросмотр объявления</Text><Text style={styles.sellerDraftHint}>Так покупатель увидит твоё предложение после одобрения.</Text><PlateFace vehicle={listingVehicle} leftLetter={listingLeftLetter||"*"} digits={listingDigits||"***"} rightLetters={listingRightLetters||"**"} region={listingRegion||"*"}/><Text style={styles.offerPrice}>{Number(listingPrice.replace(/\D/g,""))?`${Number(listingPrice.replace(/\D/g,"")).toLocaleString("ru-RU")} ₽`:"Цена не указана"}</Text><Text style={styles.detailsValue}>{listingRegionLabel(listingRegion)}{listingDetails.city?` · ${listingDetails.city}`:""}</Text><View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View><Text style={styles.detailsComment}>{[listingDetails.negotiable?"Возможен торг":"",storageLabels[listingDetails.storage],transferLabels[listingDetails.transfer],listingDetails.sellerType==="dealer"?"Дилер":"Частный продавец"].filter(Boolean).join(" · ")}</Text><ListingPhotos urls={listingPhotoUris}/><Text style={styles.detailsComment}>{listingComment||"Описание пока не добавлено"}</Text><Pressable accessibilityRole="button" onPress={()=>setListingPreview(false)} style={styles.publishButton}><Text style={styles.publishText}>Вернуться к редактированию</Text></Pressable></ScrollView></View></View></Modal>}
       {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={[styles.toast, /^(Не удалось|Войди|Лимит)/.test(subscriptionToastMessage) && styles.toastError, { bottom: navigationHeight + 12 }]}>
         <Text style={styles.toastText}>{subscriptionToastMessage || (hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено")}</Text>
       </Pressable>}
@@ -3561,6 +3647,9 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  sellerDraftHint:{color:"#7A718F",fontSize:12,lineHeight:19,marginVertical:10},
+  sellerCategories:{flexDirection:"row",flexWrap:"wrap",gap:7,marginVertical:10},
+  sellerCategory:{backgroundColor:"#F0ECFF",color:"#6350B0",fontSize:11,fontWeight:"700",paddingHorizontal:9,paddingVertical:5,borderRadius:8},
   brandContainer: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
   brandMark: { width: 40, height: 40, borderRadius: 12, backgroundColor: "#5C4EC5", alignItems: "center", justifyContent: "center" },
   brandMarkText: { color: "#FFFFFF", fontSize: 28, lineHeight: 34, fontWeight: "800" },
