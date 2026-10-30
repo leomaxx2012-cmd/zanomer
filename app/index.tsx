@@ -2649,7 +2649,7 @@ export default function HomeScreen() {
               {managementOpen && <View style={styles.managementPanel}>
                 <Text style={styles.managementTitle}>Мои объявления</Text>
                 <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>0</Text><Text style={styles.statLabel}>сообщений</Text></View></View>
-                {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={styles.managementCard}>
+                {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={[styles.managementCard, styles.managementOwnCard]}>
                   <Pressable onPress={() => setPromotionListing(value => value === listing.id ? null : listing.id)} style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text><Text style={styles.managementHint}>Нажми на номер для выделения</Text>
                     {listing.listingStatus === "active" && !!listing.featuredUntil && new Date(listing.featuredUntil).getTime() > Date.now() && <Text style={styles.managementStatus}>🔥 В горячих предложениях · {new Date(listing.featuredUntil).getFullYear() >= 9999 ? "до продажи" : `до ${new Date(listing.featuredUntil).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`}</Text>}
                     {promotionListing === listing.id && listing.listingStatus === "active" && <View>
@@ -2659,12 +2659,12 @@ export default function HomeScreen() {
                     {promotionListing === listing.id && listing.listingStatus !== "active" && <Text style={styles.managementHint}>Размещение доступно после одобрения объявления.</Text>}
                   </Pressable>
                   <Text style={styles.managementHint}>{listingOpens[listing.id]===undefined?"Счётчик открытий пока недоступен":`Открытия карточки после подключения счётчика: ${listingOpens[listing.id]}`}</Text>
-                  {listing.listingStatus!=="archived"&&<Pressable accessibilityRole="button" onPress={()=>{setEditingPriceId(listing.id);setEditingPrice(String(listing.priceValue));}} style={styles.editPriceButton}><Text style={styles.editPriceButtonText}>Изменить цену</Text></Pressable>}
+                  {listing.listingStatus!=="archived"&&<View style={styles.managementOwnActions}>
+                    <Pressable accessibilityRole="button" onPress={()=>{setEditingPriceId(listing.id);setEditingPrice(String(listing.priceValue));}} style={styles.editPriceButton}><Text style={styles.editPriceButtonText}>Изменить цену</Text></Pressable>
+                    <Pressable accessibilityRole="button" onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
+                  </View>}
                   {editingPriceId===listing.id&&<View style={{gap:8}}><TextInput accessibilityLabel="Новая цена объявления" value={editingPrice} onChangeText={setEditingPrice} keyboardType="number-pad" style={styles.addInput}/><Text style={styles.managementHint}>После изменения цены объявление снова проходит проверку.</Text><Pressable accessibilityRole="button" onPress={()=>void updateMyListingPrice(listing)} style={styles.managementButton}><Text style={styles.managementButtonText}>Сохранить новую цену</Text></Pressable><Pressable onPress={()=>setEditingPriceId(null)}><Text style={styles.cancelText}>Отмена</Text></Pressable></View>}
                   {listing.listingStatus==="archived"&&<Pressable accessibilityRole="button" onPress={()=>void restoreMyListing(listing)} style={styles.managementButton}><Text style={styles.managementButtonText}>Вернуть на проверку</Text></Pressable>}
-                  {listing.listingStatus !== "archived" && <View style={styles.managementActions}>
-                    <Pressable onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
-                  </View>}
                 </View>)}
                 {isModerator && <>
                   <View style={styles.analyticsPanel}>
@@ -3798,7 +3798,9 @@ const styles = StyleSheet.create({
   reportReviewText: { flex: 1, paddingRight: 8 },
   managementHint: { color: "#716A88", fontSize: 12, lineHeight: 17, marginTop: 6 },
   managementCard: { alignItems: "center", backgroundColor: "#FFFFFF", borderColor: "#E4E0F3", borderRadius: 11, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 8, padding: 10 },
-  managementListingInfo: { flex: 1, paddingRight: 8 },
+  managementOwnCard: { flexDirection: "column", alignItems: "stretch", gap: 8, width: "100%", minWidth: 0 },
+  managementListingInfo: { width: "100%", minWidth: 0 },
+  managementOwnActions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
   managementActions: { alignItems: "flex-end", gap: 5 },
   managementPlate: { color: "#24213E", fontSize: 14, fontWeight: "900" },
   managementMeta: { color: "#716A88", fontSize: 11, marginTop: 2 },
