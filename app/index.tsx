@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import Head from "expo-router/head";
 import { LivingBackdrop } from "../components/LivingBackdrop";
@@ -303,6 +303,9 @@ const catalogFallback = deduplicateOffers(bundledCatalog.length > 0 ? bundledCat
 const regionalSearchLinks = linkedRegions.filter(item => catalogFallback.some(plate => plate.region.split(" · ")[0].trim() === item.title));
 
 export default function HomeScreen() {
+  // A stack can retain the home screen while the results screen is mounted.
+  // Supabase reuses identical topics, so each screen must own its channel.
+  const screenId = useId();
   const router = useRouter();
   const pathname = usePathname();
   const isCatalogRoute = pathname === "/catalog";
@@ -1530,7 +1533,7 @@ export default function HomeScreen() {
     // Realtime даёт мгновенное обновление, если оно разрешено на стороне
     // Supabase. Минутная проверка выше остаётся надёжным резервом.
     const updatesChannel = client
-      .channel("zanomer-partner-listings")
+      .channel(`zanomer-partner-listings-${screenId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "partner_listings" }, () => void loadCatalog())
       .on("postgres_changes", { event: "*", schema: "public", table: "auto_listings" }, () => void loadCatalog())
       .subscribe();
@@ -1754,7 +1757,7 @@ export default function HomeScreen() {
   useEffect(() => {
     if (!supabase || !currentUserId) return;
     const channel = supabase
-      .channel(`listing-messages-${currentUserId}`)
+      .channel(`listing-messages-${currentUserId}-${screenId}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "listing_messages", filter: `recipient_id=eq.${currentUserId}` }, (payload) => {
         const message = payload.new as ChatMessage & { listing_id?: string };
         if (message.sender_id === currentUserId) return;
