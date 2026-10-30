@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocalSearchParams } from "expo-router";
+import { Link, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import Head from "expo-router/head";
+import { LivingBackdrop } from "../components/LivingBackdrop";
+import { catalogSearchParams, readCatalogSearch, type CatalogSearch } from "../lib/catalog-navigation";
 import { linkedRegions, regionFromLink, regionLink } from "../lib/region-links";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
@@ -108,7 +110,7 @@ type SavedSearchRow = {
 };
 
 type GeneralSpecialFilter = "firstTen" | "roundHundred" | "mirror";
-type SpecialFilter = GeneralSpecialFilter | "similarDigits" | "similarLetters" | "similarRegion";
+type SpecialFilter = GeneralSpecialFilter | "repeatDigits" | "repeatLetters" | "similarDigits" | "similarLetters" | "similarRegion";
 type PlatePicker = "left" | "digits" | "right" | "region" | null;
 type SimilarityFilter = "digits" | "letters" | "region";
 type LegalDocument = "overview" | "offer" | "refund" | "delivery" | "privacy" | "requisites" | "plus" | "highlight" | "hot" | "highlight-pack" | "hot-pack" | "security" | "payment-methods";
@@ -299,6 +301,9 @@ const catalogFallback = deduplicateOffers(bundledCatalog.length > 0 ? bundledCat
 const regionalSearchLinks = linkedRegions.filter(item => catalogFallback.some(plate => plate.region.split(" · ")[0].trim() === item.title));
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const isCatalogRoute = pathname === "/catalog";
   const { width: windowWidth, height: windowHeight, fontScale } = useWindowDimensions();
   const compactLayout = windowWidth < 600 || windowWidth / fontScale < 430;
   const wideListingCards = !compactLayout && windowWidth / fontScale >= 900;
@@ -324,6 +329,7 @@ export default function HomeScreen() {
     setCatalogDisplayLimit(catalogPageSize);
     setCatalogScope("filtered");
     setCatalogOnly(true);
+    if (Platform.OS === "web") router.push({ pathname: "/catalog", params: catalogSearchParams(currentSearch()) } as never);
     catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
   }
   const latestPartnerListingRef = useRef("");
@@ -332,10 +338,11 @@ export default function HomeScreen() {
   const [catalog, setCatalog] = useState<Plate[]>(catalogFallback);
   const catalogSnapshotRef = useRef(catalog);
   catalogSnapshotRef.current = catalog;
-  const sharedParams = useLocalSearchParams<{ listing?: string; kind?: string; region?: string | string[] }>();
+  const sharedParams = useLocalSearchParams<Record<string, string | string[]>>();
+  const initialSearch = readCatalogSearch(sharedParams);
   const incomingRegion = useMemo(() => regionFromLink(sharedParams.region, catalogFallback), [sharedParams.region]);
-  const incomingListingId = sharedListingId(sharedParams.listing);
-  const incomingListingKind = sharedParams.kind;
+  const incomingListingId = sharedListingId(typeof sharedParams.listing === "string" ? sharedParams.listing : undefined);
+  const incomingListingKind = typeof sharedParams.kind === "string" ? sharedParams.kind : undefined;
   const handledSharedListingRef = useRef("");
   const [sharedListingMessage, setSharedListingMessage] = useState("");
   const [sharedListingAttempt, setSharedListingAttempt] = useState(0);
@@ -347,17 +354,17 @@ export default function HomeScreen() {
   const [catalogLoadError, setCatalogLoadError] = useState("");
   const [catalogSlowMessage, setCatalogSlowMessage] = useState("");
   const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => compactLayout ? 12 : 40);
-  const [catalogOnly, setCatalogOnly] = useState(false);
-  const [catalogScope, setCatalogScope] = useState<"all" | "filtered">("all");
+  const [catalogOnly, setCatalogOnly] = useState(isCatalogRoute);
+  const [catalogScope, setCatalogScope] = useState<"all" | "filtered">("filtered");
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
-  const [leftLetter, setLeftLetter] = useState("");
-  const [rightLetters, setRightLetters] = useState("");
-  const [digits, setDigits] = useState("");
-  const [region, setRegion] = useState(() => incomingRegion?.region ?? "Все");
-  const [regionCode, setRegionCode] = useState(() => incomingRegion?.regionCode ?? "");
-  const [vehicle, setVehicle] = useState<Plate["vehicle"]>("car");
-  const [priceLimit, setPriceLimit] = useState<number | null>(null);
-  const [specialFilters, setSpecialFilters] = useState<SpecialFilter[]>([]);
+  const [leftLetter, setLeftLetter] = useState(() => initialSearch.leftLetter);
+  const [rightLetters, setRightLetters] = useState(() => initialSearch.rightLetters);
+  const [digits, setDigits] = useState(() => initialSearch.digits);
+  const [region, setRegion] = useState(() => incomingRegion?.region ?? initialSearch.region);
+  const [regionCode, setRegionCode] = useState(() => incomingRegion?.regionCode ?? initialSearch.regionCode);
+  const [vehicle, setVehicle] = useState<Plate["vehicle"]>(initialSearch.vehicle);
+  const [priceLimit, setPriceLimit] = useState<number | null>(initialSearch.priceLimit);
+  const [specialFilters, setSpecialFilters] = useState<SpecialFilter[]>(initialSearch.specialFilters as SpecialFilter[]);
   const [saved, setSaved] = useState<string[]>([]);
   const [likedListingIds, setLikedListingIds] = useState<string[]>([]);
   const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
@@ -368,24 +375,42 @@ export default function HomeScreen() {
   const [similarityPickerPlate, setSimilarityPickerPlate] = useState<Plate | null>(null);
   const [hiddenSeriesGroupKeys, setHiddenSeriesGroupKeys] = useState<string[]>([]);
   const [savedSearches, setSavedSearches] = useState<SavedSearch[]>([]);
-  const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">("date");
-  const [freshOnly, setFreshOnly] = useState(false);
+  const [sort, setSort] = useState<"date" | "priceAsc" | "priceDesc">(initialSearch.sort);
+  const [freshOnly, setFreshOnly] = useState(initialSearch.freshOnly);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
-  const [selectedSources, setSelectedSources] = useState<string[]>([]);
+  const [selectedSources, setSelectedSources] = useState<string[]>(initialSearch.selectedSources);
   const [sourceListExpanded, setSourceListExpanded] = useState(false);
-  const [similarFiltersOpen, setSimilarFiltersOpen] = useState(false);
+  const [similarFiltersOpen, setSimilarFiltersOpen] = useState(initialSearch.groupSeries);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
-  const handledRegionLink = useRef(sharedParams.region);
+  const routeSearchKey = JSON.stringify([pathname, sharedParams]);
+  const handledSearchLink = useRef(routeSearchKey);
   useEffect(() => {
-    if (handledRegionLink.current === sharedParams.region) return;
-    handledRegionLink.current = sharedParams.region;
-    setRegion(incomingRegion?.region ?? "Все");
-    setRegionCode(incomingRegion?.regionCode ?? "");
-    setActiveTab("buy"); setCatalogOnly(false);
-    setLeftLetter(""); setDigits(""); setRightLetters("");
-    setPriceLimit(null); setSpecialFilters([]); setSelectedSources([]);
-    setFreshOnly(false); setSimilarToId(null); setSimilarFiltersOpen(false);
-  }, [incomingRegion, sharedParams.region]);
+    if (handledSearchLink.current === routeSearchKey) return;
+    handledSearchLink.current = routeSearchKey;
+    const next = readCatalogSearch(sharedParams);
+    setRegion(incomingRegion?.region ?? next.region); setRegionCode(incomingRegion?.regionCode ?? next.regionCode);
+    setLeftLetter(next.leftLetter); setDigits(next.digits); setRightLetters(next.rightLetters);
+    setVehicle(next.vehicle); setPriceLimit(next.priceLimit); setSpecialFilters(next.specialFilters as SpecialFilter[]);
+    setSelectedSources(next.selectedSources); setFreshOnly(next.freshOnly); setSort(next.sort);
+    setActiveTab("buy"); setCatalogOnly(isCatalogRoute); setCatalogScope("filtered");
+    setSimilarToId(null); setSimilarFiltersOpen(next.groupSeries);
+    setPlatePicker(null); setFilterPanelOpen(false);
+    catalogScrollRef.current?.scrollTo({y:0,animated:false});
+  }, [routeSearchKey, incomingRegion, isCatalogRoute]);
+  function currentSearch(): CatalogSearch { return {leftLetter,rightLetters,digits,region,regionCode,vehicle,priceLimit,specialFilters,selectedSources,freshOnly,groupSeries:similarFiltersOpen,sort}; }
+  function returnToSearch() {
+    setCatalogOnly(false); setCatalogDisplayLimit(catalogPageSize); setActiveTab("buy"); setPlatePicker(null);
+    if (Platform.OS === "web" && isCatalogRoute) router.push({pathname:"/",params:catalogSearchParams(currentSearch())} as never);
+    catalogScrollRef.current?.scrollTo({y:0,animated:true});
+  }
+  function openCollection(changes: Partial<CatalogSearch>) {
+    const next = {...currentSearch(), leftLetter:"",rightLetters:"",digits:"",specialFilters:[],groupSeries:false,...changes};
+    setLeftLetter(next.leftLetter);setRightLetters(next.rightLetters);setDigits(next.digits);setSpecialFilters(next.specialFilters as SpecialFilter[]);
+    setRegion(next.region);setRegionCode(next.regionCode);setCatalogOnly(true);setCatalogScope("filtered");
+    setPlatePicker(null);setFilterPanelOpen(false);setSimilarFiltersOpen(next.groupSeries);
+    if(Platform.OS === "web")router.push({pathname:"/catalog",params:catalogSearchParams(next)} as never);
+    catalogScrollRef.current?.scrollTo({y:0,animated:false});
+  }
   const [profileName, setProfileName] = useState("");
   const [isSignedIn, setIsSignedIn] = useState(false);
   const [isAnonymous, setIsAnonymous] = useState(false);
@@ -1790,6 +1815,8 @@ export default function HomeScreen() {
         const specialMatches = specialFilters.every((filter) => {
           if (filter === "firstTen") return Number(plate.digits) >= 1 && Number(plate.digits) <= 10;
           if (filter === "roundHundred") return plate.digits.endsWith("00");
+          if (filter === "repeatDigits") return /^(\d)\1+$/.test(plate.digits);
+          if (filter === "repeatLetters") { const letters = `${plate.leftLetter}${plate.rightLetters}`; return /^(.)\1+$/.test(letters); }
           if (filter === "mirror") return plate.digits === plate.digits.split("").reverse().join("");
           return hasSimilarCatalogOffer(plate, filter, similarityCounts);
         });
@@ -1827,7 +1854,8 @@ export default function HomeScreen() {
       : plates, [activeTab, archivedPartnerSourceSet, catalog, catalogOnly, catalogScope, likedListingIds, plates, saved]);
   // Мобильное приложение не должно строить тысячи тяжёлых карточек за один раз:
   // это блокирует прокрутку и нажатия. Все номера доступны через «Показать ещё».
-  const renderedPlates = visiblePlates.slice(0, catalogDisplayLimit);
+  const isLanding = activeTab === "buy" && !catalogOnly;
+  const renderedPlates = visiblePlates.slice(0, isLanding ? 6 : catalogDisplayLimit);
 
   useEffect(() => {
     setCatalogDisplayLimit(catalogPageSize);
@@ -1909,7 +1937,7 @@ export default function HomeScreen() {
   const showingMultipleRegionCodes = selectedRegionCodes.length > 1;
   const compactRegion = compactSearchRegions(regionGroups, selectedRegionCodes);
   const selectedRegionLabel = region === "Все" ? "—" : compactRegion.codes;
-  const desktopCatalog = activeTab === "buy" && !catalogOnly && windowWidth / fontScale >= 1100;
+  const desktopCatalog = false;
   const gridCards = wideListingCards && !similarFiltersOpen;
   const editingListing = activeTab === "sell" && addOpen;
   const currentPlatePicker = editingListing ? listingPicker : platePicker;
@@ -2425,12 +2453,12 @@ export default function HomeScreen() {
       onTouchCancel={() => { backgroundTouch.current = null; }}
       onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       {Platform.OS === "web" && !incomingListingId && <Head>
-        <title>{region === "Все" ? "ЗаНомером — красивые автомобильные номера" : `Номера: ${region} — ЗаНомером`}</title>
-        <meta name="description" content={region === "Все" ? "Поиск автомобильных номеров по региону, буквам, цифрам и цене. Объявления ЗаНомером." : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
+        <title>{region === "Все" ? "Красивые номера на авто, мото и прицепы — ЗаНомером" : `Номера: ${region} — ЗаНомером`}</title>
+        <meta name="description" content={region === "Все" ? "Объявления о красивых госномерах на авто, мотоциклы и прицепы. Поиск по буквам, цифрам, региону и цене. Сравнивайте варианты и связывайтесь с продавцами." : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
       </Head>}
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
-          <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { setActiveTab("buy"); setCatalogOnly(false); resetSearchAndFilters(); }} style={styles.brandContainer}>
+          <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={styles.brandContainer}>
             <View style={[styles.brandMark, compactLayout && { width: 32, height: 36 }]}><Text allowFontScaling={false} style={styles.brandMarkText}>З</Text></View>
             <View style={{ flexShrink: 1 }}><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.brandName, compactLayout && styles.brandNameCompact]}>ЗаНомером</Text>{!compactLayout && <Text style={styles.brandCaption}>Красивые номера. Твой выбор.</Text>}</View>
           </Pressable>
@@ -2619,12 +2647,13 @@ export default function HomeScreen() {
       )}
 
       {activeTab === "buy" && catalogOnly && <View style={styles.catalogOnlyToolbar}>
-        <Pressable onPress={() => { setCatalogOnly(false); setCatalogDisplayLimit(catalogPageSize); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); }} style={styles.catalogOnlyBack}>
+        <Pressable onPress={returnToSearch} style={styles.catalogOnlyBack}>
           <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
         </Pressable>
-        <Text style={styles.catalogOnlyTitle}>{catalogScope === "filtered" ? "Каталог по выбранным фильтрам" : "Все объявления"}</Text>
-        <Text style={styles.catalogOnlyCount}>{catalogLoading ? "…" : visiblePlates.length}</Text>
+        <Text style={styles.catalogOnlyTitle}>{catalogScope === "filtered" ? `Найдено: ${visiblePlates.length}` : "Все объявления"}</Text>
+        <Pressable accessibilityRole="button" testID="motion-button" onPress={() => setFilterPanelOpen(value => !value)} style={styles.catalogOnlyBack}><Text style={styles.catalogOnlyBackText}>{filterPanelOpen ? "Скрыть фильтры" : "Изменить фильтры"}</Text></Pressable>
       </View>}
+      {activeTab === "buy" && catalogOnly && <Text style={styles.catalogSearchSummary}>{[vehicle === "car" ? "Авто" : vehicle === "motorcycle" ? "Мото" : "Прицеп", [leftLetter, digits, rightLetters].filter(Boolean).join(" "), region !== "Все" ? region : "Все регионы", regionCode, priceLimit ? `до ${catalogPriceFormatter.format(priceLimit)} ₽` : "", specialFilters.map(x => ({repeatDigits:"Одинаковые цифры",repeatLetters:"Одинаковые буквы",mirror:"Зеркальные",firstTen:"Первая десятка"} as Record<string,string>)[x] ?? x).join(", ")].filter(Boolean).join(" · ")}</Text>}
       {activeTab === "buy" && catalogOnly && catalogRefreshing && <View style={styles.catalogUpdateNotice} accessibilityLiveRegion="polite">
         <Text style={styles.catalogUpdateNoticeText}>↻ Каталог обновляется…</Text>
       </View>}
@@ -2634,23 +2663,25 @@ export default function HomeScreen() {
 
 
 
-      {activeTab === "buy" && !catalogOnly && <View style={[styles.catalogIntro, compactLayout && { paddingTop: 20, paddingBottom: 20 }]}>
+      <View testID={isLanding ? "landing-stage" : "catalog-controls"} style={isLanding ? [styles.landingStage, compactLayout && styles.landingStageCompact] : undefined}>
+      {isLanding && <LivingBackdrop />}
+      {activeTab === "buy" && !catalogOnly && <View style={[styles.catalogIntro, compactLayout && { paddingTop: 24, paddingBottom: 24 }]}>
         <View style={styles.introCopy}>
-          <Text style={styles.introEyebrow}>АВТО · МОТО · ПРИЦЕПЫ</Text>
-          <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим характером.</Text>
+          <Text style={styles.introEyebrow}>ТВОЯ КОМБИНАЦИЯ. ТВОЯ ИСТОРИЯ.</Text>
+          <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим<Text style={{color:"#B9A5FF"}}> характером.</Text></Text>
           <Text style={styles.introDescription}>Найди свою комбинацию. Выбирай регион, сравнивай цены и связывайся с продавцом.</Text>
         </View>
         {!compactLayout && <Pressable accessibilityRole="button" onPress={() => { setActiveTab("sell"); setAddOpen(true); }} style={styles.introAction}><Text style={styles.introActionText}>＋ Разместить номер</Text></Pressable>}
       </View>}
-      <View style={[styles.browseLayout, desktopCatalog && styles.browseLayoutDesktop]}>
-      {activeTab === "buy" && !catalogOnly && <View testID="catalog-filters" style={[styles.browseSidebar, desktopCatalog && styles.browseSidebarDesktop]}>
-      <View style={[styles.searchArea, desktopCatalog && styles.searchAreaSidebar]}>
+
+      {activeTab === "buy" && (!catalogOnly || filterPanelOpen) && <View testID="catalog-filters" style={[styles.browseSidebar, styles.landingSearchWrap]}>
+      <View style={[styles.searchArea, styles.landingSearchCard]}>
       <View style={[styles.searchHeading, (compactLayout || desktopCatalog) && styles.searchHeadingCompact]}>
         <View style={[styles.searchHeadingText, (compactLayout || desktopCatalog) && styles.searchHeadingTextCompact]}>
           <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.searchLabel}>Найди свой номер</Text>
           <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel={`Открыть каталог: ${visiblePlates.length} объявлений по выбранным фильтрам`} onPress={openFilteredCatalog} style={[styles.catalogCount, (compactLayout || desktopCatalog) && styles.catalogCountCompact]}><Text style={styles.catalogCountText}>{visiblePlates.length}</Text><Text style={[styles.catalogCountCaption, (compactLayout || desktopCatalog) && styles.catalogCountCaptionCompact]}>По выбранным фильтрам · открыть →</Text></Pressable>
+        <Text style={styles.searchAvailability}>{visiblePlates.length} вариантов</Text>
       </View>
       <View style={styles.vehicleTabs}>
         {([
@@ -2667,6 +2698,7 @@ export default function HomeScreen() {
       <PlateEditor vehicle={vehicle} leftLetter={leftLetter} digits={digits} rightLetters={rightLetters} region={selectedRegionLabel === "—" ? "*" : selectedRegionLabel}
         onOpen={section => { if (section === "region") setRegionPickerGroup(null); setPlatePicker(section); }} />
       {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
+      <Pressable testID="hero-search" accessibilityRole="button" onPress={openFilteredCatalog} style={({pressed}) => [styles.findNumberButton, pressed && {opacity:0.85}]}><Text style={styles.findNumberText}>{catalogOnly ? "Применить фильтры" : "Найти номер"} →</Text></Pressable>
       <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
         <Text style={styles.searchResetButtonText}>↺ Сбросить фильтры</Text>
       </Pressable>
@@ -2713,12 +2745,12 @@ export default function HomeScreen() {
 
       </View>
 
-      {compactLayout && <View style={styles.filterToolbar}>
+      {(!catalogOnly || filterPanelOpen) && <View style={styles.filterToolbar}>
         <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle}>
           <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть" : "☷ Фильтры"}</Text>
         </Pressable>
       </View>}
-      {(!compactLayout || filterPanelOpen) && <View style={styles.filterControlPanel}>
+      {filterPanelOpen && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
           <Pressable accessibilityRole="button" accessibilityLabel="Источники объявлений" accessibilityState={{ expanded: sourceListExpanded }} onPress={() => setSourceListExpanded(current => !current)} style={styles.sourceFilterToggle}>
             <Text style={styles.filterControlTitle}>Источники объявлений</Text>
@@ -2785,7 +2817,17 @@ export default function HomeScreen() {
         </View>
       </View>}
       </View>}
-      <View style={[styles.browseResults, desktopCatalog && { flex: 1 }]}>
+      {isLanding && <View testID="home-collections" style={styles.homeCollections}>
+        <Text style={styles.homeCollectionCaption}>БЫСТРЫЙ ВЫБОР</Text>
+        <View style={styles.homeCollectionRow}>
+          {([['repeatDigits','Одинаковые цифры'],['repeatLetters','Одинаковые буквы'],['mirror','Зеркальные'],['firstTen','Первая десятка']] as const).map(([key,label]) => <Pressable key={key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({specialFilters:[key]})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{label} ↗</Text></Pressable>)}
+          {regionalSearchLinks.slice(0,2).map(item => <Pressable key={item.key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({region:item.title,regionCode:""})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{item.title} ↗</Text></Pressable>)}
+        </View>
+        <Text style={styles.landingFootnote}>Ищи по части номера или оставь звёздочки — покажем все подходящие варианты.</Text>
+      </View>}
+      </View>
+      <View style={[styles.browseResults, {alignSelf:"center",maxWidth:1360}]}>
+
       {activeTab === "sell" && <View style={styles.tabScroll}>
         <View style={styles.sellIntro}>
           <Text style={styles.sellTitle}>Продай красивый номер</Text>
@@ -2874,7 +2916,7 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
-        {activeTab === "buy" && !similarTo && <View><Text style={styles.resultsHeading}>Каталог номеров</Text><Text style={styles.resultsCaption}>Выбирай то, что подходит именно тебе</Text></View>}
+        {activeTab === "buy" && !similarTo && <View><Text style={styles.resultsHeading}>Свежие объявления</Text><Text style={styles.resultsCaption}>Несколько вариантов из каталога. Найди свой через поиск выше.</Text></View>}
         {(activeTab === "favorites" || similarTo) && <Text style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
@@ -2942,7 +2984,7 @@ export default function HomeScreen() {
           const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
           const isSeriesStart = !!seriesGroup && seriesGroup.key !== previousGroup?.key;
           return (
-            <View key={item.id} style={[styles.listingItem, gridCards && styles.listingGridItem]}>
+            <View key={item.id} testID="motion-card" style={[styles.listingItem, gridCards && styles.listingGridItem]}>
               {isSeriesStart && <Pressable accessibilityLabel="Скрыть группу похожих номеров" onPress={() => setHiddenSeriesGroupKeys((current) => current.includes(seriesGroup.key) ? current : [...current, seriesGroup.key])} style={styles.seriesHeader}>
                 <Text style={styles.seriesHeaderText}>Похожие номера · {seriesGroup.size} объявлений</Text>
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
@@ -2998,13 +3040,12 @@ export default function HomeScreen() {
         })}
         {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
       </View>
-      {renderedPlates.length < visiblePlates.length && <Pressable onPress={() => setCatalogDisplayLimit((current) => current + catalogPageSize)} style={styles.showMoreButton}>
-        <Text style={styles.showMoreText}>Показать ещё · осталось {visiblePlates.length - renderedPlates.length}</Text>
+      {renderedPlates.length < visiblePlates.length && <Pressable testID="motion-button" onPress={isLanding ? openFilteredCatalog : () => setCatalogDisplayLimit((current) => current + catalogPageSize)} style={styles.showMoreButton}>
+        <Text style={styles.showMoreText}>{isLanding ? `Весь каталог · ${visiblePlates.length} →` : `Показать ещё · осталось ${visiblePlates.length - renderedPlates.length}`}</Text>
       </Pressable>}
       </View>
       </>}
 
-      </View>
       </View>
 
       {Platform.OS === "web" && <View style={styles.siteFooter} accessibilityRole="summary">
@@ -3500,7 +3541,7 @@ export default function HomeScreen() {
           ["favorites", "♡", "Избранное, сохранённое и лайки", "#D92D20"],
           ["subscriptions", "🔔", "Подписка", "#D97706"],
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
-          <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: activeTab === tab }} onPress={() => { setPlatePicker(null); setListingPicker(null); setActiveTab(tab); if (tab === "buy") { setCatalogOnly(false); catalogScrollRef.current?.scrollTo({ y: searchScrollPosition, animated: true }); } }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: activeTab === tab }} onPress={() => { setPlatePicker(null); setListingPicker(null); setActiveTab(tab); if (tab === "buy") returnToSearch(); }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
             <Text allowFontScaling={false} style={[styles.navIcon, { color }]}>{icon}</Text>
             <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.navText, { color: activeTab === tab ? color : "#667085" }]}>{({ buy: "Поиск", sell: "Разместить", favorites: "Избранное", subscriptions: "Подписка" } as const)[tab]}</Text>
           </Pressable>
@@ -3522,13 +3563,27 @@ const styles = StyleSheet.create({
   brandNameCompact: { fontSize: 16, letterSpacing: -0.4 },
   brandCaption: { color: "#83889A", fontSize: 10, marginTop: 2 },
   headerHotButtonCompact: { paddingHorizontal: 8, minWidth: 36, minHeight: 36 },
-  catalogIntro: { alignSelf: "center", width: "100%", maxWidth: 1360, flexDirection: "row", alignItems: "center", gap: 24, paddingTop: 34, paddingBottom: 28 },
-  introCopy: { flex: 1, minWidth: 0 },
-  introEyebrow: { color: "#7769C7", fontSize: 10, letterSpacing: 2, fontWeight: "800", marginBottom: 10 },
-  introTitle: { color: "#202532", fontSize: 36, lineHeight: 44, letterSpacing: -1.3, fontWeight: "800" },
-  introTitleCompact: { fontSize: 27, lineHeight: 34, letterSpacing: -0.8 },
-  introDescription: { color: "#757D8E", fontSize: 13, lineHeight: 20, marginTop: 10, maxWidth: 640 },
-  introAction: { backgroundColor: "#5C4EC5", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 14 },
+  catalogSearchSummary: {alignSelf:"center",width:"100%",maxWidth:1100,paddingHorizontal:12,paddingVertical:12,color:"#737B8F",fontSize:12,lineHeight:19},
+  landingStage: {position:"relative",backgroundColor:"#151723",borderRadius:32,marginTop:20,marginBottom:36,paddingHorizontal:36,paddingBottom:30,width:"100%",alignSelf:"center",maxWidth:1360},
+  landingStageCompact: {borderRadius:22,marginTop:12,marginBottom:24,paddingHorizontal:14,paddingBottom:24},
+  landingSearchWrap: {maxWidth:780,alignSelf:"center",width:"100%"},
+  landingSearchCard: {maxWidth:780,width:"100%",marginTop:0,borderRadius:24,padding:24,shadowOpacity:0.1},
+  catalogIntro: {alignSelf:"center",width:"100%",maxWidth:1000,alignItems:"center",gap:20,paddingTop:48,paddingBottom:32},
+  introCopy: {alignItems:"center",width:"100%"},
+  introEyebrow: {color:"#B9A5FF",fontSize:10,letterSpacing:2,fontWeight:"800",marginBottom:16,textAlign:"center"},
+  introTitle: {color:"#FFFFFF",fontSize:54,lineHeight:62,letterSpacing:-2,fontWeight:"800",textAlign:"center",maxWidth:780},
+  introTitleCompact: {fontSize:34,lineHeight:40,letterSpacing:-1},
+  introDescription: {color:"#B9BECE",fontSize:15,lineHeight:23,marginTop:16,maxWidth:580,textAlign:"center"},
+  searchAvailability: {color:"#7E739F",fontSize:12,fontWeight:"700"},
+  findNumberButton: {backgroundColor:"#6551D3",borderRadius:14,minHeight:52,alignItems:"center",justifyContent:"center",marginTop:20},
+  findNumberText: {color:"white",fontSize:17,fontWeight:"800"},
+  homeCollections: {alignSelf:"center",width:"100%",maxWidth:820,marginTop:18,gap:12},
+  homeCollectionCaption: {color:"#928BA6",fontSize:10,letterSpacing:2,textAlign:"center",fontWeight:"700"},
+  homeCollectionRow: {flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:9},
+  homeCollectionChip: {backgroundColor:"#242735",borderColor:"#393A50",borderWidth:1,borderRadius:30,paddingHorizontal:15,paddingVertical:11,minHeight:42,justifyContent:"center"},
+  homeCollectionText: {color:"#E4DDF7",fontSize:12,fontWeight:"600"},
+  landingFootnote: {color:"#969BAD",fontSize:11,lineHeight:18,textAlign:"center",marginTop:6},
+  introAction: { backgroundColor: "#282B3D", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
   introActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
   browseLayout: { alignSelf: "center", width: "100%", maxWidth: 1360, gap: 20 },
   browseLayoutDesktop: { flexDirection: "row", alignItems: "flex-start", gap: 24 },

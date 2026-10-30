@@ -11,7 +11,7 @@ export default function RootLayout() {
       <Head>
         <meta name="google" content="notranslate" />
         <meta httpEquiv="Content-Language" content="ru" />
-        <title>ЗаНомером</title>
+        <title>Красивые номера на авто, мото и прицепы — ЗаНомером</title>
       </Head>
       <VercelAnalytics />
       <YandexMetrika />

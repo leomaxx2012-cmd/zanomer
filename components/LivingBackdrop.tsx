@@ -1,0 +1,2 @@
+import { View, StyleSheet } from 'react-native';
+export function LivingBackdrop(){return <View pointerEvents="none" style={StyleSheet.absoluteFill}><View style={{position:'absolute',width:300,height:300,borderRadius:150,backgroundColor:'#48318D',opacity:0.35,top:-80,right:-80}}/><View style={{position:'absolute',width:220,height:220,borderRadius:110,backgroundColor:'#246F84',opacity:0.2,bottom:0,left:-80}}/></View>;}
