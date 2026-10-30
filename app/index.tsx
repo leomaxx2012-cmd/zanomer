@@ -459,6 +459,7 @@ export default function HomeScreen() {
   const listingSubmittingRef = useRef(false);
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
+  const [clearedListingDraft,setClearedListingDraft]=useState<{vehicle:Plate["vehicle"];left:string;digits:string;right:string;region:string;price:string;comment:string;details:SaleDetails;photos:string[]}|null>(null);
   const [listingOpens, setListingOpens] = useState<Record<string,number>>({});
   const openedThisSession = useRef(new Set<string>());
   useEffect(() => {
@@ -501,7 +502,7 @@ export default function HomeScreen() {
   useEffect(()=>{
     if(!selectedPlate?.isSiteListing||!selectedPlate.id||selectedPlate.ownerId===currentUserId||openedThisSession.current.has(selectedPlate.id))return;
     openedThisSession.current.add(selectedPlate.id);
-    void publicCatalogClient.rpc("record_listing_open",{target:selectedPlate.id}).then(()=>{});
+    void Promise.resolve(publicCatalogClient.rpc("record_listing_open",{target:selectedPlate.id})).catch(()=>{});
   },[selectedPlate?.id,currentUserId]);
   const [editingPriceId, setEditingPriceId] = useState<string | null>(null);
   const [editingPrice, setEditingPrice] = useState("");
@@ -2193,6 +2194,16 @@ export default function HomeScreen() {
     if (listingPicker === "digits") setListingDigits(current => current.slice(0, -1));
   }
 
+  function clearListingDraft(){
+    setClearedListingDraft({vehicle:listingVehicle,left:listingLeftLetter,digits:listingDigits,right:listingRightLetters,region:listingRegion,price:listingPrice,comment:listingComment,details:listingDetails,photos:listingPhotoUris});
+    setListingVehicle("car");setListingLeftLetter("");setListingDigits("");setListingRightLetters("");setListingRegion("");setListingPrice("");setListingComment("");setListingDetails({...emptySaleDetails});setListingPhotoUris([]);setListingConfirmed(false);setListingPicker(null);setListingMessage("");setDraftMessage("Черновик очищен. Пока форма открыта, его можно вернуть кнопкой ниже.");
+    void AsyncStorage.removeItem("zanomer.seller-draft.v1").catch(()=>setDraftMessage("Поля очищены, но сохранённый черновик удалить не удалось. Попробуй ещё раз."));
+  }
+  function undoClearListingDraft(){
+    const draft=clearedListingDraft;if(!draft)return;
+    setListingVehicle(draft.vehicle);setListingLeftLetter(draft.left);setListingDigits(draft.digits);setListingRightLetters(draft.right);setListingRegion(draft.region);setListingPrice(draft.price);setListingComment(draft.comment);setListingDetails(draft.details);setListingPhotoUris(draft.photos);setClearedListingDraft(null);setDraftMessage("Черновик возвращён.");
+  }
+
   async function chooseListingPhoto() {
     if(listingPhotoUris.length>=6){setListingMessage("Можно добавить до 6 фотографий. Убери одну, чтобы заменить её.");return;}
     const permission=await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -2340,7 +2351,7 @@ export default function HomeScreen() {
     setAddOpen(false);
     setListingVehicle("car"); setListingLeftLetter(""); setListingDigits(""); setListingRightLetters(""); setListingRegion(""); setListingPrice("");
     setListingComment("");
-    setListingPhotoUris([]);setListingDetails({...emptySaleDetails});setListingPreview(false);setDraftMessage("");
+    setListingPhotoUris([]);setListingDetails({...emptySaleDetails});setListingPreview(false);setDraftMessage("");setClearedListingDraft(null);
     void AsyncStorage.removeItem("zanomer.seller-draft.v1").catch(()=>{});
     setListingConfirmed(false);
     setListingMessage(isModerator
@@ -2924,6 +2935,8 @@ export default function HomeScreen() {
             <Text style={styles.addPanelTitle}>Новое объявление</Text>
             {!profileName && <Text style={styles.addPanelHint}>Заполни номер и цену. Для публикации потребуется вход в аккаунт.</Text>}
             <Text style={styles.sellerDraftHint}>{draftMessage||"Черновик автоматически сохраняется на этом устройстве. Фотографии нужно добавить снова после перезагрузки страницы или приложения."}</Text>
+            <Pressable accessibilityRole="button" onPress={clearListingDraft} style={styles.searchResetButton}><Text style={styles.searchResetButtonText}>Очистить черновик</Text></Pressable>
+            {clearedListingDraft&&<Pressable accessibilityRole="button" onPress={undoClearListingDraft} style={styles.searchResetButton}><Text style={styles.searchResetButtonText}>Вернуть очищенный черновик</Text></Pressable>}
             <>
               <Text style={styles.listingTypeLabel}>Тип номера</Text>
               <View style={styles.listingVehicleTabs}>{([ ["car", "🚗", "Авто"], ["motorcycle", "🏍️", "Мото"], ["truck", "🚛", "Прицеп"] ] as const).map(([type, icon, label]) => <Pressable key={type} onPress={() => chooseListingVehicle(type)} style={[styles.listingVehicleTab, listingVehicle === type && styles.listingVehicleTabActive]}><Text style={[styles.listingVehicleTabText, listingVehicle === type && styles.listingVehicleTabTextActive]}>{icon} {label}</Text></Pressable>)}</View>
@@ -2942,7 +2955,7 @@ export default function HomeScreen() {
               <Text style={styles.contactHint}>Не публикуй документы, VIN, банковские данные или чужие номера телефонов. Покупатель сможет написать тебе во внутреннем чате.</Text>
               <TextInput value={listingComment} onChangeText={setListingComment} maxLength={2000} placeholder="Описание предложения" placeholderTextColor="#98A2B3" style={[styles.addInput, styles.commentInput]} multiline />
               <Pressable accessibilityRole="button" onPress={()=>{setListingPicker(null);setListingPreview(true);}} style={styles.searchResetButton}><Text style={styles.searchResetButtonText}>Посмотреть объявление перед отправкой</Text></Pressable>
-              <Pressable onPress={() => setListingConfirmed((current) => !current)} style={styles.confirmRow}>
+              <Pressable accessibilityRole="checkbox" accessibilityState={{checked:listingConfirmed}} aria-checked={listingConfirmed} onPress={() => setListingConfirmed((current) => !current)} style={styles.confirmRow}>
                 <View style={[styles.confirmBox, listingConfirmed && styles.confirmBoxActive]}>{listingConfirmed && <Text style={styles.confirmTick}>✓</Text>}</View>
                 <Text style={styles.confirmText}>Подтверждаю, что размещаю объявление о своём предложении и указал верные данные.</Text>
               </Pressable>

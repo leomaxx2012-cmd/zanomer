@@ -18,7 +18,7 @@ export function SellerBulkImport({existing,signedIn,onLogin,onSubmit}:{existing:
    {parsed.valid.slice(0,50).map(row=><View key={row.row} style={s.valid}><Text style={s.plate}>{[row.left,row.digits,row.right].filter(Boolean).join(' ')} · {row.region}</Text><Text style={s.hint}>{row.price.toLocaleString('ru-RU')} ₽{row.details.city?` · ${row.details.city}`:''}</Text></View>)}
    {parsed.issues.slice(0,50).map((row,i)=><Text key={i} style={s.issue}>Строка {row.row}: {row.message}</Text>)}{parsed.issues.length>50&&<Text style={s.issue}>Ещё замечаний: {parsed.issues.length-50}. Исправь список и проверь снова.</Text>}
   </>}
-  <Pressable accessibilityRole="checkbox" accessibilityState={{checked:confirmed}} onPress={()=>setConfirmed(x=>!x)} style={s.confirm}><Text style={s.hint}>{confirmed?'☑':'☐'} Подтверждаю, что это мои предложения или у меня есть разрешение владельцев на размещение. Данные проверены.</Text></Pressable>
+  <Pressable accessibilityRole="checkbox" accessibilityState={{checked:confirmed}} aria-checked={confirmed} onPress={()=>setConfirmed(x=>!x)} style={s.confirm}><Text style={s.hint}>{confirmed?'☑':'☐'} Подтверждаю, что это мои предложения или у меня есть разрешение владельцев на размещение. Данные проверены.</Text></Pressable>
   <Pressable accessibilityRole="button" disabled={busy||(!confirmed&&signedIn)||!parsed.valid.length} onPress={()=>void publish()} style={[s.publish,(busy||(!confirmed&&signedIn)||!parsed.valid.length)&&{opacity:0.45}]}><Text style={s.publishText}>{busy?'Отправляем…':signedIn?`Отправить корректные объявления · ${parsed.valid.length}`:'Войти для отправки'}</Text></Pressable>
   {!!message&&<Text accessibilityLiveRegion="polite" style={s.summary}>{message}</Text>}
  </View>;
