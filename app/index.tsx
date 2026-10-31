@@ -2758,7 +2758,6 @@ export default function HomeScreen() {
       {isLanding && <LivingBackdrop />}
       {activeTab === "buy" && !catalogOnly && <View style={[styles.catalogIntro, compactLayout && { paddingTop: 24, paddingBottom: 24 }]}>
         <View style={styles.introCopy}>
-          <Text style={styles.introEyebrow}>ТВОЯ КОМБИНАЦИЯ. ТВОЯ ИСТОРИЯ.</Text>
           <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим<Text style={{color:"#B9A5FF"}}> характером.</Text></Text>
           <Text style={styles.introDescription}>Найди свою комбинацию. Выбирай регион, сравнивай цены и связывайся с продавцом.</Text>
         </View>
@@ -3677,7 +3676,6 @@ const styles = StyleSheet.create({
   landingSearchCard: {maxWidth:780,width:"100%",marginTop:0,borderRadius:24,padding:24,shadowOpacity:0.1},
   catalogIntro: {alignSelf:"center",width:"100%",maxWidth:1000,alignItems:"center",gap:16,paddingTop:32,paddingBottom:24},
   introCopy: {alignItems:"center",width:"100%"},
-  introEyebrow: {color:"#B9A5FF",fontSize:10,letterSpacing:2,fontWeight:"800",marginBottom:16,textAlign:"center"},
   introTitle: {color:"#FFFFFF",fontSize:46,lineHeight:54,letterSpacing:-1.6,fontWeight:"800",textAlign:"center",maxWidth:1000},
   introTitleCompact: {fontSize:34,lineHeight:40,letterSpacing:-1},
   introDescription: {color:"#B9BECE",fontSize:15,lineHeight:23,marginTop:12,maxWidth:700,textAlign:"center"},
