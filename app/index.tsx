@@ -1,3 +1,4 @@
+import {siteTitle,siteDescription} from "../lib/site-metadata";
 import { type Theme } from '../lib/theme';
 import { useTheme, useThemedStyles } from '../components/AppTheme';
 import { registrationRegionName, registrationRegionNames, registrationRegionLabel } from '../lib/registration-regions';
@@ -2554,8 +2555,8 @@ export default function HomeScreen() {
       onTouchCancel={() => { backgroundTouch.current = null; }}
       onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       {Platform.OS === "web" && !incomingListingId && <Head>
-        <title>{region === "Все" ? "Красивые номера на авто, мото и прицепы — ЗаНомером" : `Номера: ${region} — ЗаНомером`}</title>
-        <meta name="description" content={region === "Все" ? "Объявления о красивых госномерах на авто, мотоциклы и прицепы. Поиск по буквам, цифрам, региону и цене. Сравнивайте варианты и связывайтесь с продавцами." : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
+        <title>{region === "Все" ? siteTitle : `Номера: ${region} — ЗаНомером`}</title>
+        <meta name="description" content={region === "Все" ? siteDescription : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
       </Head>}
       <LivingBackdrop />
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
