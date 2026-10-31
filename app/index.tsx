@@ -2611,7 +2611,8 @@ export default function HomeScreen() {
       {paymentNoticeExpanded && <Modal transparent animationType="fade" onRequestClose={() => setPaymentNoticeExpanded(false)}>
         <View style={styles.headerModalOverlay}>
           <Pressable accessibilityRole="button" accessibilityLabel="Закрыть напоминание" style={StyleSheet.absoluteFill} onPress={() => setPaymentNoticeExpanded(false)} />
-          <View style={[styles.headerModalPanel, { maxHeight: windowHeight * 0.85 }]}>
+          {/* Keep the payment reminder readable without using it as a search snippet. */}
+          <View {...(Platform.OS === "web" ? { dataSet: { nosnippet: "" } } : {})} style={[styles.headerModalPanel, { maxHeight: windowHeight * 0.85 }]}>
             <View style={styles.headerModalTitleRow}><Text style={styles.headerModalTitle}>Напоминание</Text><Pressable accessibilityRole="button" accessibilityLabel="Свернуть напоминание" onPress={() => setPaymentNoticeExpanded(false)} style={styles.headerModalClose}><Text style={styles.platePickerClose}>×</Text></Pressable></View>
             <ScrollView contentContainerStyle={styles.headerModalContent}>
               <Text style={styles.numberPaymentNoticeTitle}>Оплата за номера через сайт не принимается</Text>
