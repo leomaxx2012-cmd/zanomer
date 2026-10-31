@@ -1,3 +1,4 @@
+import type {BackdropTouch} from "../lib/backdrop-touch";
 import {siteTitle,siteDescription} from "../lib/site-metadata";
 import { type Theme } from '../lib/theme';
 import { useTheme, useThemedStyles } from '../components/AppTheme';
@@ -316,6 +317,7 @@ const regionalSearchLinks = linkedRegions.filter(item => catalogFallback.some(pl
 export default function HomeScreen() {
  const styles=useThemedStyles(createStyles);
  const {theme,mode,toggleTheme}=useTheme();
+ const backdropTouch=useRef<BackdropTouch>(null);
 
   // A stack can retain the home screen while the results screen is mounted.
   // Supabase reuses identical topics, so each screen must own its channel.
@@ -2550,15 +2552,15 @@ export default function HomeScreen() {
       onPointerMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onPointerCancel={() => { backgroundTouch.current = null; }}
       onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
-      onTouchStart={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
-      onTouchMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
-      onTouchCancel={() => { backgroundTouch.current = null; }}
-      onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
+      onTouchStart={event => { backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
+      onTouchMove={event => { backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
+      onTouchCancel={() => { backdropTouch.current?.end(); backgroundTouch.current = null; }}
+      onTouchEnd={() => { backdropTouch.current?.end(); const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       {Platform.OS === "web" && !incomingListingId && <Head>
         <title>{region === "Все" ? siteTitle : `Номера: ${region} — ЗаНомером`}</title>
         <meta name="description" content={region === "Все" ? siteDescription : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
       </Head>}
-      <LivingBackdrop />
+      <LivingBackdrop ref={backdropTouch} />
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={styles.brandContainer}>
