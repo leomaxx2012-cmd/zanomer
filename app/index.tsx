@@ -2554,9 +2554,6 @@ export default function HomeScreen() {
           </Pressable>
           <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact]}>
         <View style={styles.headerActions}>
-          <Pressable onPress={openPaymentInfo} style={[styles.requisitesHeaderButton, compactLayout && styles.headerIconCompact]} accessibilityLabel="Информация об услугах, оплате и реквизитах">
-            <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
-          </Pressable>
           <Pressable onPress={() => { void openChats(); }} style={[styles.chatsButton, compactLayout && styles.headerIconCompact]} accessibilityLabel="Диалоги">
             <Text style={styles.chatsButtonText}>💬</Text>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
