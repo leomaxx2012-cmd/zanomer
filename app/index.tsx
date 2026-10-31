@@ -2769,87 +2769,9 @@ export default function HomeScreen() {
 
       <View testID={isLanding ? "landing-stage" : "catalog-controls"} style={isLanding ? [styles.landingStage, compactLayout && styles.landingStageCompact] : undefined}>
 
-      {activeTab === "buy" && !catalogOnly && <View style={[styles.catalogIntro, compactLayout && { paddingTop: 24, paddingBottom: 24 }]}>
-        <View style={styles.introCopy}>
-          <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим<Text style={{color:theme.accent}}> характером.</Text></Text>
-          <Text style={styles.introDescription}>Найди свою комбинацию. Выбирай регион, сравнивай цены и связывайся с продавцом.</Text>
-        </View>
-
-      </View>}
-
       {activeTab === "buy" && (!catalogOnly || filterPanelOpen) && <View testID="catalog-filters" style={[styles.browseSidebar, styles.landingSearchWrap]}>
-      <View style={[styles.searchArea, styles.landingSearchCard]}>
-      <View style={[styles.searchHeading, (compactLayout || desktopCatalog) && styles.searchHeadingCompact]}>
-        <View style={[styles.searchHeadingText, (compactLayout || desktopCatalog) && styles.searchHeadingTextCompact]}>
-          <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.searchLabel}>Найди свой номер</Text>
-          <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
-        </View>
-        <Text style={styles.searchAvailability}>{visiblePlates.length} вариантов</Text>
-      </View>
-      <View style={styles.vehicleTabs}>
-        {([
-          ["car", "🚗", "Авто"],
-          ["motorcycle", "🏍️", "Мото"],
-          ["truck", "🚛", "Прицеп"],
-        ] as const).map(([type, icon, label]) => (
-          <Pressable key={type} onPress={() => { setVehicle(type); setRegion("Все"); setRegionCode(""); setRegionPickerGroup(null); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, (compactLayout || desktopCatalog) && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
-            <Text style={[styles.vehicleIcon, (compactLayout || desktopCatalog) && styles.vehicleIconCompact]}>{icon}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.vehicleLabel, (compactLayout || desktopCatalog) && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
-          </Pressable>
-        ))}
-      </View>
-      <PlateEditor vehicle={vehicle} leftLetter={leftLetter} digits={digits} rightLetters={rightLetters} region={selectedRegionLabel === "—" ? "*" : selectedRegionLabel}
-        onOpen={section => { if (section === "region") setRegionPickerGroup(null); setPlatePicker(section); }} />
-      {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
-      <Pressable testID="hero-search" accessibilityRole="button" onPress={openFilteredCatalog} style={({pressed}) => [styles.findNumberButton, pressed && {opacity:0.85}]}><Text style={styles.findNumberText}>{catalogOnly ? "Применить фильтры" : "Найти номер"} →</Text></Pressable>
-      <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
-        <Text style={styles.searchResetButtonText}>↺ Сбросить фильтры</Text>
-      </Pressable>
-
-      {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
-        <View style={[styles.regionPickerOverlay, { paddingTop: Math.min(compactLayout ? 210 : 150, Math.max(insets.top + 12, windowHeight * 0.2)), paddingBottom: Math.max(insets.bottom, 16) }]}>
-          <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
-          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
-            <View style={styles.platePickerTopRow}>
-              <Text style={styles.platePickerTitle}>Выбери регион</Text>
-              <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
-            </View>
-            <View style={styles.regionPickerContent}>
-              <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
-              <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
-              {!regionPickerGroup ? <>
-                <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{vehicleRegionCount}</Text></Pressable>
-                {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, selectedRegionTitles.includes(item.title) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selectedRegionTitles.includes(item.title) && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, selectedRegionTitles.includes(item.title) && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
-              </> : <>
-                <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
-                {(() => {
-                  const codes = regionGroups.find(item => item.title === regionPickerGroup)?.codes.map(item => item.value) ?? [];
-                  const selected = codes.length > 0 && codes.every(code => selectedRegionCodes.includes(code));
-                  return <Pressable onPress={() => toggleRegionValues(codes)} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{selected ? "✓" : "□"}</Text></Pressable>;
-                })()}
-                {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
-                  const selected = selectedRegionCodes.includes(item.value);
-                  return <Pressable key={item.value} onPress={() => toggleRegionValues([item.value])} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>{registrationRegionLabel(item.value)}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
-                })}
-              </>}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
-      </Modal>}
-
-
-
-      {hasSearchCriteria && <View style={styles.searchActions}>
-        <Pressable disabled={subscriptionSaving} onPress={() => { void subscribeToCurrentSearch(); }} style={[styles.saveSearchButton, subscriptionSaving && styles.saveSearchButtonDisabled]}>
-          <Text style={styles.saveSearchText}>{subscriptionSaving ? "🔔 Сохраняем уведомление…" : "🔔 Сообщить, когда номер появится"}</Text>
-        </Pressable>
-      </View>}
-
-      </View>
-
       {(!catalogOnly || filterPanelOpen) && <View style={styles.filterToolbar}>
-        <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle}>
+        <Pressable onPress={() => setFilterPanelOpen((value) => !value)} style={styles.filterToggle} accessibilityRole="button" accessibilityLabel="Фильтры поиска" accessibilityState={{expanded:filterPanelOpen}}>
           <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть" : "☷ Фильтры"}</Text>
         </Pressable>
       </View>}
@@ -2925,6 +2847,77 @@ export default function HomeScreen() {
           </View>
         </View>
       </View>}
+      <View style={[styles.searchArea, styles.landingSearchCard]}>
+      <View style={[styles.searchHeading, (compactLayout || desktopCatalog) && styles.searchHeadingCompact]}>
+        <View style={[styles.searchHeadingText, (compactLayout || desktopCatalog) && styles.searchHeadingTextCompact]}>
+          <Text numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.searchLabel}>Найди свой номер</Text>
+          <Text style={styles.searchHint}>Введи часть номера или выбери нужные параметры</Text>
+        </View>
+        <Text style={styles.searchAvailability}>{visiblePlates.length} вариантов</Text>
+      </View>
+      <View style={styles.vehicleTabs}>
+        {([
+          ["car", "🚗", "Авто"],
+          ["motorcycle", "🏍️", "Мото"],
+          ["truck", "🚛", "Прицеп"],
+        ] as const).map(([type, icon, label]) => (
+          <Pressable key={type} onPress={() => { setVehicle(type); setRegion("Все"); setRegionCode(""); setRegionPickerGroup(null); setLeftLetter(""); setDigits(""); setRightLetters(""); setPlatePicker(null); }} style={[styles.vehicleTab, (compactLayout || desktopCatalog) && styles.vehicleTabCompact, vehicle === type && styles.vehicleTabActive]}>
+            <Text style={[styles.vehicleIcon, (compactLayout || desktopCatalog) && styles.vehicleIconCompact]}>{icon}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.vehicleLabel, (compactLayout || desktopCatalog) && styles.vehicleLabelCompact, vehicle === type && styles.vehicleLabelActive]}>{label}</Text>
+          </Pressable>
+        ))}
+      </View>
+      <PlateEditor vehicle={vehicle} leftLetter={leftLetter} digits={digits} rightLetters={rightLetters} region={selectedRegionLabel === "—" ? "*" : selectedRegionLabel}
+        onOpen={section => { if (section === "region") setRegionPickerGroup(null); setPlatePicker(section); }} />
+      {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
+      <Pressable testID="hero-search" accessibilityRole="button" onPress={openFilteredCatalog} style={({pressed}) => [styles.findNumberButton, pressed && {opacity:0.85}]}><Text style={styles.findNumberText}>{catalogOnly ? "Применить фильтры" : "Найти номер"} →</Text></Pressable>
+      <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
+        <Text style={styles.searchResetButtonText}>↺ Сбросить фильтры</Text>
+      </Pressable>
+
+      {platePicker === "region" && <Modal visible transparent animationType="fade" onRequestClose={() => setPlatePicker(null)}>
+        <View style={[styles.regionPickerOverlay, { paddingTop: Math.min(compactLayout ? 210 : 150, Math.max(insets.top + 12, windowHeight * 0.2)), paddingBottom: Math.max(insets.bottom, 16) }]}>
+          <Pressable accessibilityLabel="Закрыть выбор региона" style={StyleSheet.absoluteFill} onPress={() => setPlatePicker(null)} />
+          <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
+            <View style={styles.platePickerTopRow}>
+              <Text style={styles.platePickerTitle}>Выбери регион</Text>
+              <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+            </View>
+            <View style={styles.regionPickerContent}>
+              <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
+              <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
+              {!regionPickerGroup ? <>
+                <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{vehicleRegionCount}</Text></Pressable>
+                {regionGroups.map((item) => <Pressable key={item.title} onPress={() => setRegionPickerGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, selectedRegionTitles.includes(item.title) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selectedRegionTitles.includes(item.title) && styles.pickerOptionTextActive]}>{item.title}</Text><Text style={[styles.regionPickerCount, selectedRegionTitles.includes(item.title) && styles.regionPickerCountActive]}>{item.count}</Text></Pressable>)}
+              </> : <>
+                <Pressable onPress={() => setRegionPickerGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
+                {(() => {
+                  const codes = regionGroups.find(item => item.title === regionPickerGroup)?.codes.map(item => item.value) ?? [];
+                  const selected = codes.length > 0 && codes.every(code => selectedRegionCodes.includes(code));
+                  return <Pressable onPress={() => toggleRegionValues(codes)} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>Все номера региона</Text><Text style={styles.regionPickerCheck}>{selected ? "✓" : "□"}</Text></Pressable>;
+                })()}
+                {regionGroups.find((item) => item.title === regionPickerGroup)?.codes.map((item) => {
+                  const selected = selectedRegionCodes.includes(item.value);
+                  return <Pressable key={item.value} onPress={() => toggleRegionValues([item.value])} style={[styles.pickerOption, styles.regionPickerOption, selected && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, selected && styles.pickerOptionTextActive]}>{registrationRegionLabel(item.value)}</Text><View style={styles.regionPickerOptionRight}><Text style={[styles.regionPickerCount, selected && styles.regionPickerCountActive]}>{item.count}</Text><Text style={[styles.regionPickerCheck, selected && styles.regionPickerCheckActive]}>{selected ? "✓" : "□"}</Text></View></Pressable>;
+                })}
+              </>}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>}
+
+
+
+      {hasSearchCriteria && <View style={styles.searchActions}>
+        <Pressable disabled={subscriptionSaving} onPress={() => { void subscribeToCurrentSearch(); }} style={[styles.saveSearchButton, subscriptionSaving && styles.saveSearchButtonDisabled]}>
+          <Text style={styles.saveSearchText}>{subscriptionSaving ? "🔔 Сохраняем уведомление…" : "🔔 Сообщить, когда номер появится"}</Text>
+        </Pressable>
+      </View>}
+
+      </View>
+
+
       </View>}
 
       </View>
@@ -3685,13 +3678,8 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   catalogSearchSummary: {alignSelf:"center",width:"100%",maxWidth:1100,paddingHorizontal:12,paddingVertical:12,color:theme.muted,fontSize:12,lineHeight:19},
   landingStage: {position:"relative",backgroundColor:"transparent",borderRadius:0,marginTop:0,marginBottom:28,paddingHorizontal:0,paddingBottom:24,width:"100%",alignSelf:"center",overflow:"hidden"},
   landingStageCompact: {borderRadius:0,marginTop:0,marginBottom:24,paddingHorizontal:0,paddingBottom:16},
-  landingSearchWrap: {maxWidth:780,alignSelf:"center",width:"100%"},
+  landingSearchWrap: {maxWidth:780,alignSelf:"center",width:"100%",gap:12,paddingTop:16},
   landingSearchCard: {maxWidth:780,width:"100%",marginTop:0,borderRadius:24,padding:24,shadowOpacity:0.1},
-  catalogIntro: {alignSelf:"center",width:"100%",maxWidth:1000,alignItems:"center",gap:16,paddingTop:32,paddingBottom:24},
-  introCopy: {alignItems:"center",width:"100%"},
-  introTitle: {color:theme.text,fontSize:46,lineHeight:54,letterSpacing:-1.6,fontWeight:"800",textAlign:"center",maxWidth:1000},
-  introTitleCompact: {fontSize:34,lineHeight:40,letterSpacing:-1},
-  introDescription: {color:theme.muted,fontSize:15,lineHeight:23,marginTop:12,maxWidth:700,textAlign:"center"},
   searchAvailability: {color:theme.muted,fontSize:12,fontWeight:"700"},
   findNumberButton: {backgroundColor:"#6551D3",borderRadius:14,minHeight:52,alignItems:"center",justifyContent:"center",marginTop:20},
   findNumberText: {color:theme.onPrimary,fontSize:17,fontWeight:"800"},
@@ -4048,7 +4036,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   catalogOnlyBackText: { color: theme.accent, fontSize: 13, fontWeight: "900" },
   catalogOnlyTitle: { color: theme.text, flex: 1, fontSize: 15, fontWeight: "900", marginHorizontal: 10, textAlign: "center" },
   catalogOnlyCount: { color: theme.accent, fontSize: 14, fontWeight: "900", minWidth: 24, textAlign: "right" },
-  filterToolbar: { alignItems: "stretch", alignSelf: "center", flexDirection: "row", gap: 8, marginTop: 12, maxWidth: 760, width: "100%" },
+  filterToolbar: { alignItems: "stretch", alignSelf: "center", flexDirection: "row", gap: 8, marginTop: 0, maxWidth: 780, width: "100%" },
   filterToggle: { alignItems: "center", backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 14, borderWidth: 1, flex: 1, justifyContent: "center", paddingVertical: 11 },
   filterToggleText: { color: theme.accent, fontSize: 14, fontWeight: "900" },
   resetFiltersButton: { alignItems: "center", backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 14, borderWidth: 1, justifyContent: "center", paddingHorizontal: 12, paddingVertical: 11 },
@@ -4206,7 +4194,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   emptyTabIcon: { fontSize: 34 },
   emptyTabTitle: { color: theme.text, fontSize: 21, fontWeight: "800", marginTop: 12, textAlign: "center" },
   emptyTabText: { color: theme.muted, fontSize: 14, lineHeight: 20, marginTop: 7, textAlign: "center" },
-  premiumCard: { alignSelf: "stretch", backgroundColor: "#101828", borderRadius: 18, marginTop: 18, padding: 18 },
+  premiumCard: { alignSelf: "stretch", backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 18, marginTop: 18, padding: 18 },
   comparisonPanel: { backgroundColor: theme.surface, borderRadius: 24, padding: 20, width: "100%", maxWidth: 1100, alignSelf: "center" },
   comparisonDock: { position: "absolute", bottom: 85, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border, borderRadius: 18, padding: 12, gap: 12, flexDirection: "row", alignItems: "center", shadowColor: "#352F67", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 16, elevation: 8, zIndex: 20 },
   comparisonEyebrow: { color: theme.accent, fontSize: 10, fontWeight: "900", letterSpacing: 1 },
@@ -4228,7 +4216,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   comparisonRowLabel: { color: theme.muted, fontSize: 11 },
   comparisonRowValue: { color: theme.text, fontSize: 13, fontWeight: "700", marginTop: 5 },
   comparisonSource: { color: theme.accent, fontSize: 12, fontWeight: "700", textAlign: "center", paddingTop: 14 },
-  premiumTitle: { color: theme.onPrimary, fontSize: 17, fontWeight: "800" },
+  premiumTitle: { color: theme.text, fontSize: 17, fontWeight: "800" },
   premiumItem: { color: theme.text, fontSize: 13, lineHeight: 20, marginTop: 10 },
   comingSoonButton: { alignItems: "center", backgroundColor: "#344054", borderRadius: 11, marginTop: 17, paddingVertical: 12 },
   comingSoonButtonText: { color: theme.onPrimary, fontSize: 13, fontWeight: "800" },
