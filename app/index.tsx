@@ -1934,7 +1934,8 @@ export default function HomeScreen() {
   const catalogRegionGroups = useMemo(() => {
     const groups = new Map<string, Map<string, number>>();
     catalog.forEach((plate) => {
-      const title = plate.region.split(" · ")[0].trim();
+      const rawTitle = plate.region.split(" · ")[0].trim();
+      const title = rawTitle === "Регион" ? "Другие коды региона" : rawTitle;
       const code = plate.region.split(" · ")[1]?.trim();
       if (!code || title === "Регион не указан") return;
       const codes = groups.get(title) ?? new Map<string, number>();
@@ -2739,7 +2740,6 @@ export default function HomeScreen() {
           <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
         </Pressable>
         <Text style={styles.catalogOnlyTitle}>{catalogScope === "filtered" ? `Найдено: ${visiblePlates.length}` : "Все объявления"}</Text>
-        <Pressable accessibilityRole="button" testID="motion-button" onPress={() => setFilterPanelOpen(value => !value)} style={styles.catalogOnlyBack}><Text style={styles.catalogOnlyBackText}>{filterPanelOpen ? "Скрыть фильтры" : "Изменить фильтры"}</Text></Pressable>
       </View>}
       {activeTab === "buy" && catalogOnly && <Text style={styles.catalogSearchSummary}>{[vehicle === "car" ? "Авто" : vehicle === "motorcycle" ? "Мото" : "Прицеп", [leftLetter, digits, rightLetters].filter(Boolean).join(" "), region !== "Все" ? region : "Все регионы", regionCode, priceLimit ? `до ${catalogPriceFormatter.format(priceLimit)} ₽` : "", specialFilters.map(x => ({repeatDigits:"Одинаковые цифры",repeatLetters:"Одинаковые буквы",mirror:"Зеркальные",firstTen:"Первая десятка"} as Record<string,string>)[x] ?? x).join(", ")].filter(Boolean).join(" · ")}</Text>}
       {activeTab === "buy" && catalogOnly && catalogRefreshing && <View style={styles.catalogUpdateNotice} accessibilityLiveRegion="polite">
