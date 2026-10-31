@@ -1934,8 +1934,7 @@ export default function HomeScreen() {
   const catalogRegionGroups = useMemo(() => {
     const groups = new Map<string, Map<string, number>>();
     catalog.forEach((plate) => {
-      const rawTitle = plate.region.split(" · ")[0].trim();
-      const title = rawTitle === "Регион" ? "Другие коды региона" : rawTitle;
+      const title = plate.region.split(" · ")[0].trim();
       const code = plate.region.split(" · ")[1]?.trim();
       if (!code || title === "Регион не указан") return;
       const codes = groups.get(title) ?? new Map<string, number>();
@@ -3604,7 +3603,7 @@ export default function HomeScreen() {
                   </View>
                 </> : !listingRegionGroup ? <>
                   <Pressable onPress={() => setListingRegionGroup("manual")} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>Ввести код цифрами</Text></Pressable>
-                  {catalogRegionGroups.map(item => <Pressable key={item.title} onPress={() => setListingRegionGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionTextActive]}>{item.title}</Text></Pressable>)}
+                  {catalogRegionGroups.map(item => <Pressable key={item.title} onPress={() => setListingRegionGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionTextActive]}>{item.title === "Регион" ? "Другие коды региона" : item.title}</Text></Pressable>)}
                 </> : <>
                   <Pressable onPress={() => setListingRegionGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
                   {catalogRegionGroups.find(item => item.title === listingRegionGroup)?.codes.map(item => <Pressable key={item.value} accessibilityRole="radio" accessibilityLabel={`Регион объявления ${item.value}`} accessibilityState={{checked:listingRegion === item.value}} onPress={() => setListingRegion(item.value)} style={[styles.pickerOption, styles.regionPickerOption, listingRegion === item.value && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, listingRegion === item.value && styles.pickerOptionTextActive]}>{item.value}</Text><Text style={[styles.regionPickerCheck, listingRegion === item.value && styles.regionPickerCheckActive]}>{listingRegion === item.value ? "✓" : "○"}</Text></Pressable>)}
