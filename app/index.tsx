@@ -1,3 +1,4 @@
+import { registrationRegionName, registrationRegionNames, registrationRegionLabel } from '../lib/registration-regions';
 import { Pressable } from '../components/ActionPressable';
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocalSearchParams, usePathname, useRouter } from "expo-router";
@@ -1949,6 +1950,13 @@ export default function HomeScreen() {
       }))
       .sort((a, b) => a.title.localeCompare(b.title, "ru"));
   }, [catalog]);
+  const sellerRegionGroups = useMemo(() => {
+    const groups = new Map<string,Set<string>>();
+    const add = (code:string) => { const title=registrationRegionName(code); if(!title)return; const values=groups.get(title)??new Set<string>();values.add(code);groups.set(title,values); };
+    Object.keys(registrationRegionNames).forEach(add);
+    catalogRegionGroups.forEach(group=>group.codes.forEach(code=>add(code.value)));
+    return [...groups].map(([title,values])=>({title,codes:[...values].sort((a,b)=>Number(a)-Number(b)).map(value=>({value}))})).sort((a,b)=>a.title.localeCompare(b.title,'ru'));
+  },[catalogRegionGroups]);
   const regionGroups = useMemo(() => {
     const counts = new Map<string, { count: number; codes: Map<string, number> }>();
     for (const plate of catalog) {
@@ -2213,8 +2221,8 @@ export default function HomeScreen() {
   }
 
   function listingRegionLabel(regionCode: string) {
-    const knownRegion = catalogRegionGroups.find((group) => group.codes.some((item) => item.value === regionCode));
-    return `${knownRegion?.title ?? "Регион"} · ${regionCode}`;
+    const title = registrationRegionName(regionCode);
+    return `${title ?? ""} · ${regionCode}`;
   }
 
   function chooseListingVehicle(next: Plate["vehicle"]) {
@@ -2937,7 +2945,7 @@ export default function HomeScreen() {
               <Text style={styles.listingFormatHint}>{listingVehicle === "motorcycle" ? "Мото: 4 цифры сверху и 2 буквы снизу." : listingVehicle === "truck" ? "Прицеп: 2 буквы и 4 цифры." : "Авто: 1 буква, 3 цифры, 2 буквы."}</Text>
               <PlateEditor vehicle={listingVehicle} leftLetter={listingLeftLetter} digits={listingDigits} rightLetters={listingRightLetters} region={listingRegion || "*"} labelPrefix="Объявление"
                 onOpen={section => { if (section === "region") setListingRegionGroup(null); setListingPicker(section); }} />
-              {!!listingRegion && <Text style={styles.searchRegionName}>{listingRegionLabel(listingRegion)}</Text>}
+              {!!listingRegion && <Text style={styles.searchRegionName}>{registrationRegionLabel(listingRegion)}</Text>}
               <View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View>
               <SellerOptions value={listingDetails} onChange={setListingDetails}/>
               <Text style={styles.listingTypeLabel}>Цена предложения</Text>
@@ -3592,7 +3600,7 @@ export default function HomeScreen() {
               <Pressable onPress={() => setListingPicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
             </View>
             <View style={styles.regionPickerContent}>
-              <Text style={styles.regionPickerHint}>Выбери один код для своего номера.{listingRegion ? ` Выбрано: ${listingRegionLabel(listingRegion)}.` : ""}</Text>
+              <Text style={styles.regionPickerHint}>Выбери один код для своего номера.{listingRegion ? ` Выбрано: ${registrationRegionLabel(listingRegion)}.` : ""}</Text>
               <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
                 {listingRegionGroup === "manual" ? <>
                   <Pressable onPress={() => setListingRegionGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
@@ -3603,10 +3611,10 @@ export default function HomeScreen() {
                   </View>
                 </> : !listingRegionGroup ? <>
                   <Pressable onPress={() => setListingRegionGroup("manual")} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>Ввести код цифрами</Text></Pressable>
-                  {catalogRegionGroups.map(item => <Pressable key={item.title} onPress={() => setListingRegionGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionTextActive]}>{item.title === "Регион" ? "Другие коды региона" : item.title}</Text></Pressable>)}
+                  {sellerRegionGroups.map(item => <Pressable key={item.title} onPress={() => setListingRegionGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionTextActive]}>{item.title}</Text></Pressable>)}
                 </> : <>
                   <Pressable onPress={() => setListingRegionGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
-                  {catalogRegionGroups.find(item => item.title === listingRegionGroup)?.codes.map(item => <Pressable key={item.value} accessibilityRole="radio" accessibilityLabel={`Регион объявления ${item.value}`} accessibilityState={{checked:listingRegion === item.value}} onPress={() => setListingRegion(item.value)} style={[styles.pickerOption, styles.regionPickerOption, listingRegion === item.value && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, listingRegion === item.value && styles.pickerOptionTextActive]}>{item.value}</Text><Text style={[styles.regionPickerCheck, listingRegion === item.value && styles.regionPickerCheckActive]}>{listingRegion === item.value ? "✓" : "○"}</Text></Pressable>)}
+                  {sellerRegionGroups.find(item => item.title === listingRegionGroup)?.codes.map(item => <Pressable key={item.value} accessibilityRole="radio" accessibilityLabel={`Регион объявления ${item.value}`} accessibilityState={{checked:listingRegion === item.value}} onPress={() => setListingRegion(item.value)} style={[styles.pickerOption, styles.regionPickerOption, listingRegion === item.value && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, listingRegion === item.value && styles.pickerOptionTextActive]}>{item.value}</Text><Text style={[styles.regionPickerCheck, listingRegion === item.value && styles.regionPickerCheckActive]}>{listingRegion === item.value ? "✓" : "○"}</Text></Pressable>)}
                 </>}
               </ScrollView>
             </View>
@@ -3646,7 +3654,7 @@ export default function HomeScreen() {
           {index < 3 && <View style={styles.navDivider} />}
         </View>)}
       </View>
-      {listingPreview&&<Modal transparent animationType="fade" onRequestClose={()=>setListingPreview(false)}><View style={[styles.regionPickerOverlay,{backgroundColor:"rgba(20,18,35,0.48)",justifyContent:"center",alignItems:"center",paddingVertical:24}]}><Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Закрыть предпросмотр" onPress={()=>setListingPreview(false)}/><View style={[styles.addPanel,{width:"94%",maxWidth:650,maxHeight:"88%",alignSelf:"center"}]}><ScrollView keyboardShouldPersistTaps="handled"><Text style={styles.addPanelTitle}>Предпросмотр объявления</Text><Text style={styles.sellerDraftHint}>Так покупатель увидит твоё предложение после одобрения.</Text><View style={{width:listingVehicle==="motorcycle"?240:"100%",maxWidth:520,aspectRatio:listingVehicle==="motorcycle"?4/3:520/112,alignSelf:"center",marginVertical:16}}><PlateFace vehicle={listingVehicle} leftLetter={listingLeftLetter||"*"} digits={listingDigits||"***"} rightLetters={listingRightLetters||"**"} region={listingRegion||"*"}/></View><Text style={styles.offerPrice}>{Number(listingPrice.replace(/\D/g,""))?`${Number(listingPrice.replace(/\D/g,"")).toLocaleString("ru-RU")} ₽`:"Цена не указана"}</Text><Text style={styles.detailsValue}>{listingRegionLabel(listingRegion)}{listingDetails.city?` · ${listingDetails.city}`:""}</Text><View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View><Text style={styles.detailsComment}>{[listingDetails.negotiable?"Возможен торг":"",storageLabels[listingDetails.storage],transferLabels[listingDetails.transfer],listingDetails.sellerType==="dealer"?"Дилер":"Частный продавец"].filter(Boolean).join(" · ")}</Text><ListingPhotos urls={listingPhotoUris}/><Text style={styles.detailsComment}>{listingComment||"Описание пока не добавлено"}</Text><Pressable accessibilityRole="button" onPress={()=>setListingPreview(false)} style={styles.publishButton}><Text style={styles.publishText}>Вернуться к редактированию</Text></Pressable></ScrollView></View></View></Modal>}
+      {listingPreview&&<Modal transparent animationType="fade" onRequestClose={()=>setListingPreview(false)}><View style={[styles.regionPickerOverlay,{backgroundColor:"rgba(20,18,35,0.48)",justifyContent:"center",alignItems:"center",paddingVertical:24}]}><Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Закрыть предпросмотр" onPress={()=>setListingPreview(false)}/><View style={[styles.addPanel,{width:"94%",maxWidth:650,maxHeight:"88%",alignSelf:"center"}]}><ScrollView keyboardShouldPersistTaps="handled"><Text style={styles.addPanelTitle}>Предпросмотр объявления</Text><Text style={styles.sellerDraftHint}>Так покупатель увидит твоё предложение после одобрения.</Text><View style={{width:listingVehicle==="motorcycle"?240:"100%",maxWidth:520,aspectRatio:listingVehicle==="motorcycle"?4/3:520/112,alignSelf:"center",marginVertical:16}}><PlateFace vehicle={listingVehicle} leftLetter={listingLeftLetter||"*"} digits={listingDigits||"***"} rightLetters={listingRightLetters||"**"} region={listingRegion||"*"}/></View><Text style={styles.offerPrice}>{Number(listingPrice.replace(/\D/g,""))?`${Number(listingPrice.replace(/\D/g,"")).toLocaleString("ru-RU")} ₽`:"Цена не указана"}</Text><Text style={styles.detailsValue}>{registrationRegionLabel(listingRegion)}{listingDetails.city?` · ${listingDetails.city}`:""}</Text><View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View><Text style={styles.detailsComment}>{[listingDetails.negotiable?"Возможен торг":"",storageLabels[listingDetails.storage],transferLabels[listingDetails.transfer],listingDetails.sellerType==="dealer"?"Дилер":"Частный продавец"].filter(Boolean).join(" · ")}</Text><ListingPhotos urls={listingPhotoUris}/><Text style={styles.detailsComment}>{listingComment||"Описание пока не добавлено"}</Text><Pressable accessibilityRole="button" onPress={()=>setListingPreview(false)} style={styles.publishButton}><Text style={styles.publishText}>Вернуться к редактированию</Text></Pressable></ScrollView></View></View></Modal>}
       {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={[styles.toast, /^(Не удалось|Войди|Лимит)/.test(subscriptionToastMessage) && styles.toastError, { bottom: navigationHeight + 12 }]}>
         <Text style={styles.toastText}>{subscriptionToastMessage || (hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено")}</Text>
       </Pressable>}
