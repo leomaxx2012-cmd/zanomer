@@ -2538,7 +2538,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.page, isLanding && {backgroundColor:"#151723"}]}
+    <SafeAreaView testID={isLanding ? "home-page" : undefined} style={[styles.page, isLanding && {backgroundColor:"#151723"}]}
       onPointerDown={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
       onPointerMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onPointerCancel={() => { backgroundTouch.current = null; }}
@@ -2551,6 +2551,7 @@ export default function HomeScreen() {
         <title>{region === "Все" ? "Красивые номера на авто, мото и прицепы — ЗаНомером" : `Номера: ${region} — ЗаНомером`}</title>
         <meta name="description" content={region === "Все" ? "Объявления о красивых госномерах на авто, мотоциклы и прицепы. Поиск по буквам, цифрам, региону и цене. Сравнивайте варианты и связывайтесь с продавцами." : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
       </Head>}
+      {isLanding && <LivingBackdrop />}
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={styles.brandContainer}>
@@ -2609,7 +2610,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>}
-      <ScrollView ref={catalogScrollRef} style={[styles.mainScroll, isLanding && {backgroundColor:"#151723"}]} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact, isLanding && {maxWidth:undefined, flexGrow:1}, { paddingBottom: navigationHeight + 40 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact, isLanding && {maxWidth:undefined, flexGrow:1}, { paddingBottom: navigationHeight + 40 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -2759,7 +2760,7 @@ export default function HomeScreen() {
 
 
       <View testID={isLanding ? "landing-stage" : "catalog-controls"} style={isLanding ? [styles.landingStage, compactLayout && styles.landingStageCompact] : undefined}>
-      {isLanding && <LivingBackdrop />}
+
       {activeTab === "buy" && !catalogOnly && <View style={[styles.catalogIntro, compactLayout && { paddingTop: 24, paddingBottom: 24 }]}>
         <View style={styles.introCopy}>
           <Text accessibilityRole="header" style={[styles.introTitle, compactLayout && styles.introTitleCompact]}>Номер с твоим<Text style={{color:"#B9A5FF"}}> характером.</Text></Text>
@@ -3674,7 +3675,7 @@ const styles = StyleSheet.create({
   brandCaption: { color: "#83889A", fontSize: 10, marginTop: 2 },
   headerHotButtonCompact: { paddingHorizontal: 8, minWidth: 36, minHeight: 36 },
   catalogSearchSummary: {alignSelf:"center",width:"100%",maxWidth:1100,paddingHorizontal:12,paddingVertical:12,color:"#737B8F",fontSize:12,lineHeight:19},
-  landingStage: {position:"relative",backgroundColor:"#151723",borderRadius:0,marginTop:0,marginBottom:28,paddingHorizontal:0,paddingBottom:24,width:"100%",alignSelf:"center",overflow:"hidden"},
+  landingStage: {position:"relative",backgroundColor:"transparent",borderRadius:0,marginTop:0,marginBottom:28,paddingHorizontal:0,paddingBottom:24,width:"100%",alignSelf:"center",overflow:"hidden"},
   landingStageCompact: {borderRadius:0,marginTop:0,marginBottom:24,paddingHorizontal:0,paddingBottom:16},
   landingSearchWrap: {maxWidth:780,alignSelf:"center",width:"100%"},
   landingSearchCard: {maxWidth:780,width:"100%",marginTop:0,borderRadius:24,padding:24,shadowOpacity:0.1},

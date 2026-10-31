@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 const css=`
-[data-testid="landing-stage"]{isolation:isolate;--pointer-x:50%;--pointer-y:30%;}
+[data-testid="home-page"]{isolation:isolate;--pointer-x:50%;--pointer-y:30%;}
 .living-backdrop{position:absolute;inset:0;overflow:hidden;pointer-events:none;border-radius:0;z-index:-1;background:#151723;}
 .living-backdrop:after{content:"";position:absolute;inset:0;background:radial-gradient(450px circle at var(--pointer-x) var(--pointer-y),#8e70ff24,transparent 75%);}
 .living-grid{position:absolute;inset:0;opacity:.12;background-image:linear-gradient(#9a95b5 1px,transparent 1px),linear-gradient(90deg,#9a95b5 1px,transparent 1px);background-size:60px 60px;mask-image:linear-gradient(to bottom,black,transparent);}
