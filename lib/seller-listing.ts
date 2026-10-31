@@ -63,7 +63,7 @@ export function parseSellerImport(input:string,existing:ReadonlySet<string>=new 
  }
  return {valid,issues};
 }
-export const sellerCsvTemplate='номер;регион;цена;тип;город;торг;статус номера;переоформление;продавец;описание\nА123АА;77;150000;авто;Москва;да;на хранении;обсудим;частный;Описание предложения';
+export const sellerCsvTemplate='номер;регион;цена;тип;торг;статус номера;переоформление;продавец;описание\nА123АА;77;150000;авто;да;на хранении;обсудим;частный;Описание предложения';
 export function restoredSellerDraft(value:unknown){
  if(!value||typeof value!=='object')return null;const v=value as Record<string,unknown>;
  const text=(key:string,max:number)=>typeof v[key]==='string'?(v[key] as string).slice(0,max):'';

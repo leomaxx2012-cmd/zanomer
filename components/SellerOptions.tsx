@@ -1,12 +1,11 @@
 import { Pressable } from './ActionPressable';
 import {View,StyleSheet} from 'react-native';
-import {Text,TextInput} from './ResponsiveText';
+import {Text} from './ResponsiveText';
 import {emptySaleDetails,storageLabels,transferLabels,type SaleDetails} from '../lib/seller-listing';
 export function SellerOptions({value=emptySaleDetails,onChange}:{value:SaleDetails;onChange:(v:SaleDetails)=>void}){
  const choose=<K extends keyof SaleDetails>(key:K,next:SaleDetails[K])=>onChange({...value,[key]:next});
  return <View style={s.section}>
-  <Text style={s.title}>Город и условия</Text>
-  <TextInput accessibilityLabel="Город продажи" value={value.city} onChangeText={city=>choose('city',city)} placeholder="Город, например Москва" maxLength={80} style={s.input}/>
+  <Text style={s.title}>Условия продажи</Text>
   <Pressable accessibilityRole="checkbox" accessibilityState={{checked:value.negotiable}} aria-checked={value.negotiable} onPress={()=>choose('negotiable',!value.negotiable)} style={[s.option,value.negotiable&&s.active]}><Text style={s.label}>{value.negotiable?'✓':'○'} Возможен торг</Text></Pressable>
   <Text style={s.caption}>Где находится номер</Text>
   <View style={s.row}>{Object.entries(storageLabels).map(([key,label])=><Pressable key={key} accessibilityRole="radio" accessibilityState={{checked:value.storage===key}} aria-checked={value.storage===key} onPress={()=>choose('storage',key as SaleDetails['storage'])} style={[s.option,value.storage===key&&s.active]}><Text style={s.label}>{label}</Text></Pressable>)}</View>

@@ -14,9 +14,9 @@ export function SellerBulkImport({existing,signedIn,onLogin,onSubmit}:{existing:
   <Pressable accessibilityRole="button" onPress={()=>setShowTemplate(x=>!x)} style={s.secondary}><Text style={s.secondaryText}>{showTemplate?'Скрыть шаблон':'Показать шаблон CSV'}</Text></Pressable>
   {showTemplate&&<Text selectable style={s.template}>{sellerCsvTemplate}</Text>}
   <CsvFileInput onLoad={update}/>
-  <TextInput accessibilityLabel="Список номеров из CSV или Excel" value={text} onChangeText={update} multiline maxLength={1000000} placeholder="номер;регион;цена;тип;город" style={s.input}/>
+  <TextInput accessibilityLabel="Список номеров из CSV или Excel" value={text} onChangeText={update} multiline maxLength={1000000} placeholder="номер;регион;цена;тип" style={s.input}/>
   {!!text&&<><Text style={s.summary}>Готово к отправке: {parsed.valid.length} · замечаний: {parsed.issues.length}</Text>
-   {parsed.valid.slice(0,50).map(row=><View key={row.row} style={s.valid}><Text style={s.plate}>{[row.left,row.digits,row.right].filter(Boolean).join(' ')} · {row.region}</Text><Text style={s.hint}>{row.price.toLocaleString('ru-RU')} ₽{row.details.city?` · ${row.details.city}`:''}</Text></View>)}
+   {parsed.valid.slice(0,50).map(row=><View key={row.row} style={s.valid}><Text style={s.plate}>{[row.left,row.digits,row.right].filter(Boolean).join(' ')} · {row.region}</Text><Text style={s.hint}>{row.price.toLocaleString('ru-RU')} ₽</Text></View>)}
    {parsed.issues.slice(0,50).map((row,i)=><Text key={i} style={s.issue}>Строка {row.row}: {row.message}</Text>)}{parsed.issues.length>50&&<Text style={s.issue}>Ещё замечаний: {parsed.issues.length-50}. Исправь список и проверь снова.</Text>}
   </>}
   <Pressable accessibilityRole="checkbox" accessibilityState={{checked:confirmed}} aria-checked={confirmed} onPress={()=>setConfirmed(x=>!x)} style={s.confirm}><Text style={s.hint}>{confirmed?'☑':'☐'} Подтверждаю, что это мои предложения или у меня есть разрешение владельцев на размещение. Данные проверены.</Text></Pressable>

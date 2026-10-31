@@ -2254,7 +2254,7 @@ export default function HomeScreen() {
     const normalizedRegionCode = rawRegionCode?String(Number(rawRegionCode)).padStart(2,"0"):"";
     const normalizedRegion = listingRegionLabel(normalizedRegionCode);
     const normalizedPlate = formatPlateValue(left, listingDigits, right, listingVehicle);
-    const hasForbiddenContact = hasSellerContacts(listingComment + " " + listingDetails.city);
+    const hasForbiddenContact = hasSellerContacts(listingComment);
     const duplicate = [...catalog,...myListings.filter(item=>item.listingStatus!=="archived")].some(item=>importKey({vehicle:item.vehicle,left:item.leftLetter,digits:item.digits,right:item.rightLetters,region:item.region,price:item.priceValue})===importKey({vehicle:listingVehicle,left,digits:listingDigits,right,region:normalizedRegionCode,price:priceValue}));
     if (![...left, ...right].every((letter) => allowedLetters.includes(letter))) {
       setListingMessage("В номере можно использовать только разрешённые буквы российского госномера.");
@@ -2276,7 +2276,7 @@ export default function HomeScreen() {
       setListingMessage("Не добавляй в комментарий ссылки, Telegram, почту или телефон. Для безопасности связь с покупателем будет через сайт.");
       return;
     }
-    if(listingDetails.city.length>80||listingComment.length>2000){setListingMessage("Город — до 80 символов, описание — до 2 000.");return;}
+    if(listingComment.length>2000){setListingMessage("Описание — до 2 000 символов.");return;}
     const entry: Plate = {
       id: `${Date.now()}`,
       value: normalizedPlate,
@@ -2293,7 +2293,7 @@ export default function HomeScreen() {
       isSiteListing: true,
       sellerRating: null,
       sellerComment: listingComment.trim(),
-      saleDetails: saleDetails(listingDetails),
+      saleDetails: saleDetails({...listingDetails,city:""}),
     };
     if (supabase) {
       // getUser() проверяет пользователя через сеть. При VPN или кратком
@@ -2343,7 +2343,7 @@ export default function HomeScreen() {
         price_rub: entry.priceValue,
         photo_url: photoUrls[0]??null,
         photo_urls: photoUrls,
-        sale_details: saleDetails(listingDetails),
+        sale_details: saleDetails({...listingDetails,city:""}),
         seller_comment: listingComment.trim() || null,
         status: isModerator ? "active" : "moderation",
       }).select("id, status").single();
@@ -2374,7 +2374,7 @@ export default function HomeScreen() {
     // Recheck immediately before the atomic batch write; a failed request keeps the draft.
     const freshRows=rows.filter(row=>!sellerExistingKeys.has(importKey(row)));
     if(!freshRows.length)return "Все эти предложения уже есть в каталоге или твоих объявлениях.";
-    const payload=freshRows.map(row=>({owner_id:session.session.user.id,plate_left:row.left,plate_digits:row.digits,plate_right:row.right,region:listingRegionLabel(row.region),vehicle_type:row.vehicle,price_rub:row.price,seller_comment:row.comment||null,sale_details:row.details,status:"moderation"}));
+    const payload=freshRows.map(row=>({owner_id:session.session.user.id,plate_left:row.left,plate_digits:row.digits,plate_right:row.right,region:listingRegionLabel(row.region),vehicle_type:row.vehicle,price_rub:row.price,seller_comment:row.comment||null,sale_details:{...row.details,city:""},status:"moderation"}));
     const {data,error}=await supabase.from("auto_listings").insert(payload).select("id");
     if(error)return error.code==="23505"?"Одно из предложений уже размещено. Обнови свои объявления и проверь список ещё раз; повторные записи не добавлены.":"Не удалось отправить список. Все строки сохранены — проверь соединение и повтори.";
     await loadManagement(session.session.user.id,profileName);
@@ -3654,7 +3654,7 @@ export default function HomeScreen() {
           {index < 3 && <View style={styles.navDivider} />}
         </View>)}
       </View>
-      {listingPreview&&<Modal transparent animationType="fade" onRequestClose={()=>setListingPreview(false)}><View style={[styles.regionPickerOverlay,{backgroundColor:"rgba(20,18,35,0.48)",justifyContent:"center",alignItems:"center",paddingVertical:24}]}><Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Закрыть предпросмотр" onPress={()=>setListingPreview(false)}/><View style={[styles.addPanel,{width:"94%",maxWidth:650,maxHeight:"88%",alignSelf:"center"}]}><ScrollView keyboardShouldPersistTaps="handled"><Text style={styles.addPanelTitle}>Предпросмотр объявления</Text><Text style={styles.sellerDraftHint}>Так покупатель увидит твоё предложение после одобрения.</Text><View style={{width:listingVehicle==="motorcycle"?240:"100%",maxWidth:520,aspectRatio:listingVehicle==="motorcycle"?4/3:520/112,alignSelf:"center",marginVertical:16}}><PlateFace vehicle={listingVehicle} leftLetter={listingLeftLetter||"*"} digits={listingDigits||"***"} rightLetters={listingRightLetters||"**"} region={listingRegion||"*"}/></View><Text style={styles.offerPrice}>{Number(listingPrice.replace(/\D/g,""))?`${Number(listingPrice.replace(/\D/g,"")).toLocaleString("ru-RU")} ₽`:"Цена не указана"}</Text><Text style={styles.detailsValue}>{registrationRegionLabel(listingRegion)}{listingDetails.city?` · ${listingDetails.city}`:""}</Text><View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View><Text style={styles.detailsComment}>{[listingDetails.negotiable?"Возможен торг":"",storageLabels[listingDetails.storage],transferLabels[listingDetails.transfer],listingDetails.sellerType==="dealer"?"Дилер":"Частный продавец"].filter(Boolean).join(" · ")}</Text><ListingPhotos urls={listingPhotoUris}/><Text style={styles.detailsComment}>{listingComment||"Описание пока не добавлено"}</Text><Pressable accessibilityRole="button" onPress={()=>setListingPreview(false)} style={styles.publishButton}><Text style={styles.publishText}>Вернуться к редактированию</Text></Pressable></ScrollView></View></View></Modal>}
+      {listingPreview&&<Modal transparent animationType="fade" onRequestClose={()=>setListingPreview(false)}><View style={[styles.regionPickerOverlay,{backgroundColor:"rgba(20,18,35,0.48)",justifyContent:"center",alignItems:"center",paddingVertical:24}]}><Pressable style={StyleSheet.absoluteFill} accessibilityLabel="Закрыть предпросмотр" onPress={()=>setListingPreview(false)}/><View style={[styles.addPanel,{width:"94%",maxWidth:650,maxHeight:"88%",alignSelf:"center"}]}><ScrollView keyboardShouldPersistTaps="handled"><Text style={styles.addPanelTitle}>Предпросмотр объявления</Text><Text style={styles.sellerDraftHint}>Так покупатель увидит твоё предложение после одобрения.</Text><View style={{width:listingVehicle==="motorcycle"?240:"100%",maxWidth:520,aspectRatio:listingVehicle==="motorcycle"?4/3:520/112,alignSelf:"center",marginVertical:16}}><PlateFace vehicle={listingVehicle} leftLetter={listingLeftLetter||"*"} digits={listingDigits||"***"} rightLetters={listingRightLetters||"**"} region={listingRegion||"*"}/></View><Text style={styles.offerPrice}>{Number(listingPrice.replace(/\D/g,""))?`${Number(listingPrice.replace(/\D/g,"")).toLocaleString("ru-RU")} ₽`:"Цена не указана"}</Text><Text style={styles.detailsValue}>{registrationRegionLabel(listingRegion)}</Text><View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View><Text style={styles.detailsComment}>{[listingDetails.negotiable?"Возможен торг":"",storageLabels[listingDetails.storage],transferLabels[listingDetails.transfer],listingDetails.sellerType==="dealer"?"Дилер":"Частный продавец"].filter(Boolean).join(" · ")}</Text><ListingPhotos urls={listingPhotoUris}/><Text style={styles.detailsComment}>{listingComment||"Описание пока не добавлено"}</Text><Pressable accessibilityRole="button" onPress={()=>setListingPreview(false)} style={styles.publishButton}><Text style={styles.publishText}>Вернуться к редактированию</Text></Pressable></ScrollView></View></View></Modal>}
       {subscriptionToast && <Pressable onPress={() => setSubscriptionToast(false)} style={[styles.toast, /^(Не удалось|Войди|Лимит)/.test(subscriptionToastMessage) && styles.toastError, { bottom: navigationHeight + 12 }]}>
         <Text style={styles.toastText}>{subscriptionToastMessage || (hasPlusSubscription ? "✓ Подписка Плюс активна" : "✓ Сохранено")}</Text>
       </Pressable>}
