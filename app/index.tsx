@@ -2546,7 +2546,7 @@ export default function HomeScreen() {
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={styles.brandContainer}>
-            <View style={[styles.brandMark, compactLayout && { width: 40, height: 40 }]}><Text allowFontScaling={false} style={styles.brandMarkText}>З</Text></View>
+            <Image source={require("../assets/zanomer-logo.png")} resizeMode="contain" accessible={false} style={{width:48,height:48}} />
 
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={[styles.headerHotButton, compactLayout && styles.headerHotButtonCompact]}>
