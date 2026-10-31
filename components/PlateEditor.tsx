@@ -1,4 +1,5 @@
-import { Keyboard, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable } from './ActionPressable';
+import { Keyboard, StyleSheet, View } from 'react-native';
 import { PlateFace } from './PlateFace';
 
 type Section = 'left' | 'digits' | 'right' | 'region';

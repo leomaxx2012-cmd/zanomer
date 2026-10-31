@@ -1,4 +1,5 @@
-import {Pressable,View,StyleSheet} from 'react-native';
+import { Pressable } from './ActionPressable';
+import {View,StyleSheet} from 'react-native';
 import {Text,TextInput} from './ResponsiveText';
 import {emptySaleDetails,storageLabels,transferLabels,type SaleDetails} from '../lib/seller-listing';
 export function SellerOptions({value=emptySaleDetails,onChange}:{value:SaleDetails;onChange:(v:SaleDetails)=>void}){

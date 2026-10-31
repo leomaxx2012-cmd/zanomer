@@ -1,3 +1,4 @@
+import { Pressable } from '../components/ActionPressable';
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import Head from "expo-router/head";
@@ -17,7 +18,6 @@ import {
   Linking,
   Modal,
   Platform,
-  Pressable,
   SafeAreaView,
   Share,
   ScrollView,

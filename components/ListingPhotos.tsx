@@ -1,5 +1,6 @@
+import { Pressable } from './ActionPressable';
 import {useEffect,useState} from 'react';
-import {Image,Pressable,ScrollView,View,StyleSheet} from 'react-native';
+import {Image,ScrollView,View,StyleSheet} from 'react-native';
 import {Text} from './ResponsiveText';
 export function ListingPhotos({urls,onChange}:{urls:string[];onChange?:(urls:string[])=>void}){
  const [index,setIndex]=useState(0);const key=urls.join('|');useEffect(()=>setIndex(0),[key]);
