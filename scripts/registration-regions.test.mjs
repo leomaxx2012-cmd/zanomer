@@ -7,6 +7,7 @@ test('new codes resolve without any catalogue records',()=>{
   assert.equal(registrationRegionName('750'),'Московская область');
   assert.equal(registrationRegionName('777'),'Москва');
   assert.equal(registrationRegionName('196'),'Свердловская область');
+  assert.equal(registrationRegionName('666'),'Свердловская область');
   assert.equal(registrationRegionName('178'),'Санкт-Петербург');
 });
 test('two-digit codes and leading zeroes retain the correct region',()=>{

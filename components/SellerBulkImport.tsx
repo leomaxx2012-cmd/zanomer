@@ -1,3 +1,5 @@
+import { type Theme } from '../lib/theme';
+import { useTheme, useThemedStyles } from './AppTheme';
 import { Pressable } from './ActionPressable';
 import {useMemo,useState} from 'react';
 import {View,StyleSheet,Platform} from 'react-native';
@@ -5,6 +7,9 @@ import {Text,TextInput} from './ResponsiveText';
 import {CsvFileInput} from './CsvFileInput';
 import {parseSellerImport,sellerCsvTemplate,type ImportListing} from '../lib/seller-listing';
 export function SellerBulkImport({existing,signedIn,onLogin,onSubmit}:{existing:ReadonlySet<string>;signedIn:boolean;onLogin:()=>void;onSubmit:(rows:ImportListing[])=>Promise<string>}){
+ const s=useThemedStyles(createStyles);
+ const {theme}=useTheme();
+
  const [text,setText]=useState(''),[showTemplate,setShowTemplate]=useState(false),[confirmed,setConfirmed]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState('');
  const parsed=useMemo(()=>parseSellerImport(text,existing),[text,existing]);
  const update=(value:string)=>{setText(value);setConfirmed(false);setMessage('');};
@@ -24,4 +29,4 @@ export function SellerBulkImport({existing,signedIn,onLogin,onSubmit}:{existing:
   {!!message&&<Text accessibilityLiveRegion="polite" style={s.summary}>{message}</Text>}
  </View>;
 }
-const s=StyleSheet.create({panel:{alignSelf:'center',width:'100%',maxWidth:860,backgroundColor:'white',borderRadius:22,padding:20,gap:12,borderWidth:1,borderColor:'#E5E1F0',marginTop:20},title:{fontSize:21,fontWeight:'800',color:'#24213E'},hint:{fontSize:13,lineHeight:20,color:'#667085'},secondary:{padding:12,borderRadius:12,backgroundColor:'#F0ECFF'},secondaryText:{fontSize:13,color:'#5143C2',fontWeight:'700'},template:{fontSize:12,lineHeight:20,color:'#423968',padding:12,backgroundColor:'#F5F3FB'},input:{fontSize:13,lineHeight:20,minHeight:150,padding:14,borderWidth:1,borderColor:'#D8D4E6',borderRadius:12,color:'#24213E',textAlignVertical:'top'},summary:{fontSize:14,lineHeight:21,fontWeight:'700',color:'#5143C2'},valid:{borderBottomWidth:1,borderBottomColor:'#F0EDF5',paddingVertical:8},plate:{fontSize:15,fontWeight:'700',color:'#24213E'},issue:{fontSize:12,lineHeight:19,color:'#B42318'},confirm:{paddingVertical:12},publish:{padding:15,minHeight:48,borderRadius:12,backgroundColor:'#6551D3',alignItems:'center',justifyContent:'center'},publishText:{color:'white',fontSize:14,fontWeight:'800'}});
+const createStyles = (theme:Theme) => StyleSheet.create({panel:{alignSelf:'center',width:'100%',maxWidth:860,backgroundColor:theme.surface,borderRadius:22,padding:20,gap:12,borderWidth:1,borderColor:theme.border,marginTop:20},title:{fontSize:21,fontWeight:'800',color:theme.text},hint:{fontSize:13,lineHeight:20,color:theme.muted},secondary:{padding:12,borderRadius:12,backgroundColor:theme.raised},secondaryText:{fontSize:13,color:theme.accent,fontWeight:'700'},template:{fontSize:12,lineHeight:20,color:theme.accent,padding:12,backgroundColor:theme.raised},input:{fontSize:13,lineHeight:20,minHeight:150,padding:14,borderWidth:1,borderColor:theme.border,borderRadius:12,color:theme.text,textAlignVertical:'top'},summary:{fontSize:14,lineHeight:21,fontWeight:'700',color:theme.accent},valid:{borderBottomWidth:1,borderBottomColor:theme.border,paddingVertical:8},plate:{fontSize:15,fontWeight:'700',color:theme.text},issue:{fontSize:12,lineHeight:19,color:theme.warning},confirm:{paddingVertical:12},publish:{padding:15,minHeight:48,borderRadius:12,backgroundColor:'#6551D3',alignItems:'center',justifyContent:'center'},publishText:{color:theme.onPrimary,fontSize:14,fontWeight:'800'}});
