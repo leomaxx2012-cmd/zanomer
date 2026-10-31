@@ -2547,7 +2547,7 @@ export default function HomeScreen() {
         <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={styles.brandContainer}>
             <View style={[styles.brandMark, compactLayout && { width: 40, height: 40 }]}><Text allowFontScaling={false} style={styles.brandMarkText}>З</Text></View>
-            
+
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={[styles.headerHotButton, compactLayout && styles.headerHotButtonCompact]}>
             <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>{compactLayout ? "🔥" : "🔥 Горячие объявления"}</Text>
@@ -2842,12 +2842,10 @@ export default function HomeScreen() {
         </Pressable>
       </View>}
       {filterPanelOpen && <View testID="home-collections" style={styles.homeCollections}>
-        <Text style={styles.homeCollectionCaption}>БЫСТРЫЙ ВЫБОР</Text>
         <View style={styles.homeCollectionRow}>
           {([['repeatDigits','Одинаковые цифры'],['repeatLetters','Одинаковые буквы'],['mirror','Зеркальные'],['firstTen','Первая десятка']] as const).map(([key,label]) => <Pressable key={key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({specialFilters:[key]})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{label} ↗</Text></Pressable>)}
           {regionalSearchLinks.slice(0,2).map(item => <Pressable key={item.key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({region:item.title,regionCode:""})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{item.title} ↗</Text></Pressable>)}
         </View>
-        <Text style={styles.landingFootnote}>Ищи по части номера или оставь звёздочки — покажем все подходящие варианты.</Text>
       </View>}
       {filterPanelOpen && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
