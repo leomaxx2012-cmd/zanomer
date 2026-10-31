@@ -2530,7 +2530,7 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.page}
+    <SafeAreaView style={[styles.page, isLanding && {backgroundColor:"#151723"}]}
       onPointerDown={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
       onPointerMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onPointerCancel={() => { backgroundTouch.current = null; }}
@@ -2546,29 +2546,29 @@ export default function HomeScreen() {
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={styles.brandContainer}>
-            <View style={[styles.brandMark, compactLayout && { width: 32, height: 36 }]}><Text allowFontScaling={false} style={styles.brandMarkText}>З</Text></View>
-            <View style={{ flexShrink: 1 }}><Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.brandName, compactLayout && styles.brandNameCompact]}>ЗаНомером</Text>{!compactLayout && <Text style={styles.brandCaption}>Красивые номера. Твой выбор.</Text>}</View>
+            <View style={[styles.brandMark, compactLayout && { width: 40, height: 40 }]}><Text allowFontScaling={false} style={styles.brandMarkText}>З</Text></View>
+            
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={[styles.headerHotButton, compactLayout && styles.headerHotButtonCompact]}>
             <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>{compactLayout ? "🔥" : "🔥 Горячие объявления"}</Text>
           </Pressable>
-          <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact, compactLayout && windowWidth < 320 && { width: 110 }]}>
+          <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact]}>
         <View style={styles.headerActions}>
-          <Pressable onPress={openPaymentInfo} style={styles.requisitesHeaderButton} accessibilityLabel="Информация об услугах, оплате и реквизитах">
+          <Pressable onPress={openPaymentInfo} style={[styles.requisitesHeaderButton, compactLayout && styles.headerIconCompact]} accessibilityLabel="Информация об услугах, оплате и реквизитах">
             <Text style={styles.requisitesHeaderButtonText}>ⓘ</Text>
           </Pressable>
-          <Pressable onPress={() => { void openChats(); }} style={styles.chatsButton} accessibilityLabel="Диалоги">
+          <Pressable onPress={() => { void openChats(); }} style={[styles.chatsButton, compactLayout && styles.headerIconCompact]} accessibilityLabel="Диалоги">
             <Text style={styles.chatsButtonText}>💬</Text>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
         {compactLayout && <>
-        <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={[styles.headerReminder, { minHeight: 28, paddingHorizontal: 8 }]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={[styles.headerReminder, styles.headerIconCompact]}>
           <Text style={styles.headerReminderText}>₽</Text>
         </Pressable>
         </>}
         </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton]}>
-            <Text numberOfLines={1} style={styles.accountButtonText}>{isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton, compactLayout && styles.headerProfileCompact]}>
+            <Text numberOfLines={1} style={styles.accountButtonText}>{compactLayout ? "👤" : isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
         {!compactLayout && <>
         <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={styles.headerReminder}>
@@ -2604,7 +2604,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>}
-      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact, { paddingBottom: navigationHeight + 40 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} style={[styles.mainScroll, isLanding && {backgroundColor:"#151723"}]} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact, isLanding && {maxWidth:undefined, flexGrow:1}, { paddingBottom: navigationHeight + 40 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -2841,6 +2841,14 @@ export default function HomeScreen() {
           <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть" : "☷ Фильтры"}</Text>
         </Pressable>
       </View>}
+      {filterPanelOpen && <View testID="home-collections" style={styles.homeCollections}>
+        <Text style={styles.homeCollectionCaption}>БЫСТРЫЙ ВЫБОР</Text>
+        <View style={styles.homeCollectionRow}>
+          {([['repeatDigits','Одинаковые цифры'],['repeatLetters','Одинаковые буквы'],['mirror','Зеркальные'],['firstTen','Первая десятка']] as const).map(([key,label]) => <Pressable key={key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({specialFilters:[key]})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{label} ↗</Text></Pressable>)}
+          {regionalSearchLinks.slice(0,2).map(item => <Pressable key={item.key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({region:item.title,regionCode:""})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{item.title} ↗</Text></Pressable>)}
+        </View>
+        <Text style={styles.landingFootnote}>Ищи по части номера или оставь звёздочки — покажем все подходящие варианты.</Text>
+      </View>}
       {filterPanelOpen && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
           <Pressable accessibilityRole="button" accessibilityLabel="Источники объявлений" accessibilityState={{ expanded: sourceListExpanded }} onPress={() => setSourceListExpanded(current => !current)} style={styles.sourceFilterToggle}>
@@ -2908,14 +2916,7 @@ export default function HomeScreen() {
         </View>
       </View>}
       </View>}
-      {isLanding && <View testID="home-collections" style={styles.homeCollections}>
-        <Text style={styles.homeCollectionCaption}>БЫСТРЫЙ ВЫБОР</Text>
-        <View style={styles.homeCollectionRow}>
-          {([['repeatDigits','Одинаковые цифры'],['repeatLetters','Одинаковые буквы'],['mirror','Зеркальные'],['firstTen','Первая десятка']] as const).map(([key,label]) => <Pressable key={key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({specialFilters:[key]})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{label} ↗</Text></Pressable>)}
-          {regionalSearchLinks.slice(0,2).map(item => <Pressable key={item.key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({region:item.title,regionCode:""})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{item.title} ↗</Text></Pressable>)}
-        </View>
-        <Text style={styles.landingFootnote}>Ищи по части номера или оставь звёздочки — покажем все подходящие варианты.</Text>
-      </View>}
+
       </View>
       <View style={[styles.browseResults, {alignSelf:"center",maxWidth:1360}]}>
 
@@ -3017,7 +3018,7 @@ export default function HomeScreen() {
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
-        {activeTab === "buy" && !similarTo && <View><Text style={styles.resultsHeading}>Свежие объявления</Text><Text style={styles.resultsCaption}>Несколько вариантов из каталога. Найди свой через поиск выше.</Text></View>}
+        {activeTab === "buy" && !similarTo && <View style={{flex:1,minWidth:180}}><Text style={[styles.resultsHeading,isLanding && {color:"#FFFFFF"}]}>Свежие объявления</Text><Text style={[styles.resultsCaption,isLanding && {color:"#B9BECE"}]}>Несколько вариантов из каталога. Найди свой через поиск выше.</Text></View>}
         {(activeTab === "favorites" || similarTo) && <Text style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
@@ -3151,23 +3152,23 @@ export default function HomeScreen() {
       </View>
 
       {Platform.OS === "web" && <View style={styles.siteFooter} accessibilityRole="summary">
-        <Text style={styles.siteFooterTitle}>ЗаНомером — поиск и размещение объявлений</Text>
+        <Text style={[styles.siteFooterTitle,isLanding && {color:"#CBD0DD"}]}>ЗаНомером — поиск и размещение объявлений</Text>
         <View style={styles.siteFooterLinks}>
           {regionalSearchLinks.map(item =>
-            <Link key={item.key} href={regionLink(item.title) as "/"} style={styles.siteFooterLink}>Номера: {item.title}</Link>
+            <Link key={item.key} href={regionLink(item.title) as "/"} style={[styles.siteFooterLink,isLanding && {color:"#C4B5FD"}]}>Номера: {item.title}</Link>
           )}
         </View>
-        <Text style={styles.siteFooterText}>Исполнитель цифровых услуг: ИП Леонович Александр Леонидович</Text>
-        <Text style={styles.siteFooterText}>ИНН 504406730552 · ОГРНИП 319508100089501</Text>
-        <Text style={styles.siteFooterText}>141570, Московская область, пгт Менделеево, ул. Левобережная, д. 1</Text>
+        <Text style={[styles.siteFooterText,isLanding && {color:"#CBD0DD"}]}>Исполнитель цифровых услуг: ИП Леонович Александр Леонидович</Text>
+        <Text style={[styles.siteFooterText,isLanding && {color:"#CBD0DD"}]}>ИНН 504406730552 · ОГРНИП 319508100089501</Text>
+        <Text style={[styles.siteFooterText,isLanding && {color:"#CBD0DD"}]}>141570, Московская область, пгт Менделеево, ул. Левобережная, д. 1</Text>
         <View style={styles.siteFooterLinks}>
-          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("mailto:zanomerom@mail.ru"); }}><Text style={styles.siteFooterLink}>zanomerom@mail.ru</Text></Pressable>
-          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={styles.siteFooterLink}>+7 (495) 268-01-43</Text></Pressable>
+          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("mailto:zanomerom@mail.ru"); }}><Text style={[styles.siteFooterLink,isLanding && {color:"#C4B5FD"}]}>zanomerom@mail.ru</Text></Pressable>
+          <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("tel:+74952680143"); }}><Text style={[styles.siteFooterLink,isLanding && {color:"#C4B5FD"}]}>+7 (495) 268-01-43</Text></Pressable>
         </View>
         <View style={styles.siteFooterLinks}>
-          {([['offer', 'Оферта'], ['privacy', 'Политика обработки данных'], ['delivery', 'Оказание услуг'], ['refund', 'Возврат средств'], ['requisites', 'Реквизиты']] as const).map(([page, label]) => <Pressable key={page} accessibilityRole="link" onPress={() => openLegalDocument(page)}><Text style={styles.siteFooterLink}>{label}</Text></Pressable>)}
+          {([['offer', 'Оферта'], ['privacy', 'Политика обработки данных'], ['delivery', 'Оказание услуг'], ['refund', 'Возврат средств'], ['requisites', 'Реквизиты']] as const).map(([page, label]) => <Pressable key={page} accessibilityRole="link" onPress={() => openLegalDocument(page)}><Text style={[styles.siteFooterLink,isLanding && {color:"#C4B5FD"}]}>{label}</Text></Pressable>)}
         </View>
-        <Text style={styles.siteFooterText}>Оплата самих номеров и расчёты между пользователями через сервис не проводятся. Приём оплаты цифровых услуг пока не подключён.</Text>
+        <Text style={[styles.siteFooterText,isLanding && {color:"#CBD0DD"}]}>Оплата самих номеров и расчёты между пользователями через сервис не проводятся. Приём оплаты цифровых услуг пока не подключён.</Text>
       </View>}
       </ScrollView>
 
@@ -3672,8 +3673,8 @@ const styles = StyleSheet.create({
   brandCaption: { color: "#83889A", fontSize: 10, marginTop: 2 },
   headerHotButtonCompact: { paddingHorizontal: 8, minWidth: 36, minHeight: 36 },
   catalogSearchSummary: {alignSelf:"center",width:"100%",maxWidth:1100,paddingHorizontal:12,paddingVertical:12,color:"#737B8F",fontSize:12,lineHeight:19},
-  landingStage: {position:"relative",backgroundColor:"#151723",borderRadius:32,marginTop:20,marginBottom:36,paddingHorizontal:36,paddingBottom:30,width:"100%",alignSelf:"center",maxWidth:1360},
-  landingStageCompact: {borderRadius:22,marginTop:12,marginBottom:24,paddingHorizontal:14,paddingBottom:24},
+  landingStage: {position:"relative",backgroundColor:"#151723",borderRadius:0,marginTop:0,marginBottom:28,paddingHorizontal:0,paddingBottom:24,width:"100%",alignSelf:"center",overflow:"hidden"},
+  landingStageCompact: {borderRadius:0,marginTop:0,marginBottom:24,paddingHorizontal:0,paddingBottom:16},
   landingSearchWrap: {maxWidth:780,alignSelf:"center",width:"100%"},
   landingSearchCard: {maxWidth:780,width:"100%",marginTop:0,borderRadius:24,padding:24,shadowOpacity:0.1},
   catalogIntro: {alignSelf:"center",width:"100%",maxWidth:1000,alignItems:"center",gap:16,paddingTop:32,paddingBottom:24},
@@ -3688,8 +3689,8 @@ const styles = StyleSheet.create({
   homeCollections: {alignSelf:"center",width:"100%",maxWidth:820,marginTop:18,gap:12},
   homeCollectionCaption: {color:"#928BA6",fontSize:10,letterSpacing:2,textAlign:"center",fontWeight:"700"},
   homeCollectionRow: {flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:9},
-  homeCollectionChip: {backgroundColor:"#242735",borderColor:"#393A50",borderWidth:1,borderRadius:30,paddingHorizontal:15,paddingVertical:11,minHeight:42,justifyContent:"center"},
-  homeCollectionText: {color:"#E4DDF7",fontSize:12,fontWeight:"600"},
+  homeCollectionChip: {backgroundColor:"#F0EEFF",borderColor:"#DDD6FE",borderWidth:1,borderRadius:30,paddingHorizontal:15,paddingVertical:11,minHeight:42,justifyContent:"center"},
+  homeCollectionText: {color:"#5143C2",fontSize:12,fontWeight:"600"},
   landingFootnote: {color:"#969BAD",fontSize:11,lineHeight:18,textAlign:"center",marginTop:6},
   introAction: { backgroundColor: "#282B3D", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
   introActionText: { color: "#FFFFFF", fontSize: 13, fontWeight: "800" },
@@ -3734,7 +3735,9 @@ const styles = StyleSheet.create({
   headerHotText: { color: "#A45B23", fontSize: 12, lineHeight: 18, fontWeight: "700", textAlign: "center" },
   headerHotTextCompact: { fontSize: 16, lineHeight: 22 },
   headerUtilityColumn: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "flex-end" },
-  headerUtilityColumnCompact: { width: 124, flexDirection: "column", alignItems: "stretch", gap: 4 },
+  headerUtilityColumnCompact: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
+  headerIconCompact: {width:36,height:40,minHeight:40,paddingHorizontal:0},
+  headerProfileCompact: {width:40,minWidth:40,maxWidth:40,minHeight:40,paddingHorizontal:0,paddingVertical:0},
   headerAccountButton: { maxWidth: "100%", minWidth: 70, minHeight: 36, paddingVertical: 7, alignItems: "center" },
   headerReminder: { minHeight: 36, alignItems: "center", justifyContent: "center", paddingHorizontal: 10, backgroundColor: "#F5F3FF", borderRadius: 10 },
   headerReminderText: { color: "#4536B8", fontWeight: "700", fontSize: 11, lineHeight: 15 },
@@ -4025,7 +4028,7 @@ const styles = StyleSheet.create({
   regionPickerCountActive: { color: "#DCEBFF" },
   pickerStar: { backgroundColor: "#FFF7E8", borderColor: "#FEDF89" },
   pickerErase: { backgroundColor: "#FEF3F2", borderColor: "#FECDCA" },
-  listHeader: { alignItems: "center", alignSelf: "center", flexDirection: "row", justifyContent: "space-between", maxWidth: 1100, minWidth: 0, width: "100%" },
+  listHeader: { alignItems: "center", alignSelf: "center", flexDirection: "row", flexWrap: "wrap", gap:10, justifyContent: "space-between", maxWidth: 1100, minWidth: 0, width: "100%" },
   listFilters: { alignSelf: "center", flexDirection: "row", flexWrap: "wrap", gap: 8, maxWidth: 1100, paddingBottom: 3, paddingTop: 10, width: "100%" },
   filterControlPanel: { alignSelf: "center", backgroundColor: "#FFFFFF", borderColor: "#E5E7F0", borderRadius: 20, borderWidth: 1, marginTop: 14, maxWidth: 1100, padding: 16, width: "100%" },
   catalogOnlyToolbar: { alignItems: "center", alignSelf: "center", backgroundColor: "#FFFEFF", borderColor: "#E1DCF5", borderRadius: 16, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 12, maxWidth: 1100, padding: 11, width: "100%" },
