@@ -57,7 +57,7 @@ export function parseSellerImport(input:string,existing:ReadonlySet<string>=new 
   if(!/^\d{1,3}$/.test(region)||Number(region)===0){issues.push({row,message:'Укажи код региона из 1–3 цифр.'});continue;}
   if(!/^\d+$/.test(priceText)||!Number.isInteger(price)||price<1000||price>50_000_000){issues.push({row,message:'Цена должна быть целым числом от 1 000 до 50 000 000 ₽.'});continue;}
   if(comment.length>2000||city.length>80||hasSellerContacts(comment+' '+city)){issues.push({row,message:'Проверь город и описание: без контактов и ссылок, описание до 2 000 символов.'});continue;}
-  const item:ImportListing={row,vehicle,left:vehicle==='motorcycle'?'':match[1],digits:vehicle==='motorcycle'?match[1]:match[2],right:vehicle==='car'?match[3]:vehicle==='motorcycle'?match[2]:'',region:String(Number(region)),price,comment,
+  const item:ImportListing={row,vehicle,left:vehicle==='motorcycle'?'':match[1],digits:vehicle==='motorcycle'?match[1]:match[2],right:vehicle==='car'?match[3]:vehicle==='motorcycle'?match[2]:'',region:String(Number(region)).padStart(2,"0"),price,comment,
    details:saleDetails({city,negotiable:/^(да|yes|1|true)$/i.test(get('negotiable')),storage:/^(на хранении|storage)$/i.test(get('storage'))?'storage':/^(на автомобиле|vehicle)$/i.test(get('storage'))?'vehicle':'unspecified',transfer:/^(продавец|sellerVehicle)$/i.test(get('transfer'))?'sellerVehicle':/^(покупатель|buyerVehicle)$/i.test(get('transfer'))?'buyerVehicle':'discuss',sellerType:/^(дилер|dealer)$/i.test(get('sellerType'))?'dealer':'private'})};
   const key=importKey(item);if(seen.has(key)){issues.push({row,message:'Дубль: такой тип, номер, регион и цена уже есть в списке или каталоге.'});continue;}seen.add(key);valid.push(item);
  }

@@ -2251,7 +2251,7 @@ export default function HomeScreen() {
       return;
     }
     const rawRegionCode = listingRegion.replace(/\D/g, "").slice(0, 3);
-    const normalizedRegionCode = rawRegionCode?String(Number(rawRegionCode)):"";
+    const normalizedRegionCode = rawRegionCode?String(Number(rawRegionCode)).padStart(2,"0"):"";
     const normalizedRegion = listingRegionLabel(normalizedRegionCode);
     const normalizedPlate = formatPlateValue(left, listingDigits, right, listingVehicle);
     const hasForbiddenContact = hasSellerContacts(listingComment + " " + listingDetails.city);
