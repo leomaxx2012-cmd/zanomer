@@ -3012,7 +3012,7 @@ export default function HomeScreen() {
       </View>}
 
       {(activeTab === "buy" || activeTab === "favorites") && <>
-      {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
+      {(!catalogOnly || activeTab === "favorites") && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {activeTab === "buy" && !similarTo && <View style={{flex:1,minWidth:180}}><Text style={[styles.resultsHeading,{color:theme.text}]}>Свежие объявления</Text><Text style={[styles.resultsCaption,isLanding && {color:theme.muted}]}>Несколько вариантов из каталога. Найди свой через поиск выше.</Text></View>}
         {(activeTab === "favorites" || similarTo) && <Text style={[styles.sectionTitle, activeTab === "favorites" ? styles.favoritesTitle : styles.listTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
