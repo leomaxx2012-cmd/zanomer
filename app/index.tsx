@@ -1,4 +1,4 @@
-import {isBackdropControlTouch, type BackdropTouch} from "../lib/backdrop-touch";
+import {createBackdropDrag,isBackdropControlTouch, type BackdropTouch} from "../lib/backdrop-touch";
 import {siteTitle,siteDescription} from "../lib/site-metadata";
 import { type Theme } from '../lib/theme';
 import { useTheme, useThemedStyles } from '../components/AppTheme';
@@ -17,6 +17,7 @@ import { linkedRegions, regionFromLink, regionLink } from "../lib/region-links";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   AppState,
+  type GestureResponderEvent,
   Image,
   InteractionManager,
   Keyboard,
@@ -341,7 +342,7 @@ export default function HomeScreen() {
   const catalogScrollRef = useRef<ScrollView>(null);
   const [mainViewportHeight, setMainViewportHeight] = useState(windowHeight);
   const backgroundTouch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const glowTouchActive = useRef(false);
+  const [glowDrag] = useState(createBackdropDrag);
   function openFilteredCatalog() {
     Keyboard.dismiss();
     setPlatePicker(null);
@@ -2539,16 +2540,24 @@ export default function HomeScreen() {
     setAuthOpen(false);
   }
 
+  // These capture events are supported by RN 0.81 native view configs but omitted from its TS ViewProps.
+  const glowCaptureHandlers = {
+    onTouchStartCapture: (event: GestureResponderEvent) => { const touch = event.nativeEvent.touches[0] ?? event.nativeEvent; glowDrag.begin(touch.pageX, touch.pageY); },
+    onTouchMoveCapture: (event: GestureResponderEvent) => { const touch = event.nativeEvent.touches[0] ?? event.nativeEvent; if (glowDrag.move(touch.pageX, touch.pageY)) backdropTouch.current?.move(touch.pageX, touch.pageY); },
+    onTouchEndCapture: (event: GestureResponderEvent) => { if (glowDrag.finish(event.nativeEvent.touches.length)) backdropTouch.current?.end(); },
+    onTouchCancelCapture: (event: GestureResponderEvent) => { if (glowDrag.finish(event.nativeEvent.touches.length)) backdropTouch.current?.end(); },
+  };
   return (
     <SafeAreaView testID="home-page" style={styles.page}
+      {...glowCaptureHandlers}
       onPointerDown={event => { backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
       onPointerMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onPointerCancel={() => { backgroundTouch.current = null; }}
       onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
-      onTouchStart={event => { glowTouchActive.current = !isBackdropControlTouch(event.nativeEvent); if(glowTouchActive.current) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); else backdropTouch.current?.end(); backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
-      onTouchMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) { start.moved = true; glowTouchActive.current = true; } if(glowTouchActive.current) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); }}
-      onTouchCancel={() => { glowTouchActive.current = false; backdropTouch.current?.end(); backgroundTouch.current = null; }}
-      onTouchEnd={() => { glowTouchActive.current = false; backdropTouch.current?.end(); const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
+      onTouchStart={event => { if(!isBackdropControlTouch(event.nativeEvent)) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); else backdropTouch.current?.end(); backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
+      onTouchMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
+      onTouchCancel={() => { backgroundTouch.current = null; }}
+      onTouchEnd={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       {Platform.OS === "web" && !incomingListingId && <Head>
         <title>{region === "Все" ? siteTitle : `Номера: ${region} — ЗаНомером`}</title>
         <meta name="description" content={region === "Все" ? siteDescription : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
@@ -2556,7 +2565,7 @@ export default function HomeScreen() {
       <LivingBackdrop ref={backdropTouch} />
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
         <View style={[styles.headerLowerRow, compactLayout && { gap: smallHeader ? 6 : 8 }]}>
-          <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={compactLayout ? styles.brandContainerCompact : styles.brandContainer}>
+          <Pressable outlined={false} accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={compactLayout ? styles.brandContainerCompact : styles.brandContainer}>
             <Image source={require("../assets/zanomer-logo.png")} resizeMode="contain" accessible={false} style={{width:48,height:48}} />
 
           </Pressable>

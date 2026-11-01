@@ -13,7 +13,7 @@ export const LivingBackdrop=forwardRef<BackdropTouch>(function LivingBackdrop(_,
  const opacity=useRef(new Animated.Value(0)).current;
  const reduced=useRef(false);
  const timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
- const end=()=>{clearTimeout(timer.current);Animated.timing(opacity,{toValue:0,duration:400,useNativeDriver:true}).start();};
+ const end=()=>{clearTimeout(timer.current);if(reduced.current){opacity.stopAnimation();opacity.setValue(0);}else Animated.timing(opacity,{toValue:0,duration:400,useNativeDriver:true}).start();};
  useEffect(()=>{
   let active=true;
   void AccessibilityInfo.isReduceMotionEnabled().then(value=>{if(active){reduced.current=value;if(value)opacity.setValue(0);}});
@@ -22,7 +22,6 @@ export const LivingBackdrop=forwardRef<BackdropTouch>(function LivingBackdrop(_,
  },[opacity]);
  useEffect(()=>{opacity.setValue(0);clearTimeout(timer.current);},[mode,opacity]);
  useImperativeHandle(ref,()=>({move(x,y){
-  if(reduced.current)return;
   clearTimeout(timer.current);opacity.stopAnimation();
   position.setValue({x:x-radius,y:y-radius});opacity.setValue(1);
   // Also fade when a child consumes touch-end (for example the plate editor).

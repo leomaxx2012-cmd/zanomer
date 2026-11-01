@@ -8,7 +8,7 @@ const css=(background:string)=>`
 [data-testid="motion-card"]{transition:transform .2s ease;}
 @media(hover:hover) and (pointer:fine){[data-testid="motion-card"]:hover{transform:translateY(-4px);}}
 @media(hover:none) and (pointer:coarse){.living-backdrop:after{opacity:var(--touch-glow,0);transition:opacity .4s ease;}}
-@media(prefers-reduced-motion:reduce){[data-testid="motion-card"]{transition:none!important;transform:none!important;}.living-backdrop:after{display:none;}}
+@media(prefers-reduced-motion:reduce){[data-testid="motion-card"]{transition:none!important;transform:none!important;}.living-backdrop:after{transition:none!important;}}
 `;
 export const LivingBackdrop=forwardRef<BackdropTouch>(function LivingBackdrop(_,touchRef){
  const {theme}=useTheme();
@@ -16,7 +16,6 @@ export const LivingBackdrop=forwardRef<BackdropTouch>(function LivingBackdrop(_,
  const timer=useRef<ReturnType<typeof setTimeout>|undefined>(undefined);
  const end=()=>{clearTimeout(timer.current);ref.current?.parentElement?.style.setProperty('--touch-glow','0');};
  useImperativeHandle(touchRef,()=>({move(x,y){
-  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const stage=ref.current?.parentElement;if(!stage)return;const b=stage.getBoundingClientRect();
   stage.style.setProperty('--pointer-x',`${x-window.scrollX-b.left}px`);
   stage.style.setProperty('--pointer-y',`${y-window.scrollY-b.top}px`);
@@ -26,9 +25,9 @@ export const LivingBackdrop=forwardRef<BackdropTouch>(function LivingBackdrop(_,
  useEffect(()=>()=>clearTimeout(timer.current),[]);
  useEffect(()=>{
   const stage=ref.current?.parentElement;if(!stage)return;
-  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');let frame=0;let blockedPress=false;
+  let frame=0;let blockedPress=false;
   const down=(e:PointerEvent)=>{if(e.pointerType!=='mouse')return;blockedPress=!!(e.target instanceof Element&&e.target.closest('[data-motion="button"],button,input,textarea,a,[role="button"],[role="link"]'));if(blockedPress){cancelAnimationFrame(frame);frame=0;stage.style.setProperty('--pointer-glow','0');}};
-  const move=(e:PointerEvent)=>{if(reduced.matches||e.pointerType!=='mouse'||(blockedPress&&e.buttons))return;blockedPress=false;stage.style.setProperty('--pointer-glow','1');if(frame)return;const x=e.clientX,y=e.clientY;frame=requestAnimationFrame(()=>{const b=stage.getBoundingClientRect();stage.style.setProperty('--pointer-x',`${x-b.left}px`);stage.style.setProperty('--pointer-y',`${y-b.top}px`);frame=0;});};
+  const move=(e:PointerEvent)=>{if(e.pointerType!=='mouse'||(blockedPress&&e.buttons))return;blockedPress=false;stage.style.setProperty('--pointer-glow','1');if(frame)return;const x=e.clientX,y=e.clientY;frame=requestAnimationFrame(()=>{const b=stage.getBoundingClientRect();stage.style.setProperty('--pointer-x',`${x-b.left}px`);stage.style.setProperty('--pointer-y',`${y-b.top}px`);frame=0;});};
   stage.addEventListener('pointerdown',down,{passive:true});stage.addEventListener('pointermove',move,{passive:true});return()=>{stage.removeEventListener('pointerdown',down);stage.removeEventListener('pointermove',move);cancelAnimationFrame(frame);};
  },[]);
  return <><style>{css(theme.background)}</style><div ref={ref} aria-hidden="true" className="living-backdrop"/></>;
