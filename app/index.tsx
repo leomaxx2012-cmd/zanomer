@@ -1,3 +1,4 @@
+import {HeaderIcon,headerIconColors} from "../components/HeaderIcon";
 import {createBackdropDrag,isBackdropControlTouch, type BackdropTouch} from "../lib/backdrop-touch";
 import {siteTitle,siteDescription} from "../lib/site-metadata";
 import { type Theme } from '../lib/theme';
@@ -2576,7 +2577,7 @@ export default function HomeScreen() {
         <View style={[styles.headerActions, smallHeader && { gap: 4 }]}>
           <Pressable accessibilityRole="button" accessibilityLabel={mode === "dark" ? "Включить светлую тему" : "Включить тёмную тему"} onPress={toggleTheme} style={[styles.chatsButton,styles.themeButton,compactLayout && styles.headerIconCompact,smallHeader && {width:32}]}><Text allowFontScaling={false} style={{fontSize:20,lineHeight:26}}>{mode === "dark" ? "☀️" : "🌙"}</Text></Pressable>
           <Pressable onPress={() => { void openChats(); }} style={[styles.chatsButton, compactLayout && styles.headerIconCompact,smallHeader && {width:32}]} accessibilityLabel="Диалоги">
-            <Text style={styles.chatsButtonText}>💬</Text>
+            <HeaderIcon kind="chat"/>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
         {compactLayout && <>
@@ -2585,8 +2586,8 @@ export default function HomeScreen() {
         </Pressable>
         </>}
         </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton, compactLayout && styles.headerProfileCompact,smallHeader && {width:36,minWidth:36,maxWidth:36}]}>
-            <Text numberOfLines={1} style={styles.accountButtonText}>{compactLayout ? "👤" : isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton, (compactLayout || isSignedIn) && styles.headerProfileOutline, compactLayout && styles.headerProfileCompact,smallHeader && {width:36,minWidth:36,maxWidth:36}]}>
+            <View style={{flexDirection:"row",alignItems:"center",gap:5}}>{(compactLayout || isSignedIn) && <HeaderIcon kind="profile"/>}{!compactLayout && <Text numberOfLines={1} style={[styles.accountButtonText,isSignedIn && styles.headerProfileText]}>{isSignedIn ? profileName || "Профиль" : "Войти"}</Text>}</View>
           </Pressable>
         {!compactLayout && <>
         <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={styles.headerReminder}>
@@ -3717,12 +3718,14 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   headerCompact: { alignItems: "stretch", gap: 4, paddingBottom: 6, paddingHorizontal: 12, paddingTop: Platform.OS === "android" ? (StatusBar.currentHeight ?? 0) + 6 : 6 },
   headerTopRow: { flexDirection: "row", alignItems: "center", width: "100%", gap: 6 },
   headerLowerRow: { flexDirection: "row", alignItems: "center", width: "100%", maxWidth: 1360, gap: 16, minHeight: 54 },
-  headerHotButton: { minWidth: 0, minHeight: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: 15, paddingVertical: 9, backgroundColor: theme.raised, borderColor: theme.warning, borderWidth: 1.5, borderRadius: 12 },
+  headerHotButton: { minWidth: 0, minHeight: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: 15, paddingVertical: 9, backgroundColor: theme.raised, borderColor: headerIconColors.fire, borderWidth: 1.5, borderRadius: 12 },
   headerHotText: { color: theme.warning, fontSize: 12, lineHeight: 18, fontWeight: "700", textAlign: "center" },
   headerHotTextCompact: { fontSize: 11, lineHeight: 15 },
   headerUtilityColumn: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "flex-end" },
   headerUtilityColumnCompact: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 },
   headerIconCompact: {width:36,height:40,minHeight:40,paddingHorizontal:0},
+  headerProfileOutline: { borderColor: headerIconColors.profile },
+  headerProfileText: { color: headerIconColors.profile },
   headerProfileCompact: {width:40,minWidth:40,maxWidth:40,minHeight:40,paddingHorizontal:0,paddingVertical:0},
   headerAccountButton: { maxWidth: "100%", minWidth: 70, minHeight: 36, paddingVertical: 7, alignItems: "center" },
   headerReminder: { minHeight: 36, alignItems: "center", justifyContent: "center", paddingHorizontal: 10, backgroundColor: theme.surface, borderColor: theme.accent, borderWidth: 1.5, borderRadius: 10 },
@@ -3749,9 +3752,9 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   headerActions: { alignItems: "center", justifyContent: "center", flexDirection: "row", flexShrink: 0, gap: 6 },
   requisitesHeaderButton: { alignItems: "center", backgroundColor: theme.raised, borderRadius: 14, height: 34, justifyContent: "center", width: 44 },
   requisitesHeaderButtonText: { color: theme.accent, fontSize: 20, fontWeight: "900" },
-  chatsButton: { alignItems: "center", backgroundColor: theme.raised, borderColor: theme.accent, borderWidth: 1.5, borderRadius: 14, height: 34, justifyContent: "center", position: "relative", width: 44 },
-  themeButton: { borderColor: theme.warning },
-  chatsButtonText: { fontSize: 18 },
+  chatsButton: { alignItems: "center", backgroundColor: theme.raised, borderColor: headerIconColors.chat, borderWidth: 1.5, borderRadius: 14, height: 34, justifyContent: "center", position: "relative", width: 44 },
+  themeButton: { borderColor: headerIconColors.theme },
+  chatsButtonText: { color: headerIconColors.chat, fontSize: 18 },
   chatBadge: { alignItems: "center", backgroundColor: "#F04438", borderColor: theme.border, borderRadius: 10, borderWidth: 2, justifyContent: "center", minHeight: 18, minWidth: 18, paddingHorizontal: 3, position: "absolute", right: -4, top: -4 },
   chatBadgeText: { color: theme.onPrimary, fontSize: 9, fontWeight: "900" },
   catalogHeroButton: { alignSelf: "center", backgroundColor: "#5143C2", borderRadius: 18, marginTop: 16, maxWidth: 760, paddingHorizontal: 18, paddingVertical: 15, shadowColor: "#5143C2", shadowOffset: { width: 0, height: 7 }, shadowOpacity: 0.25, shadowRadius: 14, width: "100%" },
