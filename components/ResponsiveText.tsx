@@ -1,4 +1,5 @@
 import {useTheme,useThemedStyles} from "./AppTheme";
+import {markBackdropControlTouch} from '../lib/backdrop-touch';
 import {type Theme} from "../lib/theme";
 import { createContext, forwardRef, useContext, useMemo, type PropsWithChildren } from "react";
 import { StyleSheet, Text as NativeText, TextInput as NativeTextInput, useWindowDimensions, type TextProps, type TextInputProps, type TextStyle } from "react-native";
@@ -41,7 +42,7 @@ export const TextInput = forwardRef<NativeTextInput, TextInputProps>(function Te
  const {theme,mode}=useTheme();
   const scale = useContext(TypographyScale);
   const sizing = useMemo(() => scaledStyle(style, scale), [style, scale]);
-  return <NativeTextInput placeholderTextColor={theme.muted} selectionColor={theme.accent} keyboardAppearance={mode} ref={ref} maxFontSizeMultiplier={1.3} {...props} style={[styles.input, style, sizing]} />;
+  return <NativeTextInput placeholderTextColor={theme.muted} selectionColor={theme.accent} keyboardAppearance={mode} ref={ref} maxFontSizeMultiplier={1.3} {...props} onTouchStart={event=>{markBackdropControlTouch(event.nativeEvent);props.onTouchStart?.(event);}} style={[styles.input, style, sizing]} />;
 });
 
 const createStyles = (theme:Theme) => StyleSheet.create({

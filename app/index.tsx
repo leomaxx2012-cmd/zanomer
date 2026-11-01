@@ -1,4 +1,4 @@
-import type {BackdropTouch} from "../lib/backdrop-touch";
+import {isBackdropControlTouch, type BackdropTouch} from "../lib/backdrop-touch";
 import {siteTitle,siteDescription} from "../lib/site-metadata";
 import { type Theme } from '../lib/theme';
 import { useTheme, useThemedStyles } from '../components/AppTheme';
@@ -329,20 +329,18 @@ export default function HomeScreen() {
   const compactLayout = windowWidth < 600 || windowWidth / fontScale < 430;
   const wideListingCards = !compactLayout && windowWidth / fontScale >= 900;
   const narrowCards = windowWidth / fontScale < 760;
+  const smallHeader = compactLayout && windowWidth < 360;
   const insets = useSafeAreaInsets();
   const [navigationHeight, setNavigationHeight] = useState(88);
   const [expandedListingIds, setExpandedListingIds] = useState<string[]>([]);
   const [hotExpanded, setHotExpanded] = useState(false);
   const [paymentNoticeExpanded, setPaymentNoticeExpanded] = useState(false);
-  // Тяжёлая карточка содержит разметку номера и несколько действий. На
-  // телефоне выводим меньшую первую страницу, чтобы прокрутка оставалась
-  // отзывчивой даже при каталоге из тысяч объявлений.
-  // Рендер нескольких тяжёлых карточек сразу заметно тормозит недорогие
-  // Android-устройства. Остальные карточки открываются кнопкой «Показать ещё».
-  const catalogPageSize = compactLayout ? 12 : 40;
+  // Compact rows are mounted in small batches, with more offers per page.
+  const catalogPageSize = compactLayout ? 24 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
   const backgroundTouch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const glowTouchActive = useRef(false);
   function openFilteredCatalog() {
     Keyboard.dismiss();
     setPlatePicker(null);
@@ -374,7 +372,7 @@ export default function HomeScreen() {
   const [catalogRefreshing, setCatalogRefreshing] = useState(false);
   const [catalogLoadError, setCatalogLoadError] = useState("");
   const [catalogSlowMessage, setCatalogSlowMessage] = useState("");
-  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => compactLayout ? 12 : 40);
+  const [catalogDisplayLimit, setCatalogDisplayLimit] = useState(() => compactLayout ? 24 : 40);
   const [catalogOnly, setCatalogOnly] = useState(isCatalogRoute);
   const [catalogScope, setCatalogScope] = useState<"all" | "filtered">("filtered");
   const [archivedPartnerSources, setArchivedPartnerSources] = useState<string[]>([]);
@@ -388,7 +386,6 @@ export default function HomeScreen() {
   const [specialFilters, setSpecialFilters] = useState<SpecialFilter[]>(initialSearch.specialFilters as SpecialFilter[]);
   const [saved, setSaved] = useState<string[]>([]);
   const [likedListingIds, setLikedListingIds] = useState<string[]>([]);
-  const [recentlyViewed, setRecentlyViewed] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"buy" | "sell" | "favorites" | "subscriptions">("buy");
   const [subscribedNumbers, setSubscribedNumbers] = useState<string[]>([]);
   const [similarToId, setSimilarToId] = useState<string | null>(null);
@@ -695,7 +692,6 @@ export default function HomeScreen() {
     }
 
     const currentPrice = [{ date: selectedPlate.createdAt, priceValue: selectedPlate.priceValue }];
-    setRecentlyViewed((current) => [selectedPlate.id, ...current.filter((id) => id !== selectedPlate.id)].slice(0, 8));
     setPriceHistory(currentPrice);
     if (!supabase) return;
 
@@ -1314,32 +1310,6 @@ export default function HomeScreen() {
     return { max, min, points };
   }, [priceHistory]);
 
-  const priceComparison = useMemo(() => {
-    if (!selectedPlate) return null;
-    const candidates = catalog.filter((plate) => {
-      if (plate.id === selectedPlate.id || plate.vehicle !== selectedPlate.vehicle) return false;
-      const available = !plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl);
-      return available && (plate.digits === selectedPlate.digits || plate.tag === selectedPlate.tag);
-    });
-    // Если точных аналогов мало, сравниваем с остальными номерами того же транспорта.
-    const pool = candidates.length >= 2
-      ? candidates
-      : catalog.filter((plate) => plate.id !== selectedPlate.id && plate.vehicle === selectedPlate.vehicle && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl)));
-    if (!pool.length) return null;
-    const prices = pool.map((plate) => plate.priceValue).filter((price) => Number.isFinite(price) && price > 0);
-    if (!prices.length) return null;
-    const average = Math.round(prices.reduce((sum, price) => sum + price, 0) / prices.length);
-    const delta = selectedPlate.priceValue - average;
-    return {
-      count: prices.length,
-      average,
-      min: Math.min(...prices),
-      max: Math.max(...prices),
-      delta,
-      isExact: candidates.length >= 2,
-    };
-  }, [selectedPlate, catalog, archivedPartnerSources]);
-
   // При следующем запуске сразу показываем последнюю полную версию каталога,
   // сохранённую на устройстве. Проверка свежих данных продолжается в фоне.
   useEffect(() => {
@@ -1926,7 +1896,26 @@ export default function HomeScreen() {
   // Мобильное приложение не должно строить тысячи тяжёлых карточек за один раз:
   // это блокирует прокрутку и нажатия. Все номера доступны через «Показать ещё».
   const isLanding = activeTab === "buy" && !catalogOnly;
-  const renderedPlates = visiblePlates.slice(0, isLanding ? 6 : catalogDisplayLimit);
+  const targetPlateCount = Math.min(visiblePlates.length, isLanding ? 12 : catalogDisplayLimit);
+  const mountedPlateCount = useRef(compactLayout ? 6 : 40);
+  const [mountedPlateLimit, setMountedPlateLimit] = useState(mountedPlateCount.current);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
+    mountedPlateCount.current = Math.min(mountedPlateCount.current, targetPlateCount);
+    setMountedPlateLimit(mountedPlateCount.current);
+    const advance = () => {
+      if (cancelled) return;
+      mountedPlateCount.current = Math.min(mountedPlateCount.current + (compactLayout ? 6 : 40), targetPlateCount);
+      setMountedPlateLimit(mountedPlateCount.current);
+      if (mountedPlateCount.current < targetPlateCount) timer = setTimeout(advance, 48);
+    };
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (mountedPlateCount.current < targetPlateCount) timer = setTimeout(advance, 48);
+    });
+    return () => { cancelled = true; task.cancel(); clearTimeout(timer); };
+  }, [targetPlateCount, compactLayout]);
+  const renderedPlates = visiblePlates.slice(0, Math.min(targetPlateCount, mountedPlateLimit));
 
   useEffect(() => {
     setCatalogDisplayLimit(catalogPageSize);
@@ -2552,43 +2541,43 @@ export default function HomeScreen() {
       onPointerMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
       onPointerCancel={() => { backgroundTouch.current = null; }}
       onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
-      onTouchStart={event => { backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
-      onTouchMove={event => { backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
-      onTouchCancel={() => { backdropTouch.current?.end(); backgroundTouch.current = null; }}
-      onTouchEnd={() => { backdropTouch.current?.end(); const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
+      onTouchStart={event => { glowTouchActive.current = !isBackdropControlTouch(event.nativeEvent); if(glowTouchActive.current) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); else backdropTouch.current?.end(); backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
+      onTouchMove={event => { if(glowTouchActive.current) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
+      onTouchCancel={() => { glowTouchActive.current = false; backdropTouch.current?.end(); backgroundTouch.current = null; }}
+      onTouchEnd={() => { glowTouchActive.current = false; backdropTouch.current?.end(); const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       {Platform.OS === "web" && !incomingListingId && <Head>
         <title>{region === "Все" ? siteTitle : `Номера: ${region} — ЗаНомером`}</title>
         <meta name="description" content={region === "Все" ? siteDescription : `Автомобильные номера: ${region}. Выбран нужный регион — сравнивайте объявления, цены и варианты номеров в ЗаНомером.`} />
       </Head>}
       <LivingBackdrop ref={backdropTouch} />
       <View style={[styles.header, compactLayout && styles.headerCompact]}>
-        <View style={[styles.headerLowerRow, compactLayout && { gap: 8 }]}>
-          <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={styles.brandContainer}>
+        <View style={[styles.headerLowerRow, compactLayout && { gap: smallHeader ? 6 : 8 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="ЗаНомером — к поиску" onPress={() => { returnToSearch(); }} style={compactLayout ? styles.brandContainerCompact : styles.brandContainer}>
             <Image source={require("../assets/zanomer-logo.png")} resizeMode="contain" accessible={false} style={{width:48,height:48}} />
 
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={[styles.headerHotButton, compactLayout && styles.headerHotButtonCompact]}>
-            <Text allowFontScaling={false} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>{compactLayout ? "🔥" : "🔥 Горячие объявления"}</Text>
+            <Text allowFontScaling={false} numberOfLines={compactLayout ? 2 : 1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>{compactLayout ? "🔥 Горячие\nобъявления" : "🔥 Горячие объявления"}</Text>
           </Pressable>
           <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact]}>
-        <View style={styles.headerActions}>
-          <Pressable accessibilityRole="button" accessibilityLabel={mode === "dark" ? "Включить светлую тему" : "Включить тёмную тему"} onPress={toggleTheme} style={[styles.chatsButton,compactLayout && styles.headerIconCompact]}><Text allowFontScaling={false} style={{fontSize:20,lineHeight:26}}>{mode === "dark" ? "☀️" : "🌙"}</Text></Pressable>
-          <Pressable onPress={() => { void openChats(); }} style={[styles.chatsButton, compactLayout && styles.headerIconCompact]} accessibilityLabel="Диалоги">
+        <View style={[styles.headerActions, smallHeader && { gap: 4 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={mode === "dark" ? "Включить светлую тему" : "Включить тёмную тему"} onPress={toggleTheme} style={[styles.chatsButton,compactLayout && styles.headerIconCompact,smallHeader && {width:32}]}><Text allowFontScaling={false} style={{fontSize:20,lineHeight:26}}>{mode === "dark" ? "☀️" : "🌙"}</Text></Pressable>
+          <Pressable onPress={() => { void openChats(); }} style={[styles.chatsButton, compactLayout && styles.headerIconCompact,smallHeader && {width:32}]} accessibilityLabel="Диалоги">
             <Text style={styles.chatsButtonText}>💬</Text>
             {unreadChatCount > 0 && <View style={styles.chatBadge}><Text style={styles.chatBadgeText}>{unreadChatCount > 9 ? "9+" : unreadChatCount}</Text></View>}
           </Pressable>
         {compactLayout && <>
-        <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={[styles.headerReminder, styles.headerIconCompact]}>
-          <Text style={styles.headerReminderText}>₽</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={[styles.headerReminder, styles.headerIconCompact,smallHeader && {width:32}]}>
+          <Text style={[styles.headerReminderText,styles.headerReminderIcon]}>!</Text>
         </Pressable>
         </>}
         </View>
-          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton, compactLayout && styles.headerProfileCompact]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Аккаунт" onPress={openAccount} style={[styles.accountButton, compactLayout && styles.accountButtonCompact, styles.headerAccountButton, compactLayout && styles.headerProfileCompact,smallHeader && {width:36,minWidth:36,maxWidth:36}]}>
             <Text numberOfLines={1} style={styles.accountButtonText}>{compactLayout ? "👤" : isSignedIn ? `👤 ${profileName || "Профиль"}` : "Войти"}</Text>
           </Pressable>
         {!compactLayout && <>
         <Pressable accessibilityRole="button" accessibilityLabel="Напоминание об оплате номеров" accessibilityState={{ expanded: paymentNoticeExpanded }} onPress={() => { Keyboard.dismiss(); setPaymentNoticeExpanded(true); }} style={styles.headerReminder}>
-          <Text style={styles.headerReminderText}>ⓘ Напоминание</Text>
+          <Text style={styles.headerReminderText}>! Напоминание</Text>
         </Pressable>
         </>}
           </View>
@@ -3025,7 +3014,7 @@ export default function HomeScreen() {
       {(activeTab === "buy" || activeTab === "favorites") && <>
       {!catalogOnly && <View style={[styles.listHeader, activeTab === "favorites" && styles.favoritesHeader, activeTab === "buy" && !similarTo && styles.catalogHeaderWithoutTitle]}>
         {activeTab === "buy" && !similarTo && <View style={{flex:1,minWidth:180}}><Text style={[styles.resultsHeading,{color:theme.text}]}>Свежие объявления</Text><Text style={[styles.resultsCaption,isLanding && {color:theme.muted}]}>Несколько вариантов из каталога. Найди свой через поиск выше.</Text></View>}
-        {(activeTab === "favorites" || similarTo) && <Text style={[styles.sectionTitle, styles.listTitle, activeTab === "favorites" && styles.favoritesTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
+        {(activeTab === "favorites" || similarTo) && <Text style={[styles.sectionTitle, activeTab === "favorites" ? styles.favoritesTitle : styles.listTitle]}>{activeTab === "favorites" ? "Избранное, сохранённое и лайки" : `Похожие ${similarityFilter === "digits" ? "цифры" : similarityFilter === "letters" ? "буквы" : "регионы"} для ${similarTo?.value ?? "номера"}`}</Text>}
         {activeTab === "buy" && <View style={styles.resultCount}><Text style={styles.resultCountText}>{catalogLoadError ? "Каталог не обновлён" : `Объявлений: ${visiblePlates.length}`}</Text></View>}
       </View>}
       {!!catalogLoadError && activeTab === "buy" && !catalogOnly && <Text style={styles.catalogError}>{catalogLoadError}</Text>}
@@ -3065,15 +3054,6 @@ export default function HomeScreen() {
           </View>
         ))}
       </View>}
-      {activeTab === "favorites" && recentlyViewed.length > 0 && <View style={styles.recentPanel}>
-        <Text style={styles.savedSearchesTitle}>Недавно смотрели</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recentRow}>
-          {recentlyViewed.map((id) => catalog.find((plate) => plate.id === id)).filter(Boolean).map((plate) => <Pressable key={plate!.id} onPress={() => setSelectedPlate(plate!)} style={styles.recentCard}>
-            <Text style={styles.recentPlate}>{plate!.value}</Text><Text style={styles.recentPrice}>{plate!.price}</Text>
-          </Pressable>)}
-        </ScrollView>
-      </View>}
-
       <View style={styles.listContainer}>
       {!!favoriteWatchMessage && <Text accessibilityLiveRegion="polite" style={styles.comparisonHint}>{favoriteWatchMessage}</Text>}
       {comparison.length > 0 && hasPlusSubscription && <View style={styles.comparisonBar}>
@@ -3084,7 +3064,7 @@ export default function HomeScreen() {
       {hiddenSeriesGroupKeys.length > 0 && <Pressable onPress={() => setHiddenSeriesGroupKeys([])} style={styles.restoreSeriesButton}>
         <Text style={styles.restoreSeriesButtonText}>Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
       </Pressable>}
-      <View testID="catalog-cards" style={[styles.list, styles.compactOfferList, gridCards && styles.offerGrid]}>
+      <View testID="catalog-cards" style={[styles.list, styles.compactOfferList, compactLayout && styles.compactOfferListMobile, gridCards && styles.offerGrid]}>
         {renderedPlates.map((item, index) => {
           const expanded = !compactLayout || expandedListingIds.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
@@ -3098,7 +3078,7 @@ export default function HomeScreen() {
                 <View pointerEvents="none" style={styles.seriesHideButton}><Text style={styles.seriesHideButtonText}>⌃</Text></View>
               </Pressable>}
             <View style={[styles.offerShell, wideListingCards && styles.offerShellDesktop]}>
-              <View style={[styles.offerRow, wideListingCards && styles.offerRowDesktop]}>
+              <View style={[styles.offerRow, compactLayout && styles.offerRowCompact, wideListingCards && styles.offerRowDesktop]}>
                 {compactLayout && <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Свернуть" : "Раскрыть"} объявление ${item.value}, ${item.region}`} accessibilityState={{ expanded }} onPress={() => setExpandedListingIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])} hitSlop={4} style={styles.offerExpand}>
                   <Text allowFontScaling={false} style={styles.offerChevron}>{expanded ? "⌃" : "⌄"}</Text>
                 </Pressable>}
@@ -3157,11 +3137,11 @@ export default function HomeScreen() {
 
       </View>
 
-      {Platform.OS === "web" && <View style={styles.siteFooter} accessibilityRole="summary">
+      <View testID="site-footer" style={styles.siteFooter} accessibilityRole="summary">
         <Text style={[styles.siteFooterTitle,{color:theme.text}]}>ЗаНомером — поиск и размещение объявлений</Text>
         <View style={styles.siteFooterLinks}>
           {regionalSearchLinks.map(item =>
-            <Link key={item.key} href={regionLink(item.title) as "/"} style={[styles.siteFooterLink,{color:theme.text}]}>Номера: {item.title}</Link>
+            Platform.OS === "web" ? <Link key={item.key} href={regionLink(item.title) as "/"} style={[styles.siteFooterLink,{color:theme.text}]}>Номера: {item.title}</Link> : <Pressable key={item.key} accessibilityRole="link" onPress={() => openCollection({region:item.title,regionCode:""})}><Text style={styles.siteFooterLink}>Номера: {item.title}</Text></Pressable>
           )}
         </View>
         <Text style={[styles.siteFooterText,{color:theme.text}]}>Исполнитель цифровых услуг: ИП Леонович Александр Леонидович</Text>
@@ -3175,7 +3155,7 @@ export default function HomeScreen() {
           {([['offer', 'Оферта'], ['privacy', 'Политика обработки данных'], ['delivery', 'Оказание услуг'], ['refund', 'Возврат средств'], ['requisites', 'Реквизиты']] as const).map(([page, label]) => <Pressable key={page} accessibilityRole="link" onPress={() => openLegalDocument(page)}><Text style={[styles.siteFooterLink,{color:theme.text}]}>{label}</Text></Pressable>)}
         </View>
         <Text style={[styles.siteFooterText,{color:theme.text}]}>Оплата самих номеров и расчёты между пользователями через сервис не проводятся. Приём оплаты цифровых услуг пока не подключён.</Text>
-      </View>}
+      </View>
       </ScrollView>
 
       <Modal visible={comparisonOpen && hasPlusSubscription} transparent animationType="fade" onRequestClose={() => setComparisonOpen(false)}>
@@ -3316,17 +3296,6 @@ export default function HomeScreen() {
                 <Text style={styles.priceHistoryTitle}>График изменения цены</Text>
                 <Text style={styles.priceHistoryHint}>Доступен с подпиской ЗаНомером Плюс. Она также увеличивает лимит сохранённых поисков и избранных номеров с 15 до 30.</Text>
                 <Pressable onPress={() => { setSelectedPlate(null); setActiveTab("subscriptions"); }} style={styles.priceHistoryUnlockButton}><Text style={styles.priceHistoryUnlockText}>Открыть Плюс</Text></Pressable>
-              </View>}
-              {!!priceComparison && <View style={styles.priceComparisonCard}>
-                <View style={styles.priceComparisonHeader}>
-                  <Text style={styles.priceComparisonTitle}>Сравнение цены</Text>
-                  <Text style={styles.priceComparisonHint}>{priceComparison.isExact ? "Похожие номера" : "Номера этого типа"}</Text>
-                </View>
-                <Text style={styles.priceComparisonMain}>В среднем {priceComparison.average.toLocaleString("ru-RU")} ₽</Text>
-                <Text style={[styles.priceComparisonDelta, priceComparison.delta <= 0 ? styles.priceComparisonGood : styles.priceComparisonHigh]}>
-                  {priceComparison.delta === 0 ? "Цена соответствует среднему" : priceComparison.delta < 0 ? `На ${Math.abs(priceComparison.delta).toLocaleString("ru-RU")} ₽ ниже средней` : `На ${priceComparison.delta.toLocaleString("ru-RU")} ₽ выше средней`}
-                </Text>
-                <Text style={styles.priceComparisonRange}>По {priceComparison.count} объявлениям: от {priceComparison.min.toLocaleString("ru-RU")} до {priceComparison.max.toLocaleString("ru-RU")} ₽</Text>
               </View>}
               {selectedPlate?.isSiteListing && <View style={styles.publicDiscussionBlock}>
                 <View style={styles.publicDiscussionHeader}>
@@ -3678,7 +3647,8 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   brandName: { color: theme.text, fontSize: 23, fontWeight: "800", letterSpacing: -0.8 },
   brandNameCompact: { fontSize: 16, letterSpacing: -0.4 },
   brandCaption: { color: theme.muted, fontSize: 10, marginTop: 2 },
-  headerHotButtonCompact: { paddingHorizontal: 8, minWidth: 36, minHeight: 36 },
+  brandContainerCompact: { width: 48, flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  headerHotButtonCompact: { flex: 1, paddingHorizontal: 6, minWidth: 0, minHeight: 42 },
   catalogSearchSummary: {alignSelf:"center",width:"100%",maxWidth:1100,paddingHorizontal:12,paddingVertical:12,color:theme.muted,fontSize:12,lineHeight:19},
   landingStage: {position:"relative",backgroundColor:"transparent",borderRadius:0,marginTop:0,marginBottom:28,paddingHorizontal:0,paddingBottom:24,width:"100%",alignSelf:"center",overflow:"hidden"},
   landingStageCompact: {borderRadius:0,marginTop:0,marginBottom:24,paddingHorizontal:0,paddingBottom:16},
@@ -3734,13 +3704,14 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   headerLowerRow: { flexDirection: "row", alignItems: "center", width: "100%", maxWidth: 1360, gap: 16, minHeight: 54 },
   headerHotButton: { minWidth: 0, minHeight: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: 15, paddingVertical: 9, backgroundColor: theme.raised, borderColor: theme.border, borderWidth: 1, borderRadius: 12 },
   headerHotText: { color: theme.warning, fontSize: 12, lineHeight: 18, fontWeight: "700", textAlign: "center" },
-  headerHotTextCompact: { fontSize: 16, lineHeight: 22 },
+  headerHotTextCompact: { fontSize: 11, lineHeight: 15 },
   headerUtilityColumn: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "flex-end" },
-  headerUtilityColumnCompact: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 1 },
+  headerUtilityColumnCompact: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 },
   headerIconCompact: {width:36,height:40,minHeight:40,paddingHorizontal:0},
   headerProfileCompact: {width:40,minWidth:40,maxWidth:40,minHeight:40,paddingHorizontal:0,paddingVertical:0},
   headerAccountButton: { maxWidth: "100%", minWidth: 70, minHeight: 36, paddingVertical: 7, alignItems: "center" },
-  headerReminder: { minHeight: 36, alignItems: "center", justifyContent: "center", paddingHorizontal: 10, backgroundColor: theme.surface, borderRadius: 10 },
+  headerReminder: { minHeight: 36, alignItems: "center", justifyContent: "center", paddingHorizontal: 10, backgroundColor: theme.surface, borderColor: theme.accentBorder, borderWidth: 1.5, borderRadius: 10 },
+  headerReminderIcon: { fontSize: 21, lineHeight: 26, fontWeight: "900" },
   headerReminderText: { color: theme.accent, fontWeight: "700", fontSize: 11, lineHeight: 15 },
   headerModalOverlay: { flex: 1, justifyContent: "center", padding: 16, backgroundColor: "rgba(16,24,40,0.45)" },
   headerModalPanel: { alignSelf: "center", width: "100%", maxWidth: 620, borderRadius: 22, backgroundColor: theme.surface, padding: 16, flexShrink: 1 },
@@ -3930,11 +3901,6 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   featuredMeta: { color: theme.text, fontSize: 11, marginTop: 4 },
   noHotOffers: { backgroundColor: theme.raised, borderColor: theme.border, borderRadius: 13, borderWidth: 1, color: theme.warning, fontSize: 12, fontWeight: "700", paddingHorizontal: 13, paddingVertical: 11 },
   savedSearchesPanel: { backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 14, borderWidth: 1, marginTop: 9, padding: 12 },
-  recentPanel: { backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 14, borderWidth: 1, marginTop: 9, padding: 12 },
-  recentRow: { gap: 8, paddingTop: 9 },
-  recentCard: { backgroundColor: theme.surface, borderRadius: 12, minWidth: 132, padding: 11 },
-  recentPlate: { color: theme.text, fontSize: 14, fontWeight: "900" },
-  recentPrice: { color: theme.success, fontSize: 12, fontWeight: "800", marginTop: 4 },
   savedSearchesTitle: { color: theme.text, fontSize: 14, fontWeight: "800", textAlign: "center" },
   savedSearchesEmpty: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: 6, textAlign: "center" },
   savedSearchRow: { alignItems: "center", borderTopColor: theme.border, borderTopWidth: 1, flexDirection: "row", gap: 8, marginTop: 9, paddingTop: 9 },
@@ -4059,8 +4025,8 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   listTitle: { flex: 1, marginRight: 10, minWidth: 0 },
   resultCount: { backgroundColor: theme.raised, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 6 },
   resultCountText: { color: theme.accent, fontSize: 12, fontWeight: "900" },
-  favoritesHeader: { justifyContent: "center" },
-  favoritesTitle: { flex: 0, marginRight: 0, textAlign: "center" },
+  favoritesHeader: { flexDirection: "column", alignItems: "stretch", marginBottom: 12 },
+  favoritesTitle: { width: "100%", minWidth: 0, marginRight: 0, textAlign: "center", fontSize: 20, lineHeight: 28 },
   sortButton: { flexShrink: 1, maxWidth: "38%" },
   counter: { color: theme.muted, fontSize: 13, marginTop: 22, textAlign: "right" },
   clearSimilarButton: { alignSelf: "flex-start", marginTop: 8 },
@@ -4069,6 +4035,8 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   compactOfferList: { gap: 14, paddingTop: 4, backgroundColor: "transparent", borderRadius: 0, overflow: "visible" },
   offerShell: { borderColor: theme.border, borderWidth: 1, borderRadius: 18, backgroundColor: theme.surface, overflow: "hidden" },
   offerShellDesktop: { flexDirection: "column", alignItems: "stretch", flex: 1 },
+  compactOfferListMobile: { gap: 10 },
+  offerRowCompact: { minHeight: 66, paddingVertical: 8 },
   offerRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, paddingRight: 8, minHeight: 82 },
   offerRowDesktop: { width: "100%", flexDirection: "column", alignItems: "stretch", gap: 15, padding: 18 },
   offerExpand: { width: 28, minHeight: 54, alignItems: "center", justifyContent: "center" },
@@ -4316,15 +4284,6 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   priceHistoryEmptyValue: { color: theme.accent, fontSize: 23, fontWeight: "900" },
   priceHistoryEmptyDate: { color: theme.muted, fontSize: 11, fontWeight: "700", marginTop: 3 },
   priceHistoryHint: { color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 11 },
-  priceComparisonCard: { backgroundColor: theme.raised, borderColor: theme.border, borderRadius: 16, borderWidth: 1, marginTop: 14, padding: 14 },
-  priceComparisonHeader: { alignItems: "center", flexDirection: "row", gap: 10, justifyContent: "space-between" },
-  priceComparisonTitle: { color: theme.info, fontSize: 15, fontWeight: "900" },
-  priceComparisonHint: { color: theme.info, fontSize: 11, fontWeight: "800", textAlign: "right" },
-  priceComparisonMain: { color: theme.text, fontSize: 18, fontWeight: "900", marginTop: 9 },
-  priceComparisonDelta: { fontSize: 13, fontWeight: "800", lineHeight: 19, marginTop: 5 },
-  priceComparisonGood: { color: theme.success },
-  priceComparisonHigh: { color: theme.warning },
-  priceComparisonRange: { color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 8 },
   publicDiscussionBlock: { backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 16, borderWidth: 1, marginTop: 16, padding: 14 },
   publicDiscussionHeader: { gap: 10 },
   publicDiscussionTitle: { color: theme.text, fontSize: 16, fontWeight: "900" },
