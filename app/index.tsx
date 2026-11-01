@@ -1,3 +1,5 @@
+import {belongsToConversation,groupChatThreads,type ChatMessage,type ChatThread} from "../lib/listing-chat";
+import {FilterSection} from "../components/FilterSection";
 import {HeaderIcon,headerIconColors} from "../components/HeaderIcon";
 import {createBackdropDrag,isBackdropControlTouch, type BackdropTouch} from "../lib/backdrop-touch";
 import {siteTitle,siteDescription} from "../lib/site-metadata";
@@ -91,9 +93,7 @@ type PricePoint = {
   priceValue: number;
 };
 
-type ChatMessage = { id: string; listing_id?: string; sender_id: string; recipient_id: string; body: string; created_at: string };
 type PublicComment = { id: string; listing_id: string; author_id: string; author_name: string; body: string; created_at: string };
-type ChatThread = { listingId: string; partnerId: string; lastMessage: ChatMessage };
 type DiscussionThread = { listingId: string; lastComment: PublicComment };
 type MessageReport = { id: string; reason: string; created_at: string; reported_user_id?: string; message?: { body?: string; sender_id?: string; listing_id?: string } | null };
 type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
@@ -526,6 +526,17 @@ export default function HomeScreen() {
   const [chatRecipientId, setChatRecipientId] = useState("");
   const [chatsOpen, setChatsOpen] = useState(false);
   const [chatThreads, setChatThreads] = useState<ChatThread[]>([]);
+  const [chatListingScope,setChatListingScope]=useState<Plate|null>(null);
+  const [chatPartnerNames,setChatPartnerNames]=useState<Record<string,string>>({});
+  const [chatsLoading,setChatsLoading]=useState(false);
+  const [chatLoading,setChatLoading]=useState(false);
+  const [chatSending,setChatSending]=useState(false);
+  const conversationRequest=useRef(0);
+  const inboxRequest=useRef(0);
+  const chatNamesCache=useRef<Record<string,string>>({});
+  const chatScrollRef=useRef<ScrollView>(null);
+  const visibleChatThreads=chatListingScope?chatThreads.filter(thread=>thread.listingId===chatListingScope.id):chatThreads;
+  useEffect(()=>{conversationRequest.current++;inboxRequest.current++;setChatThreads([]);setChatPartnerNames({});chatNamesCache.current={};setChatListingScope(null);setChatMessages([]);setChatRecipientId("");setChatDraft("");setChatOpen(false);setChatsOpen(false);},[currentUserId]);
   const [discussionThreads, setDiscussionThreads] = useState<DiscussionThread[]>([]);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
   const [reportingMessage, setReportingMessage] = useState<ChatMessage | null>(null);
@@ -917,41 +928,75 @@ export default function HomeScreen() {
     await loadManagement(data.user?.id, profileName);
   }
 
-  async function openChat(listing: Plate) {
-    if (!supabase) {
-      setAuthMessage("Чат пока загружается. Закрой объявление и открой его ещё раз через пару секунд.");
-      return;
-    }
-    if (listing.ownerId && listing.ownerId === currentUserId) {
-      setPublicCommentMessage("Это твоё объявление — написать самому себе нельзя.");
-      return;
-    }
-
-    let activeUserId = currentUserId;
-    if (!isSignedIn || isAnonymous) {
-      if (isAnonymous) await supabase.auth.signOut();
-      setIsAnonymous(false);
-      setIsSignedIn(false);
-      setCurrentUserId("");
-      setAuthMode("signup");
-      setAuthStep(1);
-      setAuthMessage("Чтобы написать продавцу, зарегистрируйся и подтверди почту.");
-      setAuthOpen(true);
-      return;
-    }
-    setChatMessage("");
-    setChatDraft("");
-    const { data, error } = await supabase
-      .from("listing_messages")
-      .select("id, sender_id, recipient_id, body, created_at")
-      .eq("listing_id", listing.id)
-      .order("created_at", { ascending: true });
-    if (error) setChatMessage("Чат пока не подключён к базе. Выполни chat.sql в Supabase.");
-    const messages = (data ?? []) as ChatMessage[];
-    setChatMessages(messages);
-    setChatRecipientId(listing.ownerId === activeUserId ? messages.filter((item) => item.sender_id !== activeUserId).at(-1)?.sender_id ?? "" : listing.ownerId ?? "");
-    setChatOpen(true);
+  async function loadChatPartnerNames(ids:string[]) {
+    if(!supabase)return;
+    const unique=[...new Set(ids)].filter(id=>!!id&&!chatNamesCache.current[id]);
+    if(!unique.length)return;
+    const {data}=await supabase.from("auto_profiles").select("id,username").in("id",unique);
+    if(data){chatNamesCache.current={...chatNamesCache.current,...Object.fromEntries(data.map(profile=>[profile.id,profile.username||"Пользователь"]))};setChatPartnerNames(chatNamesCache.current);}
   }
+
+  async function openListingChats(listing:Plate) {
+    if(!currentUserId||listing.ownerId!==currentUserId)return;
+    setAuthOpen(false);
+    setChatListingScope(listing);
+    setChatMessage("");
+    setChatsOpen(true);
+    await loadChatThreads();
+  }
+
+  async function openChat(listing: Plate,partnerId?:string) {
+    if(!supabase)return;
+    if(!isSignedIn||isAnonymous||!currentUserId){
+      setAuthMode("signup");setAuthStep(1);setAuthMessage("Чтобы общаться, войди или зарегистрируйся и подтверди почту.");setAuthOpen(true);return;
+    }
+    if(listing.ownerId===currentUserId&&!partnerId){await openListingChats(listing);return;}
+    const recipientId=partnerId||listing.ownerId;
+    if(!recipientId||recipientId===currentUserId)return;
+    const request=++conversationRequest.current;
+    setSelectedPlate(listing);setChatRecipientId(recipientId);setChatMessages([]);setChatDraft("");setChatMessage("");setChatLoading(true);setChatOpen(true);
+    void loadChatPartnerNames([recipientId]);
+    try{
+      const {data,error}=await supabase.from("listing_messages").select("id,listing_id,sender_id,recipient_id,body,created_at")
+        .eq("listing_id",listing.id)
+        .or(`and(sender_id.eq.${currentUserId},recipient_id.eq.${recipientId}),and(sender_id.eq.${recipientId},recipient_id.eq.${currentUserId})`)
+        .order("created_at",{ascending:true});
+      if(request!==conversationRequest.current)return;
+      if(error){setChatMessage("Не удалось загрузить переписку. Закрой чат и попробуй ещё раз.");return;}
+      setChatMessages(previous=>[...new Map([...(data??[]) as ChatMessage[],...previous].filter(message=>belongsToConversation(message,listing.id,currentUserId,recipientId)).map(message=>[message.id,message])).values()].sort((a,b)=>a.created_at.localeCompare(b.created_at)));
+    }catch{if(request===conversationRequest.current)setChatMessage("Нет связи. Попробуй открыть чат ещё раз.");}
+    finally{if(request===conversationRequest.current)setChatLoading(false);}
+  }
+
+  useEffect(()=>{
+    if(!supabase||!chatOpen||!selectedPlate||!currentUserId||!chatRecipientId)return;
+    const listingId=selectedPlate.id;
+    const channel=supabase.channel(`active-chat-${screenId}-${listingId}-${chatRecipientId}`)
+      .on("postgres_changes",{event:"INSERT",schema:"public",table:"listing_messages",filter:`listing_id=eq.${listingId}`},payload=>{
+        const message=payload.new as ChatMessage;
+        if(belongsToConversation(message,listingId,currentUserId,chatRecipientId))setChatMessages(previous=>previous.some(item=>item.id===message.id)?previous:[...previous,message].sort((a,b)=>a.created_at.localeCompare(b.created_at)));
+      }).subscribe();
+    let active=true;
+    let refreshing=false;
+    const client=supabase;
+    const refresh=async()=>{
+      if(refreshing||(AppState.currentState&&AppState.currentState!=="active"))return;
+      refreshing=true;
+      try{
+        const {data,error}=await client.from("listing_messages").select("id,listing_id,sender_id,recipient_id,body,created_at").eq("listing_id",listingId)
+          .or(`and(sender_id.eq.${currentUserId},recipient_id.eq.${chatRecipientId}),and(sender_id.eq.${chatRecipientId},recipient_id.eq.${currentUserId})`).order("created_at",{ascending:true});
+        if(active&&!error&&data)setChatMessages(previous=>[...new Map([...previous,...data as ChatMessage[]].filter(message=>belongsToConversation(message,listingId,currentUserId,chatRecipientId)).map(message=>[message.id,message])).values()].sort((a,b)=>a.created_at.localeCompare(b.created_at)));
+      }catch{}finally{refreshing=false;}
+    };
+    const timer=setInterval(()=>void refresh(),10000);
+    return()=>{active=false;clearInterval(timer);void client.removeChannel(channel);};
+  },[chatOpen,selectedPlate?.id,currentUserId,chatRecipientId,screenId]);
+
+  useEffect(()=>{
+    if(!chatsOpen||!currentUserId)return;
+    const timer=setInterval(()=>{if(!AppState.currentState||AppState.currentState==="active")void loadChatThreads(true);},15000);
+    return()=>clearInterval(timer);
+  },[chatsOpen,currentUserId]);
 
   useEffect(() => {
     if (!supabase || !currentUserId) {
@@ -1001,7 +1046,7 @@ export default function HomeScreen() {
       listingId = data?.listing_id ?? "";
     }
     if (!listingId) return;
-    let listing = catalog.find((item) => item.id === listingId);
+    let listing = catalog.find((item) => item.id === listingId) ?? myListings.find(item=>item.id===listingId);
     if (!listing) {
       const { data } = await supabase
         .from("auto_listings")
@@ -1018,9 +1063,9 @@ export default function HomeScreen() {
     if (kind === "message") await openChat(listing);
   }
 
-  async function openChatThread(listingId: string) {
+  async function openChatThread(listingId: string,partnerId?:string) {
     if (!supabase || !listingId) return;
-    let listing = catalog.find((item) => item.id === listingId);
+    let listing = catalog.find((item) => item.id === listingId) ?? myListings.find(item=>item.id===listingId);
     if (!listing) {
       const { data } = await supabase
         .from("auto_listings")
@@ -1033,8 +1078,9 @@ export default function HomeScreen() {
       }
     }
     if (!listing) return setChatMessage("Объявление для этого диалога больше недоступно.");
+    setChatsOpen(false);
     setSelectedPlate(listing);
-    await openChat(listing);
+    await openChat(listing,partnerId);
   }
 
   useEffect(() => {
@@ -1055,20 +1101,20 @@ export default function HomeScreen() {
     return () => subscription.remove();
   }, [catalog, currentUserId]);
 
-  async function loadChatThreads() {
-    if (!supabase || !currentUserId) return;
-    const { data, error } = await supabase
-      .from("listing_messages")
-      .select("id, listing_id, sender_id, recipient_id, body, created_at")
-      .order("created_at", { ascending: false });
-    if (error) return setChatMessage("Не удалось загрузить диалоги.");
-    const threads = new Map<string, ChatThread>();
-    ((data ?? []) as (ChatMessage & { listing_id: string })[]).forEach((item) => {
-      const partnerId = item.sender_id === currentUserId ? item.recipient_id : item.sender_id;
-      const key = `${item.listing_id}:${partnerId}`;
-      if (!threads.has(key)) threads.set(key, { listingId: item.listing_id, partnerId, lastMessage: item });
-    });
-    setChatThreads([...threads.values()].sort((a, b) => b.lastMessage.created_at.localeCompare(a.lastMessage.created_at)));
+  async function loadChatThreads(quiet=false) {
+    if(!supabase||!currentUserId){setChatMessage("Для загрузки диалогов войди в аккаунт и проверь подключение.");return;}
+    const request=++inboxRequest.current;
+    if(!quiet)setChatsLoading(true);
+    try{
+      const {data,error}=await supabase.from("listing_messages").select("id,listing_id,sender_id,recipient_id,body,created_at")
+        .or(`sender_id.eq.${currentUserId},recipient_id.eq.${currentUserId}`).order("created_at",{ascending:false});
+      if(request!==inboxRequest.current)return;
+      if(error){setChatMessage("Не удалось загрузить диалоги. Попробуй открыть их ещё раз.");return;}
+      const threads=groupChatThreads((data??[]) as ChatMessage[],currentUserId);
+      setChatThreads(threads);
+      await loadChatPartnerNames(threads.map(thread=>thread.partnerId));
+    }catch{setChatMessage("Нет связи. Попробуй открыть диалоги ещё раз.");}
+    finally{if(request===inboxRequest.current)setChatsLoading(false);}
   }
 
   async function loadDiscussionThreads() {
@@ -1090,6 +1136,7 @@ export default function HomeScreen() {
   }
 
   async function openChats() {
+    setChatListingScope(null);setChatMessage("");
     if (!currentUserId) {
       setChatMessage("Список диалогов появится после первого сообщения.");
       setChatsOpen(true);
@@ -1128,23 +1175,24 @@ export default function HomeScreen() {
   }
 
   async function sendChatMessage() {
-    if (!supabase || !selectedPlate || !chatDraft.trim()) return;
-    if (prohibitedChatPattern.test(chatDraft)) {
-      setChatMessage("Сообщение содержит запрещённые слова на одном из языков. Измени текст.");
-      return;
-    }
-    const recipientId = chatRecipientId || selectedPlate.ownerId;
-    if (!recipientId) return setChatMessage("Не удалось определить получателя сообщения.");
-    const { data: sentMessage, error } = await supabase.from("listing_messages").insert({ listing_id: selectedPlate.id, recipient_id: recipientId, body: chatDraft.trim() }).select("id").single();
-    if (error) {
-      if (error.message.includes("запрещ")) return setChatMessage("Сообщение содержит запрещённые слова. Измени текст.");
-      if (error.code === "42501") return setChatMessage("Чат не может отправить сообщение: в базе ещё не включены права для гостевого чата.");
-      if (error.code === "23503") return setChatMessage("Это объявление уже удалено, поэтому написать по нему нельзя.");
-      return setChatMessage(`Не удалось отправить: ${error.message}`);
-    }
-    setChatDraft("");
-    if (sentMessage?.id) void sendServerPush("message", sentMessage.id);
-    await openChat(selectedPlate);
+    if(!supabase||!selectedPlate||!currentUserId||!chatDraft.trim()||chatSending||chatLoading)return;
+    if(prohibitedChatPattern.test(chatDraft)){setChatMessage("Сообщение содержит запрещённые слова. Измени текст.");return;}
+    const recipientId=chatRecipientId;
+    if(!recipientId||recipientId===currentUserId){setChatMessage("Выбери собеседника в списке чатов.");return;}
+    const listingId=selectedPlate.id;
+    const request=conversationRequest.current;
+    setChatSending(true);setChatMessage("");
+    try{
+      const {data,error}=await supabase.from("listing_messages").insert({listing_id:listingId,recipient_id:recipientId,body:chatDraft.trim()}).select("id,listing_id,sender_id,recipient_id,body,created_at").single();
+      if(request!==conversationRequest.current){if(data?.id)void sendServerPush("message",data.id);void loadChatThreads();return;}
+      if(error){setChatMessage(error.code==="23503"?"Объявление удалено, отправить сообщение нельзя.":"Не удалось отправить сообщение. Текст сохранён — попробуй ещё раз.");return;}
+      setChatDraft("");
+      const sent=data as ChatMessage;
+      setChatMessages(previous=>previous.some(item=>item.id===sent.id)?previous:[...previous,sent]);
+      if(sent?.id)void sendServerPush("message",sent.id);
+      void loadChatThreads();
+    }catch{setChatMessage("Нет связи. Текст сохранён — попробуй отправить ещё раз.");}
+    finally{setChatSending(false);}
   }
 
   async function openReportedChat(report: MessageReport) {
@@ -1301,11 +1349,7 @@ export default function HomeScreen() {
     }
     if (comment.author_id === currentUserId) return;
     setCommentAction(null);
-    setChatRecipientId(comment.author_id);
-    setChatMessages([]);
-    setChatDraft("");
-    setChatMessage(`Личный ответ пользователю «${comment.author_name}» по этому объявлению.`);
-    setChatOpen(true);
+    await openChat(selectedPlate,comment.author_id);
   }
 
   const priceChart = useMemo(() => {
@@ -1806,10 +1850,11 @@ export default function HomeScreen() {
         const plate = catalog.find((item) => item.id === message.listing_id);
         setUnreadChatCount((count) => count + 1);
         void showChatNotification(plate?.value ?? "объявлению");
+        if(chatsOpen)void loadChatThreads();
       })
       .subscribe();
     return () => { void supabase.removeChannel(channel); };
-  }, [currentUserId, catalog]);
+  }, [currentUserId, catalog, chatsOpen]);
 
   const seriesGroupByListingId = useMemo(() => {
     // Группы нужны только после нажатия «Похожие номера». Раньше расчёт
@@ -2663,12 +2708,13 @@ export default function HomeScreen() {
                 // Supabase кнопка выглядит так, будто ничего не произошло.
                 setManagementOpen((value) => !value);
                 void loadManagement(currentUserId, profileName);
+                void loadChatThreads();
               }} style={styles.managementButton}>
                 <Text style={styles.managementButtonText}>{managementOpen ? "Скрыть мои объявления" : "Мои объявления и модерация"}</Text>
               </Pressable>
               {managementOpen && <View style={styles.managementPanel}>
                 <Text style={styles.managementTitle}>Мои объявления</Text>
-                <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>0</Text><Text style={styles.statLabel}>сообщений</Text></View></View>
+                <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{chatThreads.filter(thread=>myListings.some(listing=>listing.id===thread.listingId)).length}</Text><Text style={styles.statLabel}>диалогов</Text></View></View>
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={[styles.managementCard, styles.managementOwnCard]}>
                   <Pressable onPress={() => setPromotionListing(value => value === listing.id ? null : listing.id)} style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text><Text style={styles.managementHint}>Нажми на номер для выделения</Text>
                     {listing.listingStatus === "active" && !!listing.featuredUntil && new Date(listing.featuredUntil).getTime() > Date.now() && <Text style={styles.managementStatus}>🔥 В горячих предложениях · {new Date(listing.featuredUntil).getFullYear() >= 9999 ? "до продажи" : `до ${new Date(listing.featuredUntil).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`}</Text>}
@@ -2679,6 +2725,7 @@ export default function HomeScreen() {
                     {promotionListing === listing.id && listing.listingStatus !== "active" && <Text style={styles.managementHint}>Размещение доступно после одобрения объявления.</Text>}
                   </Pressable>
                   <Text style={styles.managementHint}>{listingOpens[listing.id]===undefined?"Счётчик открытий пока недоступен":`Открытия карточки после подключения счётчика: ${listingOpens[listing.id]}`}</Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`Чаты по объявлению ${listing.value}`} onPress={()=>void openListingChats(listing)} style={styles.managementButton}><Text style={styles.managementButtonText}>Личные чаты по объявлению</Text></Pressable>
                   {listing.listingStatus!=="archived"&&<View style={styles.managementOwnActions}>
                     <Pressable accessibilityRole="button" onPress={()=>{setEditingPriceId(listing.id);setEditingPrice(String(listing.priceValue));}} style={styles.editPriceButton}><Text style={styles.editPriceButtonText}>Изменить цену</Text></Pressable>
                     <Pressable accessibilityRole="button" onPress={() => { void archiveMyListing(listing); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>Продано</Text></Pressable>
@@ -2782,12 +2829,6 @@ export default function HomeScreen() {
           <Text style={styles.filterToggleText}>{filterPanelOpen ? "▲ Скрыть" : "☷ Фильтры"}</Text>
         </Pressable>
       </View>}
-      {filterPanelOpen && <View testID="home-collections" style={styles.homeCollections}>
-        <View style={styles.homeCollectionRow}>
-          {([['repeatDigits','Одинаковые цифры'],['repeatLetters','Одинаковые буквы'],['mirror','Зеркальные'],['firstTen','Первая десятка']] as const).map(([key,label]) => <Pressable key={key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({specialFilters:[key]})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{label} ↗</Text></Pressable>)}
-          {regionalSearchLinks.slice(0,2).map(item => <Pressable key={item.key} accessibilityRole="button" testID="motion-button" onPress={() => openCollection({region:item.title,regionCode:""})} style={styles.homeCollectionChip}><Text style={styles.homeCollectionText}>{item.title} ↗</Text></Pressable>)}
-        </View>
-      </View>}
       {filterPanelOpen && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
           <Pressable accessibilityRole="button" accessibilityLabel="Источники объявлений" accessibilityState={{ expanded: sourceListExpanded }} onPress={() => setSourceListExpanded(current => !current)} style={styles.sourceFilterToggle}>
@@ -2812,10 +2853,7 @@ export default function HomeScreen() {
           </>}
         </View>
         <View style={styles.filterControlDivider} />
-        <View style={styles.filterControlGroup}>
-          <View style={styles.filterControlTitleRow}>
-            <Text style={styles.filterControlTitle}>Регион и особенности</Text>
-          </View>
+        <FilterSection title="Регионы" summary={selectedRegionFilterLabel}>
           <View style={styles.quickFilters}>
             <Pressable onPress={() => {
               if (region !== "Все" || regionCode) {
@@ -2829,6 +2867,11 @@ export default function HomeScreen() {
               <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}{region !== "Все" || regionCode ? "  ×" : ""}</Text>
               {region === "Все" && !regionCode && <Text style={styles.quickSelectChevron}>⌄</Text>}
             </Pressable>
+          </View>
+        </FilterSection>
+        <View style={styles.filterControlDivider} />
+        <FilterSection title="Особенности" summary={[...specialFilters.map(filter=>({...specialFilterLabels,similarDigits:"Похожие цифры",similarLetters:"Похожие буквы",similarRegion:"Похожие регионы"})[filter]),similarFiltersOpen?"Похожие номера":""].filter(Boolean).join(", ")||"Любые"}>
+          <View style={styles.quickFilters}>
             {(Object.keys(specialFilterLabels) as GeneralSpecialFilter[]).map((filter) => {
               const active = specialFilters.includes(filter);
               return <Pressable key={filter} onPress={() => toggleSpecialFilter(filter)} style={[styles.quickFilter, active && styles.quickFilterActive]}>
@@ -2838,21 +2881,20 @@ export default function HomeScreen() {
             <Pressable onPress={toggleSimilarFiltersPanel} style={[styles.quickFilter, similarFiltersOpen && styles.quickFilterActive]}>
               <Text style={[styles.quickFilterText, similarFiltersOpen && styles.quickFilterTextActive]}>{similarFiltersOpen ? "✓ " : ""}Похожие номера</Text>
             </Pressable>
+
           </View>
-        </View>
+        </FilterSection>
         <View style={styles.filterControlDivider} />
-        <View style={styles.filterControlGroup}>
-          <Text style={styles.filterControlTitle}>Цена</Text>
+        <FilterSection title="Цена" summary={priceLimit?`до ${catalogPriceFormatter.format(priceLimit)} ₽`:"Любая цена"}>
           <View style={styles.listFilters}>{[[null, "Любая цена"], [100000, "до 100 тыс."], [300000, "до 300 тыс."], [1000000, "до 1 млн"]].map(([limit, label]) => <Pressable key={label} onPress={() => setPriceLimit((current) => current === limit ? null : limit as number | null)} style={[styles.listFilterButton, priceLimit === limit && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, priceLimit === limit && styles.listFilterButtonTextActive]}>₽ {label}</Text></Pressable>)}</View>
-        </View>
+        </FilterSection>
         <View style={styles.filterControlDivider} />
-        <View style={styles.filterControlGroup}>
-          <Text style={styles.filterControlTitle}>Время и порядок</Text>
+        <FilterSection title="Время и порядок" summary={`${freshOnly?"За 24 часа · ":""}${sort==="priceAsc"?"Сначала дешевле":sort==="priceDesc"?"Сначала дороже":"Сначала новые"}`}>
           <View style={styles.listFilters}>
             <Pressable onPress={() => setFreshOnly((value) => !value)} style={[styles.listFilterButton, freshOnly && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, freshOnly && styles.listFilterButtonTextActive]}>🕒 За 24 часа</Text></Pressable>
             {([ ["date", "Сначала новые"], ["priceAsc", "Сначала дешевле"], ["priceDesc", "Сначала дороже"] ] as const).map(([value, label]) => <Pressable key={value} onPress={() => setSort((current) => current === value ? "date" : value)} style={[styles.listFilterButton, sort === value && styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, sort === value && styles.listFilterButtonTextActive]}>{label}</Text></Pressable>)}
           </View>
-        </View>
+        </FilterSection>
       </View>}
       <View style={[styles.searchArea, styles.landingSearchCard]}>
       <View style={[styles.searchHeading, (compactLayout || desktopCatalog) && styles.searchHeadingCompact]}>
@@ -3105,6 +3147,7 @@ export default function HomeScreen() {
                   {!wideListingCards && <Text allowFontScaling={false} style={styles.offerDate}>{formatListingDate(item.publishedAt ?? item.createdAt).split(",")[0]}</Text>}
                 </View>
               </View>
+              {item.isSiteListing&&!!currentUserId&&item.ownerId===currentUserId&&<Pressable accessibilityRole="button" accessibilityLabel={`Чаты по объявлению ${item.value}`} onPress={()=>void openListingChats(item)} style={[styles.cardAction,{alignSelf:"flex-start",margin:8}]}><Text style={styles.cardActionText}>Личные чаты</Text></Pressable>}
               {expanded && <View style={[styles.offerDetails, wideListingCards && styles.offerDetailsDesktop]}>
                   <View style={[styles.cardInfo, narrowCards && styles.cardInfoCompact, styles.offerInfo]}>
                   <View style={styles.cardTopRow}>
@@ -3337,6 +3380,7 @@ export default function HomeScreen() {
                   <Text style={styles.detailsMuted}>Контакты продавца не показываются всем посетителям. Для общения используй внутренний чат.</Text>
                 </View>
                 {selectedPlate.ownerId !== currentUserId && <Pressable onPress={() => openChat(selectedPlate)} style={styles.chatOpenButton}><Text style={styles.chatOpenButtonText}>Написать продавцу</Text></Pressable>}
+                {selectedPlate.ownerId === currentUserId && <Pressable accessibilityRole="button" onPress={()=>void openListingChats(selectedPlate)} style={styles.chatOpenButton}><Text style={styles.chatOpenButtonText}>Личные чаты по объявлению</Text></Pressable>}
                 {selectedPlate.ownerId === currentUserId && <Pressable onPress={() => { void archiveMyListing(selectedPlate); }} style={styles.archiveButton}><Text style={styles.archiveButtonText}>✓ Продано — скрыть объявление</Text></Pressable>}
                 {!selectedPlate.sellerComment && <Text style={styles.detailsMuted}>Продавец пока не оставил комментарий.</Text>}
               </View> : <View style={styles.detailsBlock}>
@@ -3355,41 +3399,45 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={chatOpen} transparent animationType="slide" onRequestClose={() => setChatOpen(false)}>
-        <Pressable style={styles.detailsOverlay} onPress={() => setChatOpen(false)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.chatPanel}>
+        <View style={[styles.detailsOverlay,{justifyContent:"center",paddingTop:insets.top+16,paddingBottom:insets.bottom+16}]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Закрыть окно чатов" style={StyleSheet.absoluteFill} onPress={()=>setChatOpen(false)}/>
+          <View style={[styles.chatPanel,{height:Math.max(1,Math.min(650,windowHeight-insets.top-insets.bottom-32)),flex:undefined,flexGrow:0,flexShrink:0,flexBasis:"auto"}]}>
             <View style={styles.chatHeader}>
+              {selectedPlate?.ownerId===currentUserId&&<Pressable accessibilityRole="button" accessibilityLabel="Назад к чатам объявления" onPress={()=>{setChatOpen(false);void openListingChats(selectedPlate);}} style={styles.chatClose}><Text style={styles.chatCloseText}>←</Text></Pressable>}
               <View style={styles.chatSellerMark}><Text style={styles.chatSellerMarkText}>З</Text></View>
-              <View style={styles.chatHeaderText}><Text style={styles.chatTitle}>Чат по объявлению</Text><Text style={styles.chatSubtitle}>{selectedPlate?.value} · {selectedPlate?.seller}</Text></View>
+              <View style={styles.chatHeaderText}><Text style={styles.chatTitle}>Чат по объявлению</Text><Text style={styles.chatSubtitle}>{selectedPlate?.value} · {chatPartnerNames[chatRecipientId] || (selectedPlate?.ownerId===currentUserId?"Покупатель":selectedPlate?.seller)}</Text></View>
               <Pressable onPress={() => setChatOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable>
             </View>
-            <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatMessages}>
-              {chatMessages.length === 0 ? <View style={styles.chatEmpty}><Text style={styles.chatEmptyIcon}>✦</Text><Text style={styles.chatEmptyTitle}>Начните переписку</Text><Text style={styles.chatEmptyText}>Уточните цену, оформление или детали номера.</Text></View> : chatMessages.map((message) => <View key={message.id} style={[styles.chatBubbleRow, message.sender_id === currentUserId && styles.chatBubbleRowOwn]}><Pressable onPress={() => { if (selectedPlate?.ownerId === currentUserId && message.sender_id !== currentUserId) setChatRecipientId(message.sender_id); }} style={[styles.chatBubble, message.sender_id === currentUserId && styles.chatBubbleOwn]}><Text style={[styles.chatBubbleText, message.sender_id === currentUserId && styles.chatBubbleTextOwn]}>{message.body}</Text></Pressable>{message.sender_id !== currentUserId && <Pressable onPress={() => { setReportingMessage(message); setReportReason(""); setReportMessage(""); }} style={styles.reportButton}><Text style={styles.reportButtonText}>⚑ Жалоба</Text></Pressable>}</View>)}
+            <ScrollView ref={chatScrollRef} onContentSizeChange={()=>chatScrollRef.current?.scrollToEnd({animated:false})} style={styles.chatScroll} contentContainerStyle={styles.chatMessages} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {chatLoading?<Text style={styles.dialogsEmpty}>Загружаем переписку…</Text>:chatMessages.length === 0 ? <View style={styles.chatEmpty}><Text style={styles.chatEmptyIcon}>✦</Text><Text style={styles.chatEmptyTitle}>Начните переписку</Text><Text style={styles.chatEmptyText}>Уточните цену, оформление или детали номера.</Text></View> : chatMessages.map((message) => <View key={message.id} style={[styles.chatBubbleRow, message.sender_id === currentUserId && styles.chatBubbleRowOwn]}><View style={[styles.chatBubble, message.sender_id === currentUserId && styles.chatBubbleOwn]}><Text style={[styles.chatBubbleText, message.sender_id === currentUserId && styles.chatBubbleTextOwn]}>{message.body}</Text></View>{message.sender_id !== currentUserId && <Pressable onPress={() => { setReportingMessage(message); setReportReason(""); setReportMessage(""); }} style={styles.reportButton}><Text style={styles.reportButtonText}>⚑ Жалоба</Text></Pressable>}</View>)}
             </ScrollView>
-            <View style={styles.chatSafetyCard}><Text style={styles.chatSafetyIcon}>⌁</Text><Text style={styles.chatSafety}>{selectedPlate?.ownerId === currentUserId ? "Нажми на сообщение покупателя, чтобы выбрать его для ответа." : "Не отправляй документы, банковские данные или номера карт."}</Text></View>
+            <View style={styles.chatSafetyCard}><Text style={styles.chatSafetyIcon}>⌁</Text><Text style={styles.chatSafety}>Не отправляй документы, банковские данные или номера карт. Переписку видите только вы с собеседником.</Text></View>
             {!!chatMessage && <Text style={styles.authMessage}>{chatMessage}</Text>}
-            <View style={styles.chatInputRow}><TextInput value={chatDraft} onChangeText={setChatDraft} placeholder="Напишите сообщение…" placeholderTextColor="#98A2B3" style={styles.chatInput} multiline /><Pressable onPress={sendChatMessage} style={styles.chatSend}><Text style={styles.chatSendText}>➤</Text></Pressable></View>
-          </Pressable>
-        </Pressable>
+            <View style={styles.chatInputRow}><TextInput value={chatDraft} onChangeText={setChatDraft} placeholder="Напишите сообщение…" placeholderTextColor="#98A2B3" style={styles.chatInput} multiline /><Pressable accessibilityRole="button" accessibilityLabel="Отправить сообщение" disabled={chatLoading||chatSending||!chatRecipientId||!chatDraft.trim()} onPress={sendChatMessage} style={[styles.chatSend,(chatLoading||chatSending||!chatDraft.trim())&&{opacity:0.5}]}><Text style={styles.chatSendText}>{chatSending?"…":"➤"}</Text></Pressable></View>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={chatsOpen} transparent animationType="slide" onRequestClose={() => setChatsOpen(false)}>
-        <Pressable style={styles.detailsOverlay} onPress={() => setChatsOpen(false)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={styles.dialogsPanel}>
-            <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Диалоги</Text><Pressable onPress={() => setChatsOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
-            <Text style={styles.dialogsHint}>Выбери сообщение: откроется личный чат или карточка с нужным комментарием.</Text>
-            <ScrollView contentContainerStyle={styles.dialogsList}>
-              {chatThreads.length === 0 && discussionThreads.length === 0 ? <Text style={styles.dialogsEmpty}>Пока нет диалогов или комментариев. Открой карточку объявления, чтобы начать общение.</Text> : null}
-              {chatThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Личные чаты</Text><Text style={styles.dialogsSectionHint}>Переписки с продавцами и покупателями</Text>{chatThreads.map((thread) => {
-                const listing = catalog.find((item) => item.id === thread.listingId);
-                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={() => { setChatsOpen(false); void openChatThread(thread.listingId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы написали: " : "Вам написали: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
+        <View style={[styles.detailsOverlay,{justifyContent:"center",paddingTop:insets.top+16,paddingBottom:insets.bottom+16}]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Закрыть окно чатов" style={StyleSheet.absoluteFill} onPress={()=>setChatsOpen(false)}/>
+          <View style={[styles.dialogsPanel,{height:Math.max(1,Math.min(620,windowHeight-insets.top-insets.bottom-32)),flex:undefined,flexGrow:0,flexShrink:0,flexBasis:"auto"}]}>
+            <View style={styles.dialogsHeader}><Text style={[styles.dialogsTitle,{flex:1}]}>{chatListingScope?`Чаты · ${chatListingScope.value}`:"Диалоги"}</Text><Pressable onPress={() => setChatsOpen(false)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
+            <Text style={styles.dialogsHint}>{chatListingScope?"Кто написал по этому объявлению. Выбери человека, чтобы прочитать переписку и ответить.":"Выбери собеседника или комментарий."}</Text>
+            {!!chatMessage&&<Text accessibilityLiveRegion="polite" style={styles.authMessage}>{chatMessage}</Text>}
+            <ScrollView style={{flex:1,minHeight:0}} contentContainerStyle={styles.dialogsList} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              {chatsLoading?<Text style={styles.dialogsEmpty}>Загружаем диалоги…</Text>:!chatMessage&&visibleChatThreads.length===0&&(chatListingScope||discussionThreads.length===0)?<Text style={styles.dialogsEmpty}>{chatListingScope?"По этому объявлению тебе пока никто не написал.":"Пока нет диалогов или комментариев."}</Text>:null}
+              {visibleChatThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Личные чаты</Text><Text style={styles.dialogsSectionHint}>Переписки с продавцами и покупателями</Text>{visibleChatThreads.map((thread) => {
+                const listing = catalog.find((item) => item.id === thread.listingId)??myListings.find(item=>item.id===thread.listingId)??(chatListingScope?.id===thread.listingId?chatListingScope:null);
+                return <Pressable key={`${thread.listingId}-${thread.partnerId}`} onPress={() => { void openChatThread(thread.listingId,thread.partnerId); }} style={styles.dialogCard}><View style={styles.dialogMark}><Text style={styles.dialogMarkText}>З</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{chatPartnerNames[thread.partnerId]||"Пользователь"}</Text><Text style={styles.dialogsSectionHint}>{listing?.value??"Объявление"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastMessage.sender_id === currentUserId ? "Вы написали: " : "Вам написали: "}{thread.lastMessage.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastMessage.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
               })}</View>}
-              {discussionThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Комментарии</Text><Text style={styles.dialogsSectionHint}>Комментарии под твоими и просмотренными объявлениями</Text>{discussionThreads.map((thread) => {
-                const listing = catalog.find((item) => item.id === thread.listingId);
+              {!chatListingScope&&discussionThreads.length > 0 && <View style={styles.dialogsSection}><Text style={styles.dialogsSectionTitle}>Комментарии</Text><Text style={styles.dialogsSectionHint}>Комментарии под твоими и просмотренными объявлениями</Text>{discussionThreads.map((thread) => {
+                const listing = catalog.find((item) => item.id === thread.listingId)??myListings.find(item=>item.id===thread.listingId);
                 return <Pressable key={`comment-${thread.listingId}`} onPress={() => { setChatsOpen(false); if (listing) setSelectedPlate(listing); else void openListingFromNotification("listing", thread.listingId); }} style={styles.dialogCard}><View style={[styles.dialogMark, styles.commentDialogMark]}><Text style={styles.dialogMarkText}>💬</Text></View><View style={styles.dialogBody}><Text style={styles.dialogPlate}>{listing?.value ?? "Комментарий к объявлению"}</Text><Text numberOfLines={1} style={styles.dialogPreview}>{thread.lastComment.author_id === currentUserId ? "Вы написали: " : `${thread.lastComment.author_name}: `}{thread.lastComment.body}</Text></View><Text style={styles.dialogTime}>{new Date(thread.lastComment.created_at).toLocaleDateString("ru-RU", { day: "2-digit", month: "2-digit" })}</Text></Pressable>;
               })}</View>}
             </ScrollView>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={!!reportingMessage} transparent animationType="fade" onRequestClose={() => setReportingMessage(null)}>
@@ -3413,7 +3461,7 @@ export default function HomeScreen() {
               <Pressable onPress={() => setModerationReport(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable>
             </View>
             <Text style={styles.moderationChatHint}>Полная переписка доступна только модератору для рассмотрения жалобы.</Text>
-            <ScrollView style={styles.chatScroll} contentContainerStyle={styles.chatMessages}>
+            <ScrollView ref={chatScrollRef} onContentSizeChange={()=>chatScrollRef.current?.scrollToEnd({animated:false})} style={styles.chatScroll} contentContainerStyle={styles.chatMessages} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               {moderationChatMessages.length === 0 ? <Text style={styles.dialogsEmpty}>Сообщения не найдены.</Text> : moderationChatMessages.map((message) => <View key={message.id} style={styles.moderationChatBubble}><Text style={styles.moderationChatAuthor}>{message.sender_id === moderationReport?.message?.sender_id ? "Пользователь, на которого пожаловались" : "Собеседник"}</Text><Text style={styles.chatBubbleText}>{message.body}</Text><Text style={styles.moderationChatDate}>{formatListingDate(message.created_at)}</Text></View>)}
             </ScrollView>
             {!!moderationChatMessage && <Text style={styles.authMessage}>{moderationChatMessage}</Text>}
@@ -3673,11 +3721,6 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   searchAvailability: {color:theme.muted,fontSize:12,fontWeight:"700"},
   findNumberButton: {backgroundColor:"#6551D3",borderRadius:14,minHeight:52,alignItems:"center",justifyContent:"center",marginTop:20},
   findNumberText: {color:theme.onPrimary,fontSize:17,fontWeight:"800"},
-  homeCollections: {alignSelf:"center",width:"100%",maxWidth:820,marginTop:18,gap:12},
-  homeCollectionCaption: {color:theme.muted,fontSize:10,letterSpacing:2,textAlign:"center",fontWeight:"700"},
-  homeCollectionRow: {flexDirection:"row",flexWrap:"wrap",justifyContent:"center",gap:9},
-  homeCollectionChip: {backgroundColor:theme.raised,borderColor:theme.border,borderWidth:1,borderRadius:30,paddingHorizontal:15,paddingVertical:11,minHeight:42,justifyContent:"center"},
-  homeCollectionText: {color:theme.accent,fontSize:12,fontWeight:"600"},
   landingFootnote: {color:theme.muted,fontSize:11,lineHeight:18,textAlign:"center",marginTop:6},
   introAction: { backgroundColor: "#282B3D", borderRadius: 12, paddingHorizontal: 20, paddingVertical: 12 },
   introActionText: { color: theme.onPrimary, fontSize: 13, fontWeight: "800" },
