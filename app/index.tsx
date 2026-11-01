@@ -3465,13 +3465,14 @@ export default function HomeScreen() {
       </Modal>
 
       <Modal visible={!!testPayment} transparent animationType="fade" onRequestClose={() => setTestPayment(null)}>
-        <Pressable style={styles.detailsOverlay} onPress={() => setTestPayment(null)}>
-          <Pressable onPress={(event) => event.stopPropagation()} style={[styles.paymentPanel, { maxHeight: Math.max(240, windowHeight - 32) }]}>
-            <View style={styles.detailsHeader}>
+        <View style={[styles.detailsOverlay, styles.paymentOverlay, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+          <Pressable accessibilityRole="button" accessibilityLabel="Закрыть условия покупки" style={StyleSheet.absoluteFill} onPress={() => setTestPayment(null)} />
+          <View testID="payment-service-panel" style={[styles.paymentPanel, { height: Math.max(1, Math.min(windowHeight - insets.top - insets.bottom - 32, windowHeight * 0.88)) }]}>
+            <View style={[styles.detailsHeader, { flexShrink: 0 }]}>
               <View style={styles.flexibleHeading}><Text style={styles.paymentKicker}>ОПЛАТА</Text><Text style={styles.paymentTitle}>Оплата услуги</Text></View>
-              <Pressable onPress={() => setTestPayment(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Свернуть условия покупки" onPress={() => setTestPayment(null)} hitSlop={12} style={styles.detailsClose}><Text style={styles.detailsCloseText}>×</Text></Pressable>
             </View>
-            <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ paddingBottom: 16 }}>
+            <ScrollView testID="payment-service-scroll" style={styles.paymentScroll} contentContainerStyle={{ paddingBottom: 16 }} nestedScrollEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator>
             <Text style={styles.paymentItem}>{testPayment?.title}</Text>
             <Text style={styles.paymentAmount}>{testPayment?.amount}</Text>
             <View style={styles.paymentServiceInfo}>
@@ -3486,8 +3487,8 @@ export default function HomeScreen() {
             {!!paymentMessage && <Text style={styles.paymentHint}>{paymentMessage}</Text>}
             </ScrollView>
             <Pressable disabled={paymentStarting || !PAYMENT_ACCEPTANCE_ENABLED} onPress={() => { void startPayment(); }} style={[styles.paymentButton, (paymentStarting || !PAYMENT_ACCEPTANCE_ENABLED) && styles.saveSearchButtonDisabled]}><Text style={styles.paymentButtonText}>{!PAYMENT_ACCEPTANCE_ENABLED ? "Оплата временно недоступна" : paymentStarting ? "Открываем оплату…" : "Перейти к оплате"}</Text></Pressable>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Modal visible={paymentInfoOpen} transparent animationType="slide" onRequestClose={closePaymentInfo}>
@@ -4224,6 +4225,8 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   comingSoonButton: { alignItems: "center", backgroundColor: "#344054", borderRadius: 11, marginTop: 17, paddingVertical: 12 },
   comingSoonButtonText: { color: theme.onPrimary, fontSize: 13, fontWeight: "800" },
   paymentPanel: { alignSelf: "center", backgroundColor: theme.surface, borderRadius: 24, maxWidth: 470, padding: 22, width: "92%" },
+  paymentOverlay: { alignItems: "center", justifyContent: "center", paddingHorizontal: 16 },
+  paymentScroll: { flex: 1, minHeight: 0 },
   legalScroll: { flex: 1, flexShrink: 1, minHeight: 0 },
   legalScrollContent: { paddingBottom: 24 },
   legalPanel: { alignSelf: "center", backgroundColor: theme.surface, borderRadius: 24, maxWidth: 620, padding: 22, width: "92%" },
@@ -4255,7 +4258,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   paymentHint: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: 15 },
   paymentServiceInfo: { backgroundColor: theme.surface, borderColor: theme.border, borderWidth: 1, borderRadius: 14, padding: 14, marginTop: 16 },
   paymentServiceDescription: { color: theme.muted, fontSize: 14, lineHeight: 21, marginTop: 8 },
-  paymentButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, marginTop: 20, paddingVertical: 13 },
+  paymentButton: { alignItems: "center", backgroundColor: "#5143C2", borderRadius: 13, flexShrink: 0, marginTop: 20, paddingVertical: 13 },
   paymentButtonText: { color: theme.onPrimary, fontSize: 14, fontWeight: "900" },
   paymentSuccess: { alignItems: "center", paddingTop: 25 },
   paymentSuccessIcon: { alignItems: "center", backgroundColor: theme.successSurface, borderRadius: 28, color: theme.success, fontSize: 30, fontWeight: "900", height: 56, lineHeight: 56, textAlign: "center", width: 56 },
