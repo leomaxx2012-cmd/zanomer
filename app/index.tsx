@@ -4,7 +4,7 @@ import { type Theme } from '../lib/theme';
 import { useTheme, useThemedStyles } from '../components/AppTheme';
 import { registrationRegionName, registrationRegionNames, registrationRegionLabel } from '../lib/registration-regions';
 import { Pressable } from '../components/ActionPressable';
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import Head from "expo-router/head";
 import { SellerOptions } from "../components/SellerOptions";
@@ -339,6 +339,7 @@ export default function HomeScreen() {
   const catalogPageSize = compactLayout ? 24 : 40;
   const searchScrollPosition = compactLayout ? 150 : 330;
   const catalogScrollRef = useRef<ScrollView>(null);
+  const [mainViewportHeight, setMainViewportHeight] = useState(windowHeight);
   const backgroundTouch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const glowTouchActive = useRef(false);
   function openFilteredCatalog() {
@@ -387,6 +388,9 @@ export default function HomeScreen() {
   const [saved, setSaved] = useState<string[]>([]);
   const [likedListingIds, setLikedListingIds] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<"buy" | "sell" | "favorites" | "subscriptions">("buy");
+  useLayoutEffect(() => {
+    catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [activeTab]);
   const [subscribedNumbers, setSubscribedNumbers] = useState<string[]>([]);
   const [similarToId, setSimilarToId] = useState<string | null>(null);
   const [similarityFilter, setSimilarityFilter] = useState<SimilarityFilter>("digits");
@@ -419,7 +423,7 @@ export default function HomeScreen() {
   function returnToSearch() {
     setCatalogOnly(false); setCatalogDisplayLimit(catalogPageSize); setActiveTab("buy"); setPlatePicker(null);
     if (Platform.OS === "web" && isCatalogRoute) router.navigate({pathname:"/",params:catalogSearchParams(currentSearch())} as never);
-    catalogScrollRef.current?.scrollTo({y:0,animated:true});
+    catalogScrollRef.current?.scrollTo({y:0,animated:false});
   }
   function openCollection(changes: Partial<CatalogSearch>) {
     const next = {...currentSearch(), leftLetter:"",rightLetters:"",digits:"",specialFilters:[],groupSeries:false,...changes};
@@ -2542,7 +2546,7 @@ export default function HomeScreen() {
       onPointerCancel={() => { backgroundTouch.current = null; }}
       onPointerUp={() => { const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}
       onTouchStart={event => { glowTouchActive.current = !isBackdropControlTouch(event.nativeEvent); if(glowTouchActive.current) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); else backdropTouch.current?.end(); backgroundTouch.current = { x: event.nativeEvent.pageX, y: event.nativeEvent.pageY, moved: false }; }}
-      onTouchMove={event => { if(glowTouchActive.current) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) start.moved = true; }}
+      onTouchMove={event => { const start = backgroundTouch.current; if (start && Math.hypot(event.nativeEvent.pageX - start.x, event.nativeEvent.pageY - start.y) > 8) { start.moved = true; glowTouchActive.current = true; } if(glowTouchActive.current) backdropTouch.current?.move(event.nativeEvent.pageX,event.nativeEvent.pageY); }}
       onTouchCancel={() => { glowTouchActive.current = false; backdropTouch.current?.end(); backgroundTouch.current = null; }}
       onTouchEnd={() => { glowTouchActive.current = false; backdropTouch.current?.end(); const start = backgroundTouch.current; backgroundTouch.current = null; if (platePicker !== "region" && listingPicker !== "region" && start && !start.moved) { setPlatePicker(null); setListingPicker(null); } }}>
       {Platform.OS === "web" && !incomingListingId && <Head>
@@ -2610,7 +2614,7 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>}
-      <ScrollView ref={catalogScrollRef} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact, isLanding && {maxWidth:undefined, flexGrow:1}, { paddingBottom: navigationHeight + 40 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
+      <ScrollView ref={catalogScrollRef} testID="main-scroll" onLayout={event => setMainViewportHeight(Math.ceil(event.nativeEvent.layout.height))} style={styles.mainScroll} contentContainerStyle={[styles.mainScrollContent, compactLayout && styles.mainScrollContentCompact, isLanding && {maxWidth:undefined, flexGrow:1}, { paddingBottom: navigationHeight + 40 }]} keyboardShouldPersistTaps="always" keyboardDismissMode="none" showsVerticalScrollIndicator={false}>
 
       {authOpen && (
         <Modal transparent animationType="slide" onRequestClose={() => setAuthOpen(false)}>
@@ -2743,6 +2747,7 @@ export default function HomeScreen() {
         </Modal>
       )}
 
+      <View testID="tab-content" style={{ width: "100%", minHeight: mainViewportHeight }}>
       {activeTab === "buy" && catalogOnly && <View style={styles.catalogOnlyToolbar}>
         <Pressable onPress={returnToSearch} style={styles.catalogOnlyBack}>
           <Text style={styles.catalogOnlyBackText}>← Поиск</Text>
@@ -3137,6 +3142,7 @@ export default function HomeScreen() {
 
       </View>
 
+      </View>
       <View testID="site-footer" style={styles.siteFooter} accessibilityRole="summary">
         <Text style={[styles.siteFooterTitle,{color:theme.text}]}>ЗаНомером — поиск и размещение объявлений</Text>
         <View style={styles.siteFooterLinks}>
@@ -3622,7 +3628,7 @@ export default function HomeScreen() {
           ["favorites", "♡", "Избранное, сохранённое и лайки", theme.danger],
           ["subscriptions", "🔔", "Подписка", theme.warning],
         ] as const).map(([tab, icon, label, color], index) => <View key={tab} style={styles.navSlot}>
-          <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: activeTab === tab }} onPress={() => { setPlatePicker(null); setListingPicker(null); setActiveTab(tab); if (tab === "buy") returnToSearch(); }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
+          <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ selected: activeTab === tab }} onPress={() => { catalogScrollRef.current?.scrollTo({ y: 0, animated: false }); setPlatePicker(null); setListingPicker(null); setActiveTab(tab); if (tab === "buy") returnToSearch(); }} style={[styles.navItem, activeTab === tab && styles.navItemActive]}>
             <Text allowFontScaling={false} style={[styles.navIcon, { color }]}>{icon}</Text>
             <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.65} style={[styles.navText, { color: activeTab === tab ? color : theme.muted }]}>{({ buy: "Поиск", sell: "Разместить", favorites: "Избранное", subscriptions: "Подписка" } as const)[tab]}</Text>
           </Pressable>

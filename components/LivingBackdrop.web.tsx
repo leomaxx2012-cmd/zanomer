@@ -20,14 +20,16 @@ export const LivingBackdrop=forwardRef<BackdropTouch>(function LivingBackdrop(_,
   const stage=ref.current?.parentElement;if(!stage)return;const b=stage.getBoundingClientRect();
   stage.style.setProperty('--pointer-x',`${x-window.scrollX-b.left}px`);
   stage.style.setProperty('--pointer-y',`${y-window.scrollY-b.top}px`);
+  stage.style.setProperty('--pointer-glow','1');
   stage.style.setProperty('--touch-glow','1');clearTimeout(timer.current);timer.current=setTimeout(end,900);
  },end}),[]);
  useEffect(()=>()=>clearTimeout(timer.current),[]);
  useEffect(()=>{
   const stage=ref.current?.parentElement;if(!stage)return;
-  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');let frame=0;
- const move=(e:PointerEvent)=>{if(reduced.matches||e.pointerType!=='mouse')return;const control=e.target instanceof Element&&e.target.closest('[data-motion="button"],[data-testid="motion-card"],button,input,textarea,a,[role="button"],[role="link"]');stage.style.setProperty('--pointer-glow',control?'0':'1');if(control){cancelAnimationFrame(frame);frame=0;return;}if(frame)return;const x=e.clientX,y=e.clientY;frame=requestAnimationFrame(()=>{const b=stage.getBoundingClientRect();stage.style.setProperty('--pointer-x',`${x-b.left}px`);stage.style.setProperty('--pointer-y',`${y-b.top}px`);frame=0;});};
-  stage.addEventListener('pointermove',move,{passive:true});return()=>{stage.removeEventListener('pointermove',move);cancelAnimationFrame(frame);};
+  const reduced=window.matchMedia('(prefers-reduced-motion: reduce)');let frame=0;let blockedPress=false;
+  const down=(e:PointerEvent)=>{if(e.pointerType!=='mouse')return;blockedPress=!!(e.target instanceof Element&&e.target.closest('[data-motion="button"],button,input,textarea,a,[role="button"],[role="link"]'));if(blockedPress){cancelAnimationFrame(frame);frame=0;stage.style.setProperty('--pointer-glow','0');}};
+  const move=(e:PointerEvent)=>{if(reduced.matches||e.pointerType!=='mouse'||(blockedPress&&e.buttons))return;blockedPress=false;stage.style.setProperty('--pointer-glow','1');if(frame)return;const x=e.clientX,y=e.clientY;frame=requestAnimationFrame(()=>{const b=stage.getBoundingClientRect();stage.style.setProperty('--pointer-x',`${x-b.left}px`);stage.style.setProperty('--pointer-y',`${y-b.top}px`);frame=0;});};
+  stage.addEventListener('pointerdown',down,{passive:true});stage.addEventListener('pointermove',move,{passive:true});return()=>{stage.removeEventListener('pointerdown',down);stage.removeEventListener('pointermove',move);cancelAnimationFrame(frame);};
  },[]);
  return <><style>{css(theme.background)}</style><div ref={ref} aria-hidden="true" className="living-backdrop"/></>;
 });
