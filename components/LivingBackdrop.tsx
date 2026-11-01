@@ -22,13 +22,12 @@ export const LivingBackdrop=forwardRef<BackdropTouch>(function LivingBackdrop(_,
  },[opacity]);
  useEffect(()=>{opacity.setValue(0);clearTimeout(timer.current);},[mode,opacity]);
  useImperativeHandle(ref,()=>({move(x,y){
-  if(mode!=='dark'||reduced.current)return;
+  if(reduced.current)return;
   clearTimeout(timer.current);opacity.stopAnimation();
   position.setValue({x:x-radius,y:y-radius});opacity.setValue(1);
   // Also fade when a child consumes touch-end (for example the plate editor).
   timer.current=setTimeout(end,900);
- },end}),[mode,position,opacity,radius]);
- if(mode!=='dark')return null;
+ },end}),[position,opacity,radius]);
  return <View pointerEvents="none" accessible={false} importantForAccessibility="no-hide-descendants" style={styles.layer}>
   <Animated.View renderToHardwareTextureAndroid shouldRasterizeIOS style={{position:'absolute',left:0,top:0,width:radius*2,height:radius*2,opacity,transform:position.getTranslateTransform()}}>
    {rings.map((ratio,i)=>{const diameter=radius*2*ratio;return <View key={i} style={{position:'absolute',left:radius-diameter/2,top:radius-diameter/2,width:diameter,height:diameter,borderRadius:diameter/2,backgroundColor:'rgba(152,108,255,0.019)'}}/>;})}
