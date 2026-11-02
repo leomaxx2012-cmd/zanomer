@@ -1,5 +1,6 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
+import { clearReloadedPlateSearch } from '../lib/catalog-reload';
 
 export default function RootHtml({ children }: PropsWithChildren) {
   return (
@@ -12,6 +13,7 @@ export default function RootHtml({ children }: PropsWithChildren) {
         <meta name="yandex-verification" content="40eb5b43b825700c" />
         <meta name="theme-color" content="#151723" />
         <meta name="color-scheme" content="dark" />
+        <script dangerouslySetInnerHTML={{ __html: `(${clearReloadedPlateSearch.toString()})();` }} />
         <style>{`html,body,#root{background:var(--page-background,#151723);color:var(--page-text,#F4F3FA);}a{color:var(--page-link,#C4B5FD);}input::placeholder,textarea::placeholder{color:var(--page-muted,#B2B6C9);opacity:1;}`}</style>
         <ScrollViewStyleReset />
       </head>
