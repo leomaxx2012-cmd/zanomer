@@ -335,6 +335,10 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const [navigationHeight, setNavigationHeight] = useState(88);
   const [expandedListingIds, setExpandedListingIds] = useState<string[]>([]);
+  const [offerListWidth, setOfferListWidth] = useState(0);
+  // Explicit dimensions keep Yoga from sizing the plate from the row height
+  // and pushing the price outside a narrow Android card.
+  const compactOfferPlateWidth = Math.max(0, (offerListWidth || windowWidth - 24) - 152);
   const [hotExpanded, setHotExpanded] = useState(false);
   const [paymentNoticeExpanded, setPaymentNoticeExpanded] = useState(false);
   // Compact rows are mounted in small batches, with more offers per page.
@@ -2616,7 +2620,7 @@ export default function HomeScreen() {
 
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel="Горячие объявления" accessibilityState={{ expanded: hotExpanded }} onPress={() => { Keyboard.dismiss(); setHotExpanded(true); }} style={[styles.headerHotButton, compactLayout && styles.headerHotButtonCompact]}>
-            <Text allowFontScaling={false} numberOfLines={compactLayout ? 2 : 1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>{compactLayout ? "🔥 Горячие\nобъявления" : "🔥 Горячие объявления"}</Text>
+            <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85} style={[styles.headerHotText, compactLayout && styles.headerHotTextCompact]}>{compactLayout ? "🔥" : "🔥 Горячие объявления"}</Text>
           </Pressable>
           <View style={[styles.headerUtilityColumn, compactLayout && styles.headerUtilityColumnCompact]}>
         <View style={[styles.headerActions, smallHeader && { gap: 4 }]}>
@@ -3121,7 +3125,7 @@ export default function HomeScreen() {
       {hiddenSeriesGroupKeys.length > 0 && <Pressable onPress={() => setHiddenSeriesGroupKeys([])} style={styles.restoreSeriesButton}>
         <Text style={styles.restoreSeriesButtonText}>Показать скрытые группы ({hiddenSeriesGroupKeys.length})</Text>
       </Pressable>}
-      <View testID="catalog-cards" style={[styles.list, styles.compactOfferList, compactLayout && styles.compactOfferListMobile, gridCards && styles.offerGrid]}>
+      <View testID="catalog-cards" onLayout={event => { const width = event.nativeEvent.layout.width; setOfferListWidth(current => current === width ? current : width); }} style={[styles.list, styles.compactOfferList, compactLayout && styles.compactOfferListMobile, gridCards && styles.offerGrid]}>
         {renderedPlates.map((item, index) => {
           const expanded = !compactLayout || expandedListingIds.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
@@ -3139,12 +3143,12 @@ export default function HomeScreen() {
                 {compactLayout && <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Свернуть" : "Раскрыть"} объявление ${item.value}, ${item.region}`} accessibilityState={{ expanded }} onPress={() => setExpandedListingIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])} hitSlop={4} style={styles.offerExpand}>
                   <Text allowFontScaling={false} style={styles.offerChevron}>{expanded ? "⌃" : "⌄"}</Text>
                 </Pressable>}
-                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.offerPlate, wideListingCards && styles.offerPlateDesktop, item.vehicle === "motorcycle" && styles.offerPlateMotorcycle]}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.offerPlate, wideListingCards && styles.offerPlateDesktop, item.vehicle === "motorcycle" && styles.offerPlateMotorcycle, compactLayout && { flex: 0, flexShrink: 0, width: item.vehicle === "motorcycle" ? Math.min(compactOfferPlateWidth, 160) : compactOfferPlateWidth, height: item.vehicle === "motorcycle" ? Math.min(compactOfferPlateWidth, 160) * 3 / 4 : compactOfferPlateWidth * 112 / 520, minHeight: 0 }]}>
                   <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} vehicle={item.vehicle} />
                 </Pressable>
-                <View style={[styles.offerSummary, !compactLayout && styles.offerSummaryWide, wideListingCards && styles.offerSummaryDesktop]}>
-                  <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.offerPrice, wideListingCards && styles.offerPriceDesktop, item.price.length > 11 && styles.offerPriceLong]}>{item.price}</Text>
-                  {!wideListingCards && <Text allowFontScaling={false} style={styles.offerDate}>{formatListingDate(item.publishedAt ?? item.createdAt).split(",")[0]}</Text>}
+                <View style={[styles.offerSummary, !compactLayout && styles.offerSummaryWide, wideListingCards && styles.offerSummaryDesktop, compactLayout && styles.offerSummaryCompact]}>
+                  <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.offerPrice, wideListingCards && styles.offerPriceDesktop, item.price.length > 11 && styles.offerPriceLong, compactLayout && styles.offerPriceCompact]}>{item.price}</Text>
+                  {!wideListingCards && <Text allowFontScaling={false} numberOfLines={1} style={styles.offerDate}>{formatListingDate(item.publishedAt ?? item.createdAt).split(",")[0]}</Text>}
                 </View>
               </View>
               {item.isSiteListing&&!!currentUserId&&item.ownerId===currentUserId&&<Pressable accessibilityRole="button" accessibilityLabel={`Чаты по объявлению ${item.value}`} onPress={()=>void openListingChats(item)} style={[styles.cardAction,{alignSelf:"flex-start",margin:8}]}><Text style={styles.cardActionText}>Личные чаты</Text></Pressable>}
@@ -3153,9 +3157,9 @@ export default function HomeScreen() {
                   <View style={styles.cardTopRow}>
                     <Text numberOfLines={1} style={styles.tag}>{item.tag}</Text>
                   </View>
-                  <View style={styles.cardRegionRow}>
-                    <Text style={[styles.region, styles.cardRegionName]}>{item.saleDetails?.city?`${item.region} · ${item.saleDetails.city}`:item.region}</Text>
-                    <Text style={styles.cardPublishedTop}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
+                  <View style={[styles.cardRegionRow, compactLayout && styles.cardRegionRowCompact]}>
+                    <Text style={[styles.region, styles.cardRegionName, compactLayout && { flex: 0 }]}>{item.saleDetails?.city?`${item.region} · ${item.saleDetails.city}`:item.region}</Text>
+                    <Text style={[styles.cardPublishedTop, compactLayout && { textAlign: "left" }]}>{formatListingDate(item.publishedAt ?? item.createdAt)}</Text>
                   </View>
                   <View style={styles.cardBadgesSpread}>
                     {item.saleDetails?.negotiable&&<Text style={styles.sellerCategory}>Торг</Text>}{item.saleDetails?.storage==="storage"&&<Text style={styles.sellerCategory}>На хранении</Text>}
@@ -3712,7 +3716,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   brandNameCompact: { fontSize: 16, letterSpacing: -0.4 },
   brandCaption: { color: theme.muted, fontSize: 10, marginTop: 2 },
   brandContainerCompact: { width: 48, flexShrink: 0, alignItems: "center", justifyContent: "center" },
-  headerHotButtonCompact: { flex: 1, paddingHorizontal: 6, minWidth: 0, minHeight: 42 },
+  headerHotButtonCompact: { flexGrow: 0, flexShrink: 0, width: 42, minWidth: 42, height: 42, paddingHorizontal: 0, paddingVertical: 0 },
   catalogSearchSummary: {alignSelf:"center",width:"100%",maxWidth:1100,paddingHorizontal:12,paddingVertical:12,color:theme.muted,fontSize:12,lineHeight:19},
   landingStage: {position:"relative",backgroundColor:"transparent",borderRadius:0,marginTop:0,marginBottom:28,paddingHorizontal:0,paddingBottom:24,width:"100%",alignSelf:"center",overflow:"hidden"},
   landingStageCompact: {borderRadius:0,marginTop:0,marginBottom:24,paddingHorizontal:0,paddingBottom:16},
@@ -3763,9 +3767,9 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   headerLowerRow: { flexDirection: "row", alignItems: "center", width: "100%", maxWidth: 1360, gap: 16, minHeight: 54 },
   headerHotButton: { minWidth: 0, minHeight: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: 15, paddingVertical: 9, backgroundColor: theme.raised, borderColor: headerIconColors.fire, borderWidth: 1.5, borderRadius: 12 },
   headerHotText: { color: theme.warning, fontSize: 12, lineHeight: 18, fontWeight: "700", textAlign: "center" },
-  headerHotTextCompact: { fontSize: 11, lineHeight: 15 },
+  headerHotTextCompact: { fontSize: 22, lineHeight: 28 },
   headerUtilityColumn: { flexDirection: "row", gap: 8, alignItems: "center", justifyContent: "flex-end" },
-  headerUtilityColumnCompact: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0 },
+  headerUtilityColumnCompact: { flexDirection: "row", alignItems: "center", gap: 4, flexShrink: 0, marginLeft: "auto" },
   headerIconCompact: {width:36,height:40,minHeight:40,paddingHorizontal:0},
   headerProfileOutline: { borderColor: headerIconColors.profile },
   headerProfileText: { color: headerIconColors.profile },
@@ -4098,10 +4102,10 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   offerShell: { borderColor: theme.border, borderWidth: 1, borderRadius: 18, backgroundColor: theme.surface, overflow: "hidden" },
   offerShellDesktop: { flexDirection: "column", alignItems: "stretch", flex: 1 },
   compactOfferListMobile: { gap: 10 },
-  offerRowCompact: { minHeight: 66, paddingVertical: 8 },
+  offerRowCompact: { width: "100%", minWidth: 0, minHeight: 66, paddingVertical: 8 },
   offerRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, paddingRight: 8, minHeight: 82 },
   offerRowDesktop: { width: "100%", flexDirection: "column", alignItems: "stretch", gap: 15, padding: 18 },
-  offerExpand: { width: 28, minHeight: 54, alignItems: "center", justifyContent: "center" },
+  offerExpand: { width: 28, flexShrink: 0, minHeight: 54, alignItems: "center", justifyContent: "center" },
   offerChevron: { color: theme.muted, fontSize: 25, lineHeight: 30 },
   offerPlate: { flex: 1, minWidth: 0, maxWidth: 520, aspectRatio: 520 / 112, minHeight: 34, borderWidth: 0, borderColor: theme.border, borderRadius: 0, backgroundColor: "transparent", overflow: "hidden" },
   offerPlateMotorcycle: { aspectRatio: 4 / 3, maxWidth: 160 },
@@ -4109,9 +4113,11 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   offerSummary: { width: 102, alignItems: "flex-end", justifyContent: "center", gap: 6, marginLeft: "auto" },
   offerSummaryWide: { width: 150 },
   offerSummaryDesktop: { width: "100%", marginLeft: 0, alignItems: "flex-start" },
+  offerSummaryCompact: { flexShrink: 0, marginLeft: 0, minWidth: 0 },
   offerPrice: { color: theme.text, fontSize: 17, fontWeight: "800", textAlign: "right" },
   offerPriceDesktop: { fontSize: 25, letterSpacing: -0.5 },
   offerPriceLong: { fontSize: 14 },
+  offerPriceCompact: { width: "100%", lineHeight: 22 },
   offerDate: { color: theme.muted, fontSize: 10, lineHeight: 15, textAlign: "right" },
   offerDetails: { paddingHorizontal: 12, paddingBottom: 10, borderTopColor: theme.border, borderTopWidth: 1 },
   offerDetailsDesktop: { minWidth: 0, width: "100%", borderTopWidth: 1, borderTopColor: theme.border, borderLeftWidth: 0, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
@@ -4171,6 +4177,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   cardTopRow: { alignItems: "center", flexDirection: "row", gap: 6, justifyContent: "space-between", minWidth: 0 },
   tag: { color: theme.accent, flex: 1, flexShrink: 1, fontSize: 12, fontWeight: "700", minWidth: 0 },
   cardRegionRow: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: 6, justifyContent: "space-between" },
+  cardRegionRowCompact: { flexDirection: "column", alignItems: "stretch", gap: 0 },
   cardRegionName: { flex: 1, minWidth: 0 },
   cardPublishedTop: { color: theme.muted, flexShrink: 0, fontSize: 10, lineHeight: 16, marginTop: 4, fontWeight: "700", textAlign: "right" },
   region: { color: theme.muted, fontSize: 12, lineHeight: 16, marginTop: 4 },
