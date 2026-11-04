@@ -4,6 +4,49 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const headers = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
 
+export async function deliverModerationPushJobs(admin: ReturnType<typeof createClient>, jobIds: string[], issuer: string, fetcher = fetch) {
+  const { data: jobs, error: claimError } = await admin.rpc("claim_moderation_push_jobs", { job_ids: jobIds, issuer });
+  if (claimError) throw new Error("Could not claim moderation notifications");
+  let sent = 0, failed = 0;
+  for (const job of jobs ?? []) {
+    let accepted = 0;
+    try {
+      const { data: devices, error } = await admin.from("auto_push_tokens").select("token").eq("owner_id", job.owner_id);
+      if (error) throw new Error("Could not load devices");
+      const tokens = [...new Set((devices ?? []).map((device: { token: string }) => device.token))] as string[];
+      let jobFailed = 0;
+      for (let offset = 0; offset < tokens.length; offset += 100) {
+        const batch = tokens.slice(offset, offset + 100);
+        const response = await fetcher("https://exp.host/--/api/v2/push/send", {
+          method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(batch.map(token => ({ to: token, title: job.title, body: job.body, sound: "default", priority: "high", channelId: "matches", ttl: 86400, data: { kind: "moderation-notice", id: job.id } }))),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (!response.ok) throw new Error("Push provider unavailable");
+        const result = await response.json();
+        if (!Array.isArray(result.data) || result.data.length !== batch.length) throw new Error("Invalid push response");
+        const invalid: string[] = [];
+        result.data.forEach((ticket: { status?: string; details?: { error?: string } }, index: number) => {
+          if (ticket.status === "ok") accepted++;
+          else { jobFailed++; if (ticket.details?.error === "DeviceNotRegistered") invalid.push(batch[index]); }
+        });
+        if (invalid.length) await admin.from("auto_push_tokens").delete().eq("owner_id", job.owner_id).in("token", invalid);
+      }
+      // Accepted devices must not receive the same decision again on a retry.
+      if (accepted || !tokens.length) {
+        await admin.from("moderation_push_jobs").update({ push_sent_at: new Date().toISOString(), push_error: jobFailed ? "Some devices rejected the notification" : null }).eq("id", job.id);
+      } else {
+        await admin.from("moderation_push_jobs").update({ push_claimed_at: null, push_error: "Push not accepted; retry pending" }).eq("id", job.id);
+      }
+      sent += accepted; failed += jobFailed;
+    } catch {
+      failed++;
+      await admin.from("moderation_push_jobs").update(accepted ? { push_sent_at: new Date().toISOString(), push_error: "Partial delivery" } : { push_claimed_at: null, push_error: "Delivery unavailable; retry pending" }).eq("id", job.id);
+    }
+  }
+  return { sent, failed, claimed: (jobs ?? []).length };
+}
+
 function matchesSearchAlert(listing: Record<string, unknown>, alert: Record<string, unknown>) {
   const matchesPattern = (value: unknown, pattern: unknown) => {
     const clean = String(pattern ?? "").trim().toUpperCase();
@@ -45,6 +88,14 @@ Deno.serve(async (request) => {
   const payload = await request.json();
   const { kind, id } = payload;
   const admin = createClient(url, service);
+  if (kind === "moderation-batch") {
+    const ids = payload.ids;
+    if (!Array.isArray(ids) || ids.length > 50 || ids.some((value: unknown) => typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value))) return Response.json({ error: "Invalid notification IDs" }, { status: 400, headers });
+    const { data: moderator } = await admin.from("auto_moderators").select("user_id").eq("user_id", user.id).maybeSingle();
+    if (!moderator) return Response.json({ error: "Forbidden" }, { status: 403, headers });
+    try { return Response.json(await deliverModerationPushJobs(admin, [...new Set(ids)], user.id), { headers }); }
+    catch { return Response.json({ error: "Notification delivery unavailable" }, { status: 503, headers }); }
+  }
   if (kind === "register-push-token") {
     const token = String(payload.token ?? "");
     if (!/^(?:ExponentPushToken|ExpoPushToken)\[[^\]]+\]$/.test(token)) {

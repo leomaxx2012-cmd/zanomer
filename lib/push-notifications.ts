@@ -80,3 +80,8 @@ export async function sendServerPush(kind: "message" | "comment" | "report" | "c
   if (!supabase || !id) return;
   await supabase.functions.invoke("notify", { body: { kind, id } });
 }
+
+export async function sendModerationPush(ids: string[]) {
+  if (!supabase || !ids.length) return;
+  await supabase.functions.invoke("notify", { body: { kind: "moderation-batch", ids: [...new Set(ids)].slice(0, 50) } });
+}

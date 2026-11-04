@@ -62,7 +62,7 @@ import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
 import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion, compactSearchRegions } from "../lib/search-regions";
 import { availableListingSources, matchesListingSources } from "../lib/listing-sources";
 import { createAppUpdateManager } from "../lib/app-updates";
-import { registerForPushNotifications, sendServerPush, showChatNotification } from "../lib/push-notifications";
+import { registerForPushNotifications, sendServerPush, sendModerationPush, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
   id: string;
@@ -855,6 +855,9 @@ export default function HomeScreen() {
       setModerationReportsError("");
       return;
     }
+    void client.rpc("get_my_pending_moderation_push_jobs").then(({data,error})=>{
+      if(!error&&data?.length)void sendModerationPush(data.map((job:{id:string})=>job.id)).catch(()=>{});
+    });
     const { data: traffic } = await client.rpc("get_site_analytics");
     if (traffic?.[0]) setSiteTraffic(traffic[0] as SiteTrafficAnalytics);
     const { data: pending } = await client
@@ -994,9 +997,10 @@ export default function HomeScreen() {
     if (banReason.trim().length < 3 || banReason.trim().length > 480) { setBanFormError("Укажи причину от 3 до 480 символов — её увидит пользователь."); return; }
     setModerationActionId(banTarget.id); setBanFormError("");
     try {
-      const { data, error } = await supabase.rpc("moderate_report_participant", { report:banTarget.id,report_kind:banTarget.kind,target_role:banTarget.participant,action_type:moderationMode,duration_minutes:minutes,description:banReason.trim() });
+      const { data, error } = await supabase.rpc("moderate_report_with_push", { report:banTarget.id,report_kind:banTarget.kind,target_role:banTarget.participant,action_type:moderationMode,duration_minutes:minutes,description:banReason.trim() });
       if (error) { setBanFormError("Не удалось сохранить решение. Жалоба могла быть уже обработана — обнови список."); return; }
-      const result = data?.[0] as { expires_at: string | null } | undefined;
+      const result = data?.[0] as { expires_at: string | null; push_job_ids: string[] } | undefined;
+      if(result?.push_job_ids?.length)void sendModerationPush(result.push_job_ids).catch(()=>{});
       setAuthMessage(banTarget.participant === "reporter" ? `Автор ложной жалобы ${moderationMode === "warning" ? "получил предупреждение" : "заблокирован"}. ${moderationMode === "ban" ? banExpiryText(result?.expires_at ?? null)+". " : ""}Жалоба отклонена; описание сохранено в его аккаунте.` : moderationMode === "warning" ? "Предупреждение с твоим описанием сохранено в аккаунте пользователя. Жалоба принята." : `Пользователь заблокирован. ${banExpiryText(result?.expires_at ?? null)}. Сообщение сохранено в его аккаунте.`);
       setBanTarget(null); setModerationReport(null);
       await loadManagement(currentUserId, profileName);
@@ -1113,6 +1117,12 @@ export default function HomeScreen() {
 
   async function openListingFromNotification(kind: string, id: string) {
     if (!supabase || !id) return;
+    if(kind==="moderation-notice") {
+      setAuthOpen(true);
+      const {data}=await supabase.rpc("get_unread_account_moderation_notice");
+      if(data?.[0])setBanNotice(data[0]);
+      return;
+    }
     let listingId = id;
     if (kind === "message") {
       const { data } = await supabase.from("listing_messages").select("listing_id").eq("id", id).maybeSingle();
@@ -1926,7 +1936,7 @@ export default function HomeScreen() {
   async function dismissBanNotice() {
     if (!supabase || !banNotice || banNotice.owner_id !== currentUserId) return;
     const notice = banNotice;
-    const { error } = await supabase.from(notice.kind === "warning" ? "account_warning_notices" : "account_ban_notices").update({ read_at: new Date().toISOString() })
+    const { error } = await supabase.from(notice.kind === "report-result" ? "moderation_push_jobs" : notice.kind === "warning" ? "account_warning_notices" : "account_ban_notices").update({ read_at: new Date().toISOString() })
       .eq("owner_id", currentUserId).eq("id", notice.id).is("read_at", null);
     if (!error) setBanNotice(current => current?.id === notice.id ? null : current);
   }
@@ -3675,9 +3685,9 @@ export default function HomeScreen() {
 
       <Modal visible={!!banNotice && banNotice.owner_id === currentUserId} transparent animationType="fade" onRequestClose={()=>{void dismissBanNotice();}}>
         <View style={styles.noticeOverlay}><View style={styles.noticePanel}>
-          <Text style={styles.noticeIcon}>!</Text><Text style={styles.noticeTitle}>{banNotice?.kind==="warning"?"Предупреждение от модератора":"Ограничение общения"}</Text>
+          <Text style={styles.noticeIcon}>!</Text><Text style={styles.noticeTitle}>{banNotice?.kind==="report-result"?"Результат вашей жалобы":banNotice?.kind==="warning"?"Предупреждение от модератора":"Ограничение общения"}</Text>
           <Text style={styles.noticeBody}>{banNotice?.reason}</Text>
-          {banNotice?.kind==="warning"?<Text style={styles.noticeBody}>Это предупреждение. Отправка сообщений и комментариев не ограничена этим решением.</Text>:<>
+          {banNotice?.kind==="report-result"?null:banNotice?.kind==="warning"?<Text style={styles.noticeBody}>Это предупреждение. Отправка сообщений и комментариев не ограничена этим решением.</Text>:<>
             <Text style={styles.noticeBody}>Модератор ограничил отправку сообщений и комментариев.</Text>
             <Text style={styles.noticeBody}>{banExpiryText(banNotice?.expires_at ?? null)}</Text>
             <Text style={styles.noticeBody}>{banNotice?.expires_at ? "После указанного срока возможность писать восстановится автоматически." : "Срок окончания блокировки не установлен."}</Text>

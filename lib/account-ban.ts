@@ -1,6 +1,6 @@
 export type BanUnit = "minutes" | "hours" | "days";
 export type AccountBan = { reason: string; expires_at: string | null; created_at: string };
-export type BanNotice = AccountBan & { id: string; owner_id: string; kind: "ban" | "warning" };
+export type BanNotice = AccountBan & { id: string; owner_id: string; kind: "ban" | "warning" | "report-result" };
 export type ModerationHistoryRecord = AccountBan & { id: string; participant: "reporter" | "reported"; username: string; kind: "ban" | "warning"; active: boolean; total_count: number };
 
 export function banDurationMinutes(value: string, unit: BanUnit, permanent: boolean): number | null {
