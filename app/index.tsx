@@ -1,4 +1,5 @@
 import {containsProhibitedLanguage} from "../lib/profanity";
+import {reportReasonError,reportSubmissionError} from "../lib/report-submission";
 import {belongsToConversation,groupChatThreads,type ChatMessage,type ChatThread} from "../lib/listing-chat";
 import {banDurationMinutes,banExpiryText,type BanUnit,type AccountBan,type BanNotice,type ModerationHistoryRecord} from "../lib/account-ban";
 import {FilterSection} from "../components/FilterSection";
@@ -566,6 +567,7 @@ export default function HomeScreen() {
   const [reportingMessage, setReportingMessage] = useState<ChatMessage | null>(null);
   const [reportReason, setReportReason] = useState("");
   const [reportMessage, setReportMessage] = useState("");
+  const [reportSending, setReportSending] = useState(false);
   const [moderationReport, setModerationReport] = useState<MessageReport | null>(null);
   const [moderationChatMessages, setModerationChatMessages] = useState<ChatMessage[]>([]);
   const [moderationChatMessage, setModerationChatMessage] = useState("");
@@ -1222,23 +1224,25 @@ export default function HomeScreen() {
     void Promise.all([loadChatThreads(), loadDiscussionThreads()]);
   }
 
-  async function sendReport() {
-    if (!supabase || !reportingMessage || !reportReason.trim()) return setReportMessage("Кратко укажи причину жалобы.");
-    const { data, error } = await supabase.from("listing_message_reports").insert({ message_id: reportingMessage.id, reason: reportReason.trim() }).select("id").single();
-    if (error) return setReportMessage("Не удалось отправить жалобу. Проверь, что в базе выполнен chat.sql.");
-    setReportReason("");
-    setReportMessage("Жалоба отправлена на проверку.");
-    if (data?.id) void sendServerPush("report", data.id);
+  async function submitContentReport(targetId: string | undefined, kind: "message" | "comment") {
+    if (reportSending) return;
+    const validationError = reportReasonError(reportReason);
+    if (validationError) return setReportMessage(validationError);
+    if (!supabase || !currentUserId) return setReportMessage("Для отправки жалобы войди в аккаунт.");
+    if (!targetId) return setReportMessage("Открой сообщение или комментарий, на который хочешь пожаловаться.");
+    setReportSending(true); setReportMessage("");
+    try {
+      const { data, error } = await supabase.from(kind === "message" ? "listing_message_reports" : "listing_public_comment_reports")
+        .insert({ [kind === "message" ? "message_id" : "comment_id"]: targetId, reason: reportReason.trim() }).select("id").single();
+      if (error) return setReportMessage(reportSubmissionError(error, kind));
+      setReportReason(""); setReportMessage("Жалоба отправлена на проверку.");
+      if (data?.id) void sendServerPush(kind === "message" ? "report" : "comment-report", data.id);
+    } catch { setReportMessage("Нет связи. Текст жалобы сохранён — попробуй ещё раз."); }
+    finally { setReportSending(false); }
   }
 
-  async function sendPublicCommentReport() {
-    if (!supabase || !reportingPublicComment || !reportReason.trim()) return setReportMessage("Кратко укажи причину жалобы.");
-    const { data, error } = await supabase.from("listing_public_comment_reports").insert({ comment_id: reportingPublicComment.id, reason: reportReason.trim() }).select("id").single();
-    if (error) return setReportMessage("Не удалось отправить жалобу. Проверь обновление базы комментариев.");
-    setReportReason("");
-    setReportMessage("Жалоба отправлена администратору на проверку.");
-    if (data?.id) void sendServerPush("comment-report", data.id);
-  }
+  async function sendReport() { await submitContentReport(reportingMessage?.id, "message"); }
+  async function sendPublicCommentReport() { await submitContentReport(reportingPublicComment?.id, "comment"); }
 
   async function rateSeller(score: number) {
     if (!supabase || !selectedPlate?.ownerId || !currentUserId) return setRatingMessage("Сначала зарегистрируйся и напиши продавцу.");
@@ -3570,9 +3574,10 @@ export default function HomeScreen() {
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportPanel}>
             <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Пожаловаться</Text><Pressable onPress={() => setReportingMessage(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
             <Text style={styles.dialogsHint}>Ты жалуешься на пользователя, написавшего это сообщение. Модератор увидит причину и чат по этому объявлению. Не указывай личные данные.</Text>
-            <TextInput value={reportReason} onChangeText={setReportReason} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline />
+            <Text style={styles.dialogsHint}>Причина жалобы: от 3 до 500 символов.</Text>
+            <TextInput accessibilityLabel="Причина жалобы" value={reportReason} onChangeText={value=>{setReportReason(value);setReportMessage("");}} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline maxLength={500} editable={!reportSending} />
             {!!reportMessage && <Text style={styles.authMessage}>{reportMessage}</Text>}
-            <Pressable onPress={() => { void sendReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>Пожаловаться на пользователя</Text></Pressable>
+            <Pressable disabled={reportSending} onPress={() => { void sendReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>{reportSending?"Отправляем…":"Пожаловаться на пользователя"}</Text></Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -3696,9 +3701,10 @@ export default function HomeScreen() {
           <Pressable onPress={(event) => event.stopPropagation()} style={styles.reportPanel}>
             <View style={styles.dialogsHeader}><Text style={styles.dialogsTitle}>Жалоба на комментарий</Text><Pressable onPress={() => setReportingPublicComment(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable></View>
             <Text style={styles.dialogsHint}>Администратор увидит жалобу и решит, ограничивать ли пользователя.</Text>
-            <TextInput value={reportReason} onChangeText={setReportReason} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline />
+            <Text style={styles.dialogsHint}>Причина жалобы: от 3 до 500 символов.</Text>
+            <TextInput accessibilityLabel="Причина жалобы" value={reportReason} onChangeText={value=>{setReportReason(value);setReportMessage("");}} placeholder="Например: спам или оскорбление" placeholderTextColor="#98A2B3" style={styles.reportInput} multiline maxLength={500} editable={!reportSending} />
             {!!reportMessage && <Text style={styles.authMessage}>{reportMessage}</Text>}
-            <Pressable onPress={() => { void sendPublicCommentReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>Отправить жалобу</Text></Pressable>
+            <Pressable disabled={reportSending} onPress={() => { void sendPublicCommentReport(); }} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>{reportSending?"Отправляем…":"Отправить жалобу"}</Text></Pressable>
           </Pressable>
         </Pressable>
       </Modal>
