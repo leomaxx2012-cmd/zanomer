@@ -3965,8 +3965,8 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   browseSidebarDesktop: { width: 310, flexShrink: 0 },
   browseResults: { minWidth: 0, width: "100%" },
   searchAreaSidebar: { padding: 18, borderRadius: 20 },
-  offerGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "stretch", gap: 16 },
-  listingGridItem: { width: "48.5%", alignSelf: "stretch" },
+  offerGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", alignItems: "flex-start", gap: 16 },
+  listingGridItem: { width: "48.5%", alignSelf: "flex-start" },
   resultsHeading: { color: theme.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
   resultsCaption: { color: theme.muted, fontSize: 11, marginTop: 4 },
 
