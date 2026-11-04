@@ -1,4 +1,5 @@
 import {belongsToConversation,groupChatThreads,type ChatMessage,type ChatThread} from "../lib/listing-chat";
+import {banDurationMinutes,banExpiryText,type BanUnit,type AccountBan,type BanNotice} from "../lib/account-ban";
 import {FilterSection} from "../components/FilterSection";
 import {HeaderIcon,headerIconColors} from "../components/HeaderIcon";
 import {createBackdropDrag,isBackdropControlTouch, type BackdropTouch} from "../lib/backdrop-touch";
@@ -516,6 +517,14 @@ export default function HomeScreen() {
   const [moderationCommentReports, setModerationCommentReports] = useState<CommentReport[]>([]);
   const [moderationReportsError, setModerationReportsError] = useState("");
   const [moderationActionId, setModerationActionId] = useState<string | null>(null);
+  const [banTarget, setBanTarget] = useState<{ id: string; kind: "message" | "comment" } | null>(null);
+  const [banDuration, setBanDuration] = useState("1");
+  const [banUnit, setBanUnit] = useState<BanUnit>("days");
+  const [banPermanent, setBanPermanent] = useState(false);
+  const [banReason, setBanReason] = useState("Нарушение правил общения");
+  const [banFormError, setBanFormError] = useState("");
+  const [accountBan, setAccountBan] = useState<AccountBan | null>(null);
+  const [banNotice, setBanNotice] = useState<BanNotice | null>(null);
   const [siteTraffic, setSiteTraffic] = useState<SiteTrafficAnalytics | null>(null);
   const [isModerator, setIsModerator] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
@@ -943,15 +952,26 @@ export default function HomeScreen() {
     await loadManagement(data.user?.id, profileName);
   }
 
-  async function banReportedUser(report: MessageReport) {
-    if (!supabase || moderationActionId) return;
-    setModerationActionId(report.id);
-    const { error } = await supabase.rpc("ban_user_from_message_report", { report: report.id });
-    setModerationActionId(null);
-    if (error) return setModerationChatMessage("Не удалось заблокировать пользователя. Проверь права модератора.");
-    setModerationChatMessage("Пользователь заблокирован: он больше не сможет писать в чатах и комментариях.");
-    const { data } = await supabase.auth.getUser();
-    await loadManagement(data.user?.id, profileName);
+  function openBanForm(id: string, kind: "message" | "comment") {
+    setBanTarget({ id, kind }); setBanDuration("1"); setBanUnit("days"); setBanPermanent(false);
+    setBanReason("Нарушение правил общения"); setBanFormError("");
+  }
+
+  async function submitBan() {
+    if (!supabase || !banTarget || moderationActionId) return;
+    let minutes: number | null;
+    try { minutes = banDurationMinutes(banDuration, banUnit, banPermanent); }
+    catch (error) { setBanFormError((error as Error).message); return; }
+    if (banReason.trim().length < 3 || banReason.trim().length > 500) { setBanFormError("Укажи причину от 3 до 500 символов — её увидит пользователь."); return; }
+    setModerationActionId(banTarget.id); setBanFormError("");
+    try {
+      const { data, error } = await supabase.rpc("ban_user_from_report", { report: banTarget.id, report_kind: banTarget.kind, duration_minutes: minutes, ban_reason: banReason.trim() });
+      if (error) { setBanFormError("Не удалось заблокировать пользователя. Жалоба могла быть уже обработана — обнови список."); return; }
+      const result = data?.[0] as { expires_at: string | null } | undefined;
+      setAuthMessage(`Пользователь заблокирован. ${banExpiryText(result?.expires_at ?? null)}. Сообщение сохранено в его аккаунте.`);
+      setBanTarget(null); setModerationReport(null);
+      await loadManagement(currentUserId, profileName);
+    } finally { setModerationActionId(null); }
   }
 
   async function loadChatPartnerNames(ids:string[]) {
@@ -1841,6 +1861,38 @@ export default function HomeScreen() {
   }
 
   useEffect(() => {
+    setAccountBan(null); setBanNotice(null);
+    if (!supabase || !currentUserId) return;
+    const client = supabase;
+    let active = true, loading = false;
+    async function refreshBan() {
+      if (loading) return;
+      loading = true;
+      try {
+        const [status, notice] = await Promise.all([
+          client.rpc("get_my_ban_status"),
+          client.from("account_ban_notices").select("id, owner_id, reason, expires_at, created_at").eq("owner_id", currentUserId).is("read_at", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        if (!active) return;
+        if (!status.error) setAccountBan(status.data?.[0] ?? null);
+        if (!notice.error) setBanNotice(notice.data ?? null);
+      } finally { loading = false; }
+    }
+    void refreshBan();
+    const timer = setInterval(() => void refreshBan(), 30000);
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") void refreshBan(); });
+    return () => { active = false; clearInterval(timer); subscription.remove(); };
+  }, [currentUserId]);
+
+  async function dismissBanNotice() {
+    if (!supabase || !banNotice || banNotice.owner_id !== currentUserId) return;
+    const notice = banNotice;
+    const { error } = await supabase.from("account_ban_notices").update({ read_at: new Date().toISOString() })
+      .eq("owner_id", currentUserId).lte("created_at", notice.created_at).is("read_at", null);
+    if (!error) setBanNotice(current => current?.id === notice.id ? null : current);
+  }
+
+  useEffect(() => {
     if (!currentUserId || inAppNotice) return;
     void loadUnreadAppNotice(currentUserId);
     const timer = setInterval(() => void loadUnreadAppNotice(currentUserId), 30000);
@@ -2715,6 +2767,7 @@ export default function HomeScreen() {
           </View>
           {isSignedIn && !(authMode === "signup" && authStep === 3) ? (
             <>
+              {!!accountBan && <View style={styles.moderationNotice}><Text style={styles.moderationNoticeText}>Отправка сообщений и комментариев заблокирована. {banExpiryText(accountBan.expires_at)}. Причина: {accountBan.reason}</Text></View>}
               {Platform.OS !== "web" && <Text selectable style={styles.managementHint}>Версия {Constants.expoConfig?.version ?? Updates.runtimeVersion} · обновление {Updates.updateId?.slice(0, 8) ?? "встроенное"}</Text>}
               <Text style={styles.authHint}>Ты уже вошёл. Пароль нужен только если хочешь изменить его для будущих входов.</Text>
               <Text style={styles.managementTitle}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "Подписка Плюс не активна"}</Text>
@@ -2805,7 +2858,7 @@ export default function HomeScreen() {
                     <View style={styles.reviewActions}>
                       <Pressable disabled={!!moderationActionId} onPress={() => { void reviewCommentReport(report, "approved"); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable>
                       <Pressable disabled={!!moderationActionId} onPress={() => { void reviewCommentReport(report, "rejected"); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
-                      <Pressable disabled={!!moderationActionId} onPress={() => { void reviewCommentReport(report, "approved", true); }} style={styles.banButton}><Text style={styles.banButtonText}>Заблокировать автора</Text></Pressable>
+                      <Pressable disabled={!!moderationActionId} onPress={() => openBanForm(report.id, "comment")} style={styles.banButton}><Text style={styles.banButtonText}>Заблокировать автора</Text></Pressable>
                     </View>
                   </View>)}
                 </>}
@@ -3504,10 +3557,46 @@ export default function HomeScreen() {
             <View style={styles.reviewActions}>
               <Pressable disabled={!!moderationActionId} onPress={async () => { if (moderationReport && await reviewMessageReport(moderationReport, "approved")) setModerationReport(null); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять жалобу</Text></Pressable>
               <Pressable disabled={!!moderationActionId} onPress={async () => { if (moderationReport && await reviewMessageReport(moderationReport, "rejected")) setModerationReport(null); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
-              <Pressable disabled={!!moderationActionId} onPress={() => { if (moderationReport) void banReportedUser(moderationReport); }} style={styles.banButton}><Text style={styles.banButtonText}>Забанить пользователя</Text></Pressable>
+              <Pressable disabled={!!moderationActionId} onPress={() => { if (moderationReport) openBanForm(moderationReport.id, "message"); }} style={styles.banButton}><Text style={styles.banButtonText}>Заблокировать пользователя</Text></Pressable>
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      <Modal visible={!!banTarget} transparent animationType="fade" onRequestClose={() => { if (!moderationActionId) setBanTarget(null); }}>
+        <View style={[styles.detailsOverlay, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }]}>
+          <ScrollView style={{width:"100%",maxWidth:440,maxHeight:"90%",flexGrow:0}} keyboardShouldPersistTaps="handled">
+            <View style={[styles.reportPanel,{maxWidth:440}]}>
+              <Text style={styles.dialogsTitle}>Блокировка пользователя</Text>
+              <Text style={styles.dialogsHint}>Выбери срок и причину. Пользователь увидит сообщение в аккаунте. После окончания срока он снова сможет писать.</Text>
+              <View style={styles.reviewActions}>
+                {[{label:"1 час",value:"1",unit:"hours"},{label:"1 день",value:"1",unit:"days"},{label:"7 дней",value:"7",unit:"days"},{label:"30 дней",value:"30",unit:"days"}].map(option=><Pressable key={option.label} onPress={()=>{setBanDuration(option.value);setBanUnit(option.unit as BanUnit);setBanPermanent(false);}} style={styles.viewChatButton}><Text style={styles.viewChatButtonText}>{option.label}</Text></Pressable>)}
+              </View>
+              <Text style={styles.dialogsHint}>Свой срок</Text>
+              <TextInput accessibilityLabel="Количество времени блокировки" value={banDuration} onChangeText={value=>{setBanDuration(value);setBanPermanent(false);}} keyboardType="number-pad" maxLength={8} style={styles.reportInput} editable={!moderationActionId} />
+              <View style={styles.reviewActions}>
+                {([{unit:"minutes",label:"Минуты"},{unit:"hours",label:"Часы"},{unit:"days",label:"Дни"}] as const).map(option=><Pressable key={option.unit} onPress={()=>{setBanUnit(option.unit);setBanPermanent(false);}} style={!banPermanent&&banUnit===option.unit?styles.approveButton:styles.viewChatButton}><Text style={!banPermanent&&banUnit===option.unit?styles.approveButtonText:styles.viewChatButtonText}>{option.label}</Text></Pressable>)}
+                <Pressable onPress={()=>setBanPermanent(true)} style={banPermanent?styles.approveButton:styles.viewChatButton}><Text style={banPermanent?styles.approveButtonText:styles.viewChatButtonText}>Бессрочно</Text></Pressable>
+              </View>
+              <Text style={styles.dialogsHint}>Причина, которую увидит пользователь</Text>
+              <TextInput accessibilityLabel="Причина блокировки" value={banReason} onChangeText={setBanReason} maxLength={500} style={styles.reportInput} multiline editable={!moderationActionId} />
+              {!!banFormError&&<Text style={styles.authMessage}>{banFormError}</Text>}
+              <Pressable disabled={!!moderationActionId} onPress={()=>{void submitBan();}} style={styles.reportSubmit}><Text style={styles.reportSubmitText}>{moderationActionId?"Сохраняем…":banPermanent?"Заблокировать бессрочно":"Заблокировать на выбранный срок"}</Text></Pressable>
+              <Pressable disabled={!!moderationActionId} onPress={()=>setBanTarget(null)} style={styles.noticeCloseButton}><Text style={styles.noticeCloseText}>Отмена</Text></Pressable>
+            </View>
+          </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal visible={!!banNotice && banNotice.owner_id === currentUserId} transparent animationType="fade" onRequestClose={()=>{void dismissBanNotice();}}>
+        <View style={styles.noticeOverlay}><View style={styles.noticePanel}>
+          <Text style={styles.noticeIcon}>!</Text><Text style={styles.noticeTitle}>Ограничение общения</Text>
+          <Text style={styles.noticeBody}>Модератор ограничил отправку сообщений и комментариев.</Text>
+          <Text style={styles.noticeBody}>{banExpiryText(banNotice?.expires_at ?? null)}</Text>
+          <Text style={styles.noticeBody}>Причина: {banNotice?.reason}</Text>
+          <Text style={styles.noticeBody}>{banNotice?.expires_at ? "После указанного срока возможность писать восстановится автоматически." : "Срок окончания блокировки не установлен."}</Text>
+          <Pressable onPress={()=>{void dismissBanNotice();}} style={styles.noticeOpenButton}><Text style={styles.noticeOpenText}>Понятно</Text></Pressable>
+        </View></View>
       </Modal>
 
       <Modal visible={!!commentAction} transparent animationType="fade" onRequestClose={() => setCommentAction(null)}>
