@@ -3266,7 +3266,11 @@ export default function HomeScreen() {
       <View testID="catalog-cards" onLayout={event => { const width = event.nativeEvent.layout.width; setOfferListWidth(current => current === width ? current : width); }} style={[styles.list, styles.compactOfferList, compactLayout && styles.compactOfferListMobile, gridCards && styles.offerGrid]}>
         {renderedPlates.map((item, index) => {
           const sellerName = listingSellerName(item,currentUserId,profileName);
-          const expanded = !compactLayout || expandedListingIds.includes(item.id);
+          const expanded = expandedListingIds.includes(item.id);
+          const hasOwnerChat = item.isSiteListing && !!currentUserId && item.ownerId === currentUserId;
+          const price = <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.offerPrice, wideListingCards && styles.offerPriceDesktop, item.price.length > 11 && styles.offerPriceLong, styles.offerPriceInRow]}>{item.price}</Text>;
+          const ownerChat = hasOwnerChat ? <Pressable accessibilityRole="button" accessibilityLabel={`Личный чат по объявлению ${item.value}`} onPress={() => void openListingChats(item)} style={[styles.cardAction, styles.offerOwnerChat]}><Text numberOfLines={1} style={styles.cardActionText}>Личный чат</Text></Pressable> : null;
+          const expandButton = <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Свернуть" : "Раскрыть"} объявление ${item.value}, ${item.region}`} accessibilityState={{ expanded }} onPress={() => setExpandedListingIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])} hitSlop={4} style={[styles.offerExpand, wideListingCards && styles.offerExpandDesktop]}><Text allowFontScaling={false} style={styles.offerChevron}>{expanded ? "⌃" : "⌄"}</Text></Pressable>;
           const isLiked = likedListingIds.includes(item.id);
           const seriesGroup = seriesGroupByListingId.get(item.id);
           const previousGroup = index > 0 ? seriesGroupByListingId.get(renderedPlates[index - 1].id) : undefined;
@@ -3279,19 +3283,17 @@ export default function HomeScreen() {
               </Pressable>}
             <View style={[styles.offerShell, wideListingCards && styles.offerShellDesktop]}>
               <View style={[styles.offerRow, compactLayout && styles.offerRowCompact, wideListingCards && styles.offerRowDesktop]}>
-                {compactLayout && <Pressable accessibilityRole="button" accessibilityLabel={`${expanded ? "Свернуть" : "Раскрыть"} объявление ${item.value}, ${item.region}`} accessibilityState={{ expanded }} onPress={() => setExpandedListingIds(current => current.includes(item.id) ? current.filter(id => id !== item.id) : [...current, item.id])} hitSlop={4} style={styles.offerExpand}>
-                  <Text allowFontScaling={false} style={styles.offerChevron}>{expanded ? "⌃" : "⌄"}</Text>
-                </Pressable>}
+                {!wideListingCards && expandButton}
                 <Pressable accessibilityRole="button" accessibilityLabel={`Открыть объявление ${item.value}`} onPress={() => setSelectedPlate(item)} style={[styles.offerPlate, wideListingCards && styles.offerPlateDesktop, item.vehicle === "motorcycle" && styles.offerPlateMotorcycle, compactLayout && { flex: 0, flexBasis: "auto", flexShrink: 0, width: item.vehicle === "motorcycle" ? Math.min(compactOfferPlateWidth, 160) : compactOfferPlateWidth, height: item.vehicle === "motorcycle" ? Math.min(compactOfferPlateWidth, 160) * 3 / 4 : compactOfferPlateWidth * 112 / 520, minHeight: 0 }]}>
                   <PlateFace leftLetter={item.leftLetter} digits={item.digits} rightLetters={item.rightLetters} region={item.region.split(" · ")[1] ?? ""} vehicle={item.vehicle} />
                 </Pressable>
                 <View style={[styles.offerSummary, !compactLayout && styles.offerSummaryWide, wideListingCards && styles.offerSummaryDesktop, compactLayout && styles.offerSummaryCompact]}>
-                  <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} style={[styles.offerPrice, wideListingCards && styles.offerPriceDesktop, item.price.length > 11 && styles.offerPriceLong, compactLayout && styles.offerPriceCompact]}>{item.price}</Text>
+                  {(wideListingCards || !hasOwnerChat) && <View style={styles.offerPriceRow}>{wideListingCards && expandButton}{price}{wideListingCards && ownerChat}</View>}
                   {!wideListingCards && <Text allowFontScaling={false} numberOfLines={1} style={styles.offerDate}>{formatListingDate(item.publishedAt ?? item.createdAt).split(",")[0]}</Text>}
                 </View>
               </View>
-              {item.isSiteListing&&!!currentUserId&&item.ownerId===currentUserId&&<Pressable accessibilityRole="button" accessibilityLabel={`Чаты по объявлению ${item.value}`} onPress={()=>void openListingChats(item)} style={[styles.cardAction,{alignSelf:"flex-start",margin:8}]}><Text style={styles.cardActionText}>Личные чаты</Text></Pressable>}
-              {compactLayout&&!expanded&&item.isSiteListing&&<Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${sellerName}`} onPress={()=>setSellerProfile(sellerName)} style={styles.cardFooter}><Text numberOfLines={1} style={[styles.seller,styles.sellerLink]}>Продавец: {sellerName}</Text></Pressable>}
+              {!wideListingCards && hasOwnerChat && <View style={[styles.offerPriceRow, styles.offerOwnerPriceRow]}>{price}{ownerChat}</View>}
+              {!expanded&&item.isSiteListing&&<Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${sellerName}`} onPress={()=>setSellerProfile(sellerName)} style={[styles.cardFooter, styles.offerCollapsedSeller]}><Text numberOfLines={1} style={[styles.seller,styles.sellerLink]}>Продавец: {sellerName}</Text></Pressable>}
               {expanded && <View style={[styles.offerDetails, wideListingCards && styles.offerDetailsDesktop]}>
                   <View style={[styles.cardInfo, narrowCards && styles.cardInfoCompact, styles.offerInfo]}>
                   <View style={styles.cardTopRow}>
@@ -3304,7 +3306,7 @@ export default function HomeScreen() {
                   <View style={styles.cardBadgesSpread}>
                     {item.saleDetails?.negotiable&&<Text style={styles.sellerCategory}>Торг</Text>}{item.saleDetails?.storage==="storage"&&<Text style={styles.sellerCategory}>На хранении</Text>}
 
-                    {item.isSiteListing ? <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление пользователя сайта</Text></View> : !!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
+                    {!item.isSiteListing && (!!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>)}
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
                   </View>
                   <View style={styles.cardButtonsSpread}>
@@ -3342,6 +3344,11 @@ export default function HomeScreen() {
       </View>
       <View testID="site-footer" style={styles.siteFooter} accessibilityRole="summary">
         <Text style={[styles.siteFooterTitle,{color:theme.text}]}>ЗаНомером — поиск и размещение объявлений</Text>
+        <View style={styles.siteFooterLinks}>
+          <Text style={[styles.siteFooterText,{color:theme.text}]}>Наши проекты:</Text>
+          <Link href="https://pubmatch.vercel.app/" target="_blank" style={[styles.siteFooterLink,{color:theme.text}]}>PubMatch — где смотреть футбол ↗</Link>
+          <Link href="https://folio-space-ru.vercel.app/" target="_blank" style={[styles.siteFooterLink,{color:theme.text}]}>Фолио — создать портфолио ↗</Link>
+        </View>
         <View style={styles.siteFooterLinks}>
           {regionalSearchLinks.map(item =>
             Platform.OS === "web" ? <Link key={item.key} href={regionLink(item.title) as "/"} style={[styles.siteFooterLink,{color:theme.text}]}>Номера: {item.title}</Link> : <Pressable key={item.key} accessibilityRole="link" onPress={() => openCollection({region:item.title,regionCode:""})}><Text style={styles.siteFooterLink}>Номера: {item.title}</Text></Pressable>
@@ -4332,6 +4339,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   offerRow: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 12, paddingRight: 8, minHeight: 82 },
   offerRowDesktop: { width: "100%", flexDirection: "column", alignItems: "stretch", gap: 15, padding: 18 },
   offerExpand: { width: 28, flexShrink: 0, minHeight: 54, alignItems: "center", justifyContent: "center" },
+  offerExpandDesktop: { minHeight: 36 },
   offerChevron: { color: theme.muted, fontSize: 25, lineHeight: 30 },
   offerPlate: { flex: 1, minWidth: 0, maxWidth: 520, aspectRatio: 520 / 112, minHeight: 34, borderWidth: 0, borderColor: theme.border, borderRadius: 0, backgroundColor: "transparent", overflow: "hidden" },
   offerPlateMotorcycle: { aspectRatio: 4 / 3, maxWidth: 160 },
@@ -4341,9 +4349,14 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   offerSummaryDesktop: { width: "100%", marginLeft: 0, alignItems: "flex-start" },
   offerSummaryCompact: { flexShrink: 0, marginLeft: 0, minWidth: 0 },
   offerPrice: { color: theme.text, fontSize: 17, fontWeight: "800", textAlign: "right" },
-  offerPriceDesktop: { fontSize: 25, letterSpacing: -0.5 },
+  offerPriceDesktop: { fontSize: 25, letterSpacing: -0.5, textAlign: "left" },
   offerPriceLong: { fontSize: 14 },
   offerPriceCompact: { width: "100%", lineHeight: 22 },
+  offerPriceRow: { width: "100%", minWidth: 0, flexDirection: "row", alignItems: "center", gap: 8 },
+  offerPriceInRow: { flex: 1, minWidth: 0 },
+  offerOwnerChat: { flexShrink: 0, paddingHorizontal: 9, paddingVertical: 8 },
+  offerOwnerPriceRow: { paddingHorizontal: 12, paddingBottom: 8 },
+  offerCollapsedSeller: { marginTop: 0, paddingHorizontal: 12 },
   offerDate: { color: theme.muted, fontSize: 10, lineHeight: 15, textAlign: "right" },
   offerDetails: { paddingHorizontal: 12, paddingBottom: 10, borderTopColor: theme.border, borderTopWidth: 1 },
   offerDetailsDesktop: { minWidth: 0, width: "100%", borderTopWidth: 1, borderTopColor: theme.border, borderLeftWidth: 0, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 8 },
