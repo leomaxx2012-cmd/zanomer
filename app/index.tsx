@@ -96,6 +96,7 @@ type PricePoint = {
 type PublicComment = { id: string; listing_id: string; author_id: string; author_name: string; body: string; created_at: string };
 type DiscussionThread = { listingId: string; lastComment: PublicComment };
 type MessageReport = { id: string; reason: string; created_at: string; reported_user_id?: string; message?: { body?: string; sender_id?: string; listing_id?: string } | null };
+type CommentReport = { id: string; reason: string; created_at: string; reported_user_id: string; body: string };
 type SiteTrafficAnalytics = { total_visits: number; unique_today: number; visits_today: number; unique_week: number };
 type AppNotification = { id: string; kind: string; listing_id: string; title: string; body: string; created_at: string };
 
@@ -512,6 +513,9 @@ export default function HomeScreen() {
   const [myListings, setMyListings] = useState<Plate[]>([]);
   const [moderationListings, setModerationListings] = useState<Plate[]>([]);
   const [moderationReports, setModerationReports] = useState<MessageReport[]>([]);
+  const [moderationCommentReports, setModerationCommentReports] = useState<CommentReport[]>([]);
+  const [moderationReportsError, setModerationReportsError] = useState("");
+  const [moderationActionId, setModerationActionId] = useState<string | null>(null);
   const [siteTraffic, setSiteTraffic] = useState<SiteTrafficAnalytics | null>(null);
   const [isModerator, setIsModerator] = useState(false);
   const [managementOpen, setManagementOpen] = useState(false);
@@ -823,7 +827,12 @@ export default function HomeScreen() {
     const { data: moderator } = await client.from("auto_moderators").select("user_id").eq("user_id", userId).maybeSingle();
     const canModerate = Boolean(moderator);
     setIsModerator(canModerate);
-    if (!canModerate) return;
+    if (!canModerate) {
+      setModerationReports([]);
+      setModerationCommentReports([]);
+      setModerationReportsError("");
+      return;
+    }
     const { data: traffic } = await client.rpc("get_site_analytics");
     if (traffic?.[0]) setSiteTraffic(traffic[0] as SiteTrafficAnalytics);
     const { data: pending } = await client
@@ -832,15 +841,12 @@ export default function HomeScreen() {
       .eq("status", "moderation")
       .order("created_at", { ascending: true });
     setModerationListings((pending ?? []).map((item) => mapManagedListing(item, "Пользователь ЗаНомером")));
-    const { data: reports } = await client
-      .from("listing_message_reports")
-      .select("id, reason, created_at, reported_user_id, listing_messages(body, sender_id, listing_id)")
-      .eq("status", "pending")
-      .order("created_at", { ascending: true });
-    setModerationReports((reports ?? []).map((report: any) => ({
-      ...report,
-      message: Array.isArray(report.listing_messages) ? report.listing_messages[0] : report.listing_messages,
-    })) as MessageReport[]);
+    const { data: reports, error: reportsError } = await client.rpc("get_pending_listing_reports");
+    setModerationReportsError(reportsError ? "Не удалось загрузить жалобы. Попробуй открыть раздел ещё раз." : "");
+    setModerationReports((reports ?? []).filter((report: any) => report.kind === "message").map((report: any) => ({
+      ...report, message: { body: report.body, sender_id: report.reported_user_id, listing_id: report.listing_id },
+    })));
+    setModerationCommentReports((reports ?? []).filter((report: any) => report.kind === "comment"));
   }
 
   async function archiveMyListing(listing: Plate) {
@@ -916,16 +922,32 @@ export default function HomeScreen() {
   }
 
   async function reviewMessageReport(report: MessageReport, status: "approved" | "rejected") {
-    if (!supabase) return;
+    if (!supabase || moderationActionId) return false;
+    setModerationActionId(report.id);
     const { error } = await supabase.rpc("review_listing_message_report", { report: report.id, new_status: status });
-    if (error) return setAuthMessage("Не удалось обработать жалобу. Проверь права модератора.");
+    setModerationActionId(null);
+    if (error) { setAuthMessage("Не удалось обработать жалобу. Попробуй ещё раз."); setModerationChatMessage("Не удалось обработать жалобу. Попробуй ещё раз."); return false; }
+    const { data } = await supabase.auth.getUser();
+    await loadManagement(data.user?.id, profileName);
+    return true;
+  }
+
+  async function reviewCommentReport(report: CommentReport, status: "approved" | "rejected", banAuthor = false) {
+    if (!supabase || moderationActionId) return;
+    setModerationActionId(report.id);
+    const { error } = await supabase.rpc("review_listing_public_comment_report", { report: report.id, new_status: status, ban_author: banAuthor });
+    setModerationActionId(null);
+    if (error) return setAuthMessage("Не удалось обработать жалобу на комментарий. Попробуй ещё раз.");
+    setAuthMessage(banAuthor ? "Жалоба принята. Пользователь больше не сможет писать в чатах и комментариях." : status === "approved" ? "Жалоба на комментарий принята." : "Жалоба на комментарий отклонена.");
     const { data } = await supabase.auth.getUser();
     await loadManagement(data.user?.id, profileName);
   }
 
   async function banReportedUser(report: MessageReport) {
-    if (!supabase) return;
+    if (!supabase || moderationActionId) return;
+    setModerationActionId(report.id);
     const { error } = await supabase.rpc("ban_user_from_message_report", { report: report.id });
+    setModerationActionId(null);
     if (error) return setModerationChatMessage("Не удалось заблокировать пользователя. Проверь права модератора.");
     setModerationChatMessage("Пользователь заблокирован: он больше не сможет писать в чатах и комментариях.");
     const { data } = await supabase.auth.getUser();
@@ -1189,7 +1211,7 @@ export default function HomeScreen() {
     try{
       const {data,error}=await supabase.from("listing_messages").insert({listing_id:listingId,recipient_id:recipientId,body:chatDraft.trim()}).select("id,listing_id,sender_id,recipient_id,body,created_at").single();
       if(request!==conversationRequest.current){if(data?.id)void sendServerPush("message",data.id);void loadChatThreads();return;}
-      if(error){setChatMessage(error.code==="23503"?"Объявление удалено, отправить сообщение нельзя.":"Не удалось отправить сообщение. Текст сохранён — попробуй ещё раз.");return;}
+      if(error){setChatMessage(error.message.includes("Вы заблокированы")?"Вы заблокированы и не можете отправлять сообщения и комментарии.":error.code==="23503"?"Объявление удалено, отправить сообщение нельзя.":"Не удалось отправить сообщение. Текст сохранён — попробуй ещё раз.");return;}
       setChatDraft("");
       const sent=data as ChatMessage;
       setChatMessages(previous=>previous.some(item=>item.id===sent.id)?previous:[...previous,sent]);
@@ -1206,7 +1228,7 @@ export default function HomeScreen() {
     setModerationChatMessage("");
     const { data, error } = await supabase.rpc("get_reported_listing_chat", { report: report.id });
     if (error) {
-      setModerationChatMessage("Не удалось открыть чат. Выполни обновлённый файл chat.sql в Supabase.");
+      setModerationChatMessage("Не удалось открыть переписку по жалобе. Попробуй ещё раз.");
       return;
     }
     setModerationChatMessages((data ?? []) as ChatMessage[]);
@@ -1337,7 +1359,7 @@ export default function HomeScreen() {
       .select("id, listing_id, author_id, author_name, body, created_at")
       .single();
     if (error) {
-      setPublicCommentMessage("Комментарии подключатся после запуска listing-social.sql в Supabase.");
+      setPublicCommentMessage(error.message.includes("Вы заблокированы") ? "Вы заблокированы и не можете отправлять сообщения и комментарии." : "Не удалось отправить комментарий. Текст сохранён — попробуй ещё раз.");
       return;
     }
     setPublicComments((items) => [...items, data as PublicComment]);
@@ -2772,9 +2794,19 @@ export default function HomeScreen() {
                     <View><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementHint}>Нажми, чтобы проверить все данные и фото</Text></View>
                   </Pressable>)}
                   <Text style={styles.managementTitle}>Жалобы на сообщения</Text>
-                  {moderationReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationReports.map((report) => <View key={report.id} style={styles.managementCard}>
+                  {!!moderationReportsError && <Text style={styles.authMessage}>{moderationReportsError}</Text>}
+                  {!moderationReportsError && moderationReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationReports.map((report) => <View key={report.id} style={styles.managementCard}>
                     <View style={styles.reportReviewText}><Text style={styles.managementMeta}>Сообщение: {report.message?.body ?? "удалено"}</Text><Text style={styles.managementStatus}>Причина: {report.reason}</Text></View>
                     <View style={styles.reviewActions}><Pressable onPress={() => { void openReportedChat(report); }} style={styles.viewChatButton}><Text style={styles.viewChatButtonText}>Чат</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "approved")} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "rejected")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable></View>
+                  </View>)}
+                  <Text style={styles.managementTitle}>Жалобы на комментарии</Text>
+                  {!moderationReportsError && moderationCommentReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationCommentReports.map((report) => <View key={report.id} style={styles.managementCard}>
+                    <View style={styles.reportReviewText}><Text style={styles.managementMeta}>Комментарий: {report.body}</Text><Text style={styles.managementStatus}>Причина: {report.reason}</Text><Text style={styles.managementHint}>{formatListingDate(report.created_at)}</Text></View>
+                    <View style={styles.reviewActions}>
+                      <Pressable disabled={!!moderationActionId} onPress={() => { void reviewCommentReport(report, "approved"); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable>
+                      <Pressable disabled={!!moderationActionId} onPress={() => { void reviewCommentReport(report, "rejected"); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
+                      <Pressable disabled={!!moderationActionId} onPress={() => { void reviewCommentReport(report, "approved", true); }} style={styles.banButton}><Text style={styles.banButtonText}>Заблокировать автора</Text></Pressable>
+                    </View>
                   </View>)}
                 </>}
               </View>}
@@ -3464,15 +3496,15 @@ export default function HomeScreen() {
               <View style={styles.chatHeaderText}><Text style={styles.chatTitle}>Жалоба на пользователя</Text><Text style={styles.chatSubtitle}>Причина: {moderationReport?.reason}</Text></View>
               <Pressable onPress={() => setModerationReport(null)} style={styles.chatClose}><Text style={styles.chatCloseText}>×</Text></Pressable>
             </View>
-            <Text style={styles.moderationChatHint}>Полная переписка доступна только модератору для рассмотрения жалобы.</Text>
+            <Text style={styles.moderationChatHint}>Для рассмотрения жалобы показана только переписка двух её участников по этому объявлению.</Text>
             <ScrollView ref={chatScrollRef} onContentSizeChange={()=>chatScrollRef.current?.scrollToEnd({animated:false})} style={styles.chatScroll} contentContainerStyle={styles.chatMessages} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
               {moderationChatMessages.length === 0 ? <Text style={styles.dialogsEmpty}>Сообщения не найдены.</Text> : moderationChatMessages.map((message) => <View key={message.id} style={styles.moderationChatBubble}><Text style={styles.moderationChatAuthor}>{message.sender_id === moderationReport?.message?.sender_id ? "Пользователь, на которого пожаловались" : "Собеседник"}</Text><Text style={styles.chatBubbleText}>{message.body}</Text><Text style={styles.moderationChatDate}>{formatListingDate(message.created_at)}</Text></View>)}
             </ScrollView>
             {!!moderationChatMessage && <Text style={styles.authMessage}>{moderationChatMessage}</Text>}
             <View style={styles.reviewActions}>
-              <Pressable onPress={async () => { if (!moderationReport) return; await reviewMessageReport(moderationReport, "approved"); setModerationReport(null); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять жалобу</Text></Pressable>
-              <Pressable onPress={async () => { if (!moderationReport) return; await reviewMessageReport(moderationReport, "rejected"); setModerationReport(null); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
-              <Pressable onPress={() => { if (moderationReport) void banReportedUser(moderationReport); }} style={styles.banButton}><Text style={styles.banButtonText}>Забанить пользователя</Text></Pressable>
+              <Pressable disabled={!!moderationActionId} onPress={async () => { if (moderationReport && await reviewMessageReport(moderationReport, "approved")) setModerationReport(null); }} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять жалобу</Text></Pressable>
+              <Pressable disabled={!!moderationActionId} onPress={async () => { if (moderationReport && await reviewMessageReport(moderationReport, "rejected")) setModerationReport(null); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
+              <Pressable disabled={!!moderationActionId} onPress={() => { if (moderationReport) void banReportedUser(moderationReport); }} style={styles.banButton}><Text style={styles.banButtonText}>Забанить пользователя</Text></Pressable>
             </View>
           </Pressable>
         </Pressable>

@@ -136,16 +136,17 @@ where m.id = r.message_id
 
 create or replace function public.fill_listing_message_report_details()
 returns trigger language plpgsql security definer set search_path = public as $$
+declare target_recipient uuid;
 begin
-  select listing_id, sender_id into new.listing_id, new.reported_user_id
-  from public.listing_messages
-  where id = new.message_id;
-  if new.listing_id is null or new.reported_user_id is null then
-    raise exception 'Сообщение для жалобы не найдено';
+  select m.listing_id, m.sender_id, m.recipient_id
+  into new.listing_id, new.reported_user_id, target_recipient
+  from public.listing_messages m where m.id = new.message_id;
+  if new.listing_id is null or new.reported_user_id is null then raise exception 'Сообщение для жалобы не найдено'; end if;
+  if new.reporter_id is distinct from auth.uid() or target_recipient is distinct from auth.uid() then
+    raise exception 'Можно пожаловаться только на полученное сообщение' using errcode = '42501';
   end if;
-  if new.reported_user_id = auth.uid() then
-    raise exception 'Нельзя пожаловаться на самого себя';
-  end if;
+  if new.reported_user_id = auth.uid() then raise exception 'Нельзя пожаловаться на самого себя'; end if;
+  new.status := 'pending'; new.reviewed_by := null; new.reviewed_at := null;
   return new;
 end;
 $$;
@@ -221,23 +222,20 @@ grant execute on function public.ban_user_from_message_report(uuid) to authentic
 create or replace function public.get_reported_listing_chat(report uuid)
 returns table (id uuid, listing_id uuid, sender_id uuid, recipient_id uuid, body text, created_at timestamptz)
 language plpgsql security definer set search_path = public as $$
-declare
-  report_listing_id uuid;
+declare target public.listing_messages%rowtype;
 begin
-  if not exists (select 1 from public.auto_moderators where user_id = auth.uid()) then
-    raise exception 'Недостаточно прав модератора';
+  if not exists (select 1 from public.auto_moderators m where m.user_id = auth.uid()) then
+    raise exception 'Недостаточно прав модератора' using errcode = '42501';
   end if;
-  select r.listing_id into report_listing_id
-  from public.listing_message_reports r
-  where r.id = report;
-  if report_listing_id is null then
-    raise exception 'Жалоба не найдена';
-  end if;
-  return query
-  select m.id, m.listing_id, m.sender_id, m.recipient_id, m.body, m.created_at
-  from public.listing_messages m
-  where m.listing_id = report_listing_id
-  order by m.created_at asc;
+  select m.* into target from public.listing_message_reports r
+  join public.listing_messages m on m.id = r.message_id
+  where r.id = report and r.reporter_id = m.recipient_id and r.reporter_id <> m.sender_id;
+  if not found then raise exception 'Жалоба или её переписка не найдена'; end if;
+  return query select m.id, m.listing_id, m.sender_id, m.recipient_id, m.body, m.created_at
+  from public.listing_messages m where m.listing_id = target.listing_id and (
+    (m.sender_id = target.sender_id and m.recipient_id = target.recipient_id) or
+    (m.sender_id = target.recipient_id and m.recipient_id = target.sender_id)
+  ) order by m.created_at asc, m.id asc;
 end;
 $$;
 

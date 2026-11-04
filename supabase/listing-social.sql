@@ -49,16 +49,24 @@ create table if not exists public.listing_public_comment_reports (
   reason text not null check (char_length(trim(reason)) between 3 and 500),
   reported_user_id uuid references auth.users(id) on delete cascade,
   status text not null default 'pending' check (status in ('pending', 'approved', 'rejected')),
+  reviewed_by uuid references auth.users(id) on delete set null,
+  reviewed_at timestamptz,
   created_at timestamptz not null default now(),
   unique (comment_id, reporter_id)
 );
 
+alter table public.listing_public_comment_reports
+  add column if not exists reviewed_by uuid references auth.users(id) on delete set null,
+  add column if not exists reviewed_at timestamptz;
+
 create or replace function public.fill_public_comment_report_details()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  select author_id into new.reported_user_id from public.listing_public_comments where id = new.comment_id;
+  select c.author_id into new.reported_user_id from public.listing_public_comments c where c.id = new.comment_id;
   if new.reported_user_id is null then raise exception 'Комментарий не найден'; end if;
+  if new.reporter_id is distinct from auth.uid() then raise exception 'Недостаточно прав' using errcode = '42501'; end if;
   if new.reported_user_id = auth.uid() then raise exception 'Нельзя пожаловаться на себя'; end if;
+  new.status := 'pending'; new.reviewed_by := null; new.reviewed_at := null;
   return new;
 end;
 $$;
