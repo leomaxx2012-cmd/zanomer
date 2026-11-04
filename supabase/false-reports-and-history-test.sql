@@ -1,0 +1,61 @@
+begin;
+do $$
+declare
+  seller uuid:=gen_random_uuid(); buyer uuid:=gen_random_uuid(); other_user uuid:=gen_random_uuid(); moderator uuid:=gen_random_uuid();
+  listing uuid:=gen_random_uuid(); ids uuid[]:=array[gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()];
+  reports uuid[]:=array[gen_random_uuid(),gen_random_uuid(),gen_random_uuid(),gen_random_uuid()];
+  comment uuid:=gen_random_uuid(); comment_report uuid:=gen_random_uuid(); ends_at timestamptz;
+  denied boolean; i integer; amount integer; first_ids uuid[]; second_ids uuid[];
+begin
+  insert into auth.users(id) values(seller),(buyer),(other_user),(moderator);
+  insert into public.auto_moderators(user_id) values(moderator);
+  perform set_config('request.jwt.claim.sub',seller::text,true);
+  insert into public.auto_listings(id,owner_id,plate_left,plate_digits,plate_right,region,price_rub,status) values(listing,seller,'А','128','ВС','77',100000,'active');
+  for i in 1..4 loop
+    insert into public.listing_messages(id,listing_id,sender_id,recipient_id,body) values(ids[i],listing,seller,buyer,'Test seller message');
+  end loop;
+  insert into public.listing_public_comments(id,listing_id,author_id,author_name,body) values(comment,listing::text,seller,'Test seller','Test seller comment');
+  perform set_config('request.jwt.claim.sub',buyer::text,true);
+  for i in 1..4 loop
+    insert into public.listing_message_reports(id,message_id,reason) values(reports[i],ids[i],'Test complaint');
+  end loop;
+  insert into public.listing_public_comment_reports(id,comment_id,reason) values(comment_report,comment,'Test comment complaint');
+  execute 'set local role authenticated';
+  denied:=false;
+  begin perform public.moderate_report_participant(reports[1],'message','reporter','warning',null,'Test false report'); exception when insufficient_privilege then denied:=true; end;
+  if not denied then raise exception 'FAIL: non-moderator can punish reporter'; end if;
+  denied:=false;
+  begin perform public.get_report_participant_history(reports[1],'message',0); exception when insufficient_privilege then denied:=true; end;
+  if not denied then raise exception 'FAIL: participant can read moderation history'; end if;
+  perform set_config('request.jwt.claim.sub',moderator::text,true);
+  perform public.moderate_report_participant(reports[1],'message','reporter','warning',null,'Жалоба не соответствует переписке.');
+  select b.expires_at into ends_at from public.moderate_report_participant(reports[2],'message','reporter','ban',45,'Повторная ложная жалоба.') b;
+  if ends_at is distinct from now()+interval '45 minutes' then raise exception 'FAIL: false-report ban duration'; end if;
+  perform public.review_listing_message_report(reports[3],'rejected');
+  perform public.moderate_report_participant(reports[4],'message','reported','warning',null,'Соблюдайте правила общения.');
+  perform public.moderate_report_participant(comment_report,'comment','reporter','ban',720,'Ложная жалоба на комментарий.');
+  denied:=false;
+  begin perform public.moderate_report_participant(reports[1],'message','reporter','ban',5,'Duplicate decision'); exception when raise_exception then denied:=true; end;
+  if not denied then raise exception 'FAIL: report punished twice'; end if;
+  select count(*) into amount from public.get_report_participant_history(reports[4],'message',0) h where h.participant='reporter';
+  if amount<>3 then raise exception 'FAIL: reporter history incorrect; ordinary rejection must add nothing'; end if;
+  if not exists(select 1 from public.get_report_participant_history(reports[4],'message',0) h where h.participant='reported' and h.kind='warning' and h.reason='Соблюдайте правила общения.') then raise exception 'FAIL: reported user history missing'; end if;
+  select count(*) into amount from public.get_report_participant_history(comment_report,'comment',0) h where h.kind='ban' and h.active;
+  if amount<>1 then raise exception 'FAIL: previous and current bans not distinguished'; end if;
+  execute 'reset role';
+  if exists(select 1 from public.auto_banned_users b where b.user_id=seller) then raise exception 'FAIL: innocent reported author was banned'; end if;
+  if not exists(select 1 from public.account_warning_notices n where n.owner_id=buyer and n.reason='Ложная жалоба. Жалоба не соответствует переписке.') then raise exception 'FAIL: reporter warning description missing'; end if;
+  if not exists(select 1 from public.listing_message_reports r where r.id=reports[1] and r.status='rejected' and r.reviewed_by=moderator) then raise exception 'FAIL: false report not rejected'; end if;
+  insert into public.account_warning_notices(owner_id,reason) select buyer,'Test previous warning '||g from generate_series(1,25) g;
+  insert into public.account_warning_notices(owner_id,reason) values(other_user,'Private other history');
+  update public.account_warning_notices set read_at=now() where owner_id=buyer;
+  execute 'set local role authenticated';
+  select array_agg(h.id) into first_ids from public.get_report_participant_history(reports[4],'message',0) h where h.participant='reporter';
+  select array_agg(h.id) into second_ids from public.get_report_participant_history(reports[4],'message',1) h where h.participant='reporter';
+  if array_length(first_ids,1)<>20 or array_length(second_ids,1)<>8 or first_ids && second_ids then raise exception 'FAIL: history paging or read-event retention'; end if;
+  if exists(select 1 from public.get_report_participant_history(reports[4],'message',0) h where h.reason='Private other history') then raise exception 'FAIL: unrelated user history leaked'; end if;
+  execute 'reset role';
+end;
+$$;
+rollback;
+select 'PASS: false-report actions target reporter, ordinary rejection has no punishment, moderator-only history, paging and retained past/read events; all fixtures rolled back' as result;
