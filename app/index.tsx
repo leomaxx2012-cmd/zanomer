@@ -1,5 +1,6 @@
 import {containsProhibitedLanguage} from "../lib/profanity";
 import {reportReasonError,reportSubmissionError} from "../lib/report-submission";
+import {moderationReportLayout} from "../lib/moderation-report-layout";
 import {belongsToConversation,groupChatThreads,type ChatMessage,type ChatThread} from "../lib/listing-chat";
 import {banDurationMinutes,banExpiryText,type BanUnit,type AccountBan,type BanNotice,type ModerationHistoryRecord} from "../lib/account-ban";
 import {FilterSection} from "../components/FilterSection";
@@ -2886,14 +2887,14 @@ export default function HomeScreen() {
                   </Pressable>)}
                   <Text style={styles.managementTitle}>Жалобы на сообщения</Text>
                   {!!moderationReportsError && <Text style={styles.authMessage}>{moderationReportsError}</Text>}
-                  {!moderationReportsError && moderationReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationReports.map((report) => <View key={report.id} style={styles.managementCard}>
+                  {!moderationReportsError && moderationReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationReports.map((report) => <View key={report.id} style={[styles.managementCard,styles.moderationReportCard]}>
                     <View style={styles.reportReviewText}><Text style={styles.managementMeta}>Сообщение: {report.message?.body ?? "удалено"}</Text><Text style={styles.managementStatus}>Причина: {report.reason}</Text></View>
-                    <View style={styles.reviewActions}><Pressable onPress={() => { void openReportedChat(report); }} style={styles.viewChatButton}><Text style={styles.viewChatButtonText}>Чат</Text></Pressable><Pressable onPress={() => openBanForm(report.id, "message", "warning")} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "rejected")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable><Pressable onPress={()=>openBanForm(report.id,"message","warning","reporter")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Ложная жалоба</Text></Pressable><Pressable onPress={()=>{void loadReportHistory(report.id,"message");}} style={styles.viewChatButton}><Text style={styles.viewChatButtonText}>История участников</Text></Pressable></View>
+                    <View style={styles.reportReviewActions}><Pressable onPress={() => { void openReportedChat(report); }} style={styles.viewChatButton}><Text style={styles.viewChatButtonText}>Чат</Text></Pressable><Pressable onPress={() => openBanForm(report.id, "message", "warning")} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable><Pressable onPress={() => reviewMessageReport(report, "rejected")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable><Pressable onPress={()=>openBanForm(report.id,"message","warning","reporter")} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Ложная жалоба</Text></Pressable><Pressable onPress={()=>{void loadReportHistory(report.id,"message");}} style={styles.viewChatButton}><Text style={styles.viewChatButtonText}>История участников</Text></Pressable></View>
                   </View>)}
                   <Text style={styles.managementTitle}>Жалобы на комментарии</Text>
-                  {!moderationReportsError && moderationCommentReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationCommentReports.map((report) => <View key={report.id} style={styles.managementCard}>
+                  {!moderationReportsError && moderationCommentReports.length === 0 ? <Text style={styles.managementHint}>Новых жалоб нет.</Text> : moderationCommentReports.map((report) => <View key={report.id} style={[styles.managementCard,styles.moderationReportCard]}>
                     <View style={styles.reportReviewText}><Text style={styles.managementMeta}>Комментарий: {report.body}</Text><Text style={styles.managementStatus}>Причина: {report.reason}</Text><Text style={styles.managementHint}>{formatListingDate(report.created_at)}</Text></View>
-                    <View style={styles.reviewActions}>
+                    <View style={styles.reportReviewActions}>
                       <Pressable disabled={!!moderationActionId} onPress={() => openBanForm(report.id, "comment", "warning")} style={styles.approveButton}><Text style={styles.approveButtonText}>Принять</Text></Pressable>
                       <Pressable disabled={!!moderationActionId} onPress={() => { void reviewCommentReport(report, "rejected"); }} style={styles.rejectButton}><Text style={styles.rejectButtonText}>Отклонить</Text></Pressable>
                       <Pressable disabled={!!moderationActionId} onPress={() => openBanForm(report.id, "comment")} style={styles.banButton}><Text style={styles.banButtonText}>Заблокировать автора</Text></Pressable>
@@ -4044,7 +4045,9 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   managementButtonText: { color: theme.accent, fontSize: 13, fontWeight: "900" },
   managementPanel: { borderTopColor: theme.border, borderTopWidth: 1, marginTop: 12, paddingTop: 11 },
   managementTitle: { color: theme.text, fontSize: 14, fontWeight: "900", marginTop: 6 },
-  reportReviewText: { flex: 1, paddingRight: 8 },
+  moderationReportCard: moderationReportLayout.card,
+  reportReviewText: moderationReportLayout.text,
+  reportReviewActions: moderationReportLayout.actions,
   managementHint: { color: theme.muted, fontSize: 12, lineHeight: 17, marginTop: 6 },
   managementCard: { alignItems: "center", backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 11, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", marginTop: 8, padding: 10 },
   managementOwnCard: { flexDirection: "column", alignItems: "stretch", gap: 8, width: "100%", minWidth: 0 },
