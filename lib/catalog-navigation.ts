@@ -16,7 +16,7 @@ export function readCatalogSearch(p:Params):CatalogSearch {
  regionCode:list(single(p,'codes')).filter(x=>/^\d{2,3}$/.test(x)).join(','),
  priceLimit:Number.isFinite(price)&&price>0?price:null,
  specialFilters:list(single(p,'features')).filter(x=>['firstTen','roundHundred','mirror','repeatDigits','repeatLetters','similarDigits','similarLetters','similarRegion'].includes(x)),
- selectedSources:list(single(p,'sources',500)).filter(x=>x==='site'||/^telegram:[a-zA-Z0-9_]+$/.test(x)),
+ selectedSources:list(single(p,'sources',500)).filter(x=>x==='site'||x==='mine'||/^telegram:[a-zA-Z0-9_]+$/.test(x)),
  freshOnly:single(p,'fresh')==='1',groupSeries:single(p,'series')==='1',sort:sort==='priceAsc'||sort==='priceDesc'?sort:'date'};
 }
 export function catalogSearchParams(s:CatalogSearch):Record<string,string> {

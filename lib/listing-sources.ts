@@ -1,4 +1,4 @@
-type SourcedListing = { sourceUrl?: string; isSiteListing?: boolean; vehicle: string };
+type SourcedListing = { sourceUrl?: string; isSiteListing?: boolean; ownerId?: string; vehicle: string };
 const names: Record<string, string> = {
   runomer: "Красивые номера на авто",
   runomer23: "Runomer · Краснодарский край",
@@ -27,17 +27,20 @@ export function listingSource(listing: Pick<SourcedListing, "sourceUrl" | "isSit
   }
 }
 
-export function matchesListingSources(listing: Pick<SourcedListing, "sourceUrl" | "isSiteListing">, selected: readonly string[]) {
-  return selected.length === 0 || selected.includes(listingSource(listing).id);
+export function matchesListingSources(listing: Pick<SourcedListing, "sourceUrl" | "isSiteListing" | "ownerId">, selected: readonly string[], userId = "") {
+  return selected.length === 0 || selected.includes(listingSource(listing).id)
+    || (selected.includes("mine") && !!userId && listing.isSiteListing === true && listing.ownerId === userId);
 }
 
-export function availableListingSources<T extends SourcedListing>(listings: readonly T[], vehicle: string, archivedSources: ReadonlySet<string>) {
+export function availableListingSources<T extends SourcedListing>(listings: readonly T[], vehicle: string, archivedSources: ReadonlySet<string>, userId = "") {
   const options = new Map<string, { id: string; label: string; count: number }>();
+  if (userId) options.set("mine", {id:"mine",label:"Свои объявления",count:0});
   for (const listing of listings) {
     if (listing.vehicle !== vehicle || (listing.sourceUrl && archivedSources.has(listing.sourceUrl))) continue;
     const source = listingSource(listing);
     const current = options.get(source.id);
     options.set(source.id, { ...source, count: (current?.count ?? 0) + 1 });
+    if(userId && listing.isSiteListing && listing.ownerId===userId) options.get("mine")!.count++;
   }
   return [...options.values()].sort((a, b) => a.label.localeCompare(b.label, "ru"));
 }

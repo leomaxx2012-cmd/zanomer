@@ -31,3 +31,16 @@ test('invalid URLs cannot crash the catalogue', () => {
   assert.equal(listingSource({sourceUrl:'broken'}).id, 'external:unknown');
   assert.equal(listingSource({isSiteListing:true, sourceUrl:spec.sourceUrl}).id, 'site');
 });
+
+test('own listings source follows the signed-in owner and can combine with partner sources',()=>{
+ const own={vehicle:'car',isSiteListing:true,ownerId:'me'};
+ const another={vehicle:'car',isSiteListing:true,ownerId:'other'};
+ assert.equal(matchesListingSources(own,['mine'],'me'),true);
+ assert.equal(matchesListingSources(another,['mine'],'me'),false);
+ assert.equal(matchesListingSources(own,['mine'],''),false);
+ assert.equal(matchesListingSources(own,['mine'],'other'),false);
+ assert.equal(matchesListingSources(spec,['mine','telegram:specznak'],'me'),true);
+ assert.equal(matchesListingSources({...spec,ownerId:'me'},['mine'],'me'),false);
+ const choices=availableListingSources([own,another,{...own,vehicle:'truck'},spec],'car',new Set(),'me');
+ assert.deepEqual(choices.find(x=>x.id==='mine'),{id:'mine',label:'Свои объявления',count:1});
+});

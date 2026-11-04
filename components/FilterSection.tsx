@@ -6,7 +6,7 @@ import {useTheme} from './AppTheme';
 
 export function FilterSection({title,summary,children}:PropsWithChildren<{title:string;summary:string}>) {
  const {theme}=useTheme();
- const [expanded,setExpanded]=useState(true);
+ const [expanded,setExpanded]=useState(false);
  return <View style={{width:'100%'}}>
   <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{expanded}} onPress={()=>setExpanded(value=>!value)} style={{minHeight:40,flexDirection:'row',alignItems:'center',justifyContent:'space-between',gap:12}}>
    <View style={{flex:1,gap:3}}>

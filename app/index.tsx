@@ -1,6 +1,7 @@
 import {containsProhibitedLanguage} from "../lib/profanity";
 import {reportReasonError,reportSubmissionError} from "../lib/report-submission";
 import {moderationReportLayout} from "../lib/moderation-report-layout";
+import {listingSellerName} from "../lib/listing-seller";
 import {belongsToConversation,groupChatThreads,type ChatMessage,type ChatThread} from "../lib/listing-chat";
 import {banDurationMinutes,banExpiryText,type BanUnit,type AccountBan,type BanNotice,type ModerationHistoryRecord} from "../lib/account-ban";
 import {FilterSection} from "../components/FilterSection";
@@ -1995,7 +1996,7 @@ export default function HomeScreen() {
   const similarityCounts = useMemo(() => buildSimilarityCounts(catalog), [catalog]);
 
   const archivedPartnerSourceSet = useMemo(() => new Set(archivedPartnerSources), [archivedPartnerSources]);
-  const sourceOptions = useMemo(() => availableListingSources(catalog, vehicle, archivedPartnerSourceSet), [catalog, vehicle, archivedPartnerSourceSet]);
+  const sourceOptions = useMemo(() => availableListingSources(catalog, vehicle, archivedPartnerSourceSet, currentUserId), [catalog, vehicle, archivedPartnerSourceSet, currentUserId]);
 
   // Legacy Android roots cannot defer filtering with useDeferredValue.
   // Paint the typed character first and coalesce rapid key presses.
@@ -2041,7 +2042,7 @@ export default function HomeScreen() {
         });
         const publishedAt = freshOnly ? new Date(plate.publishedAt ?? plate.createdAt).getTime() : 0;
         const isFresh = !freshOnly || (Number.isFinite(publishedAt) && Date.now() - publishedAt <= 24 * 60 * 60 * 1000 && publishedAt <= Date.now());
-        return matchesListingSources(plate, selectedSources) && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && groupMatches && plate.vehicle === vehicle;
+        return matchesListingSources(plate, selectedSources, currentUserId) && isFresh && leftLetterMatch && rightLettersMatch && digitsMatch && regionMatches && regionCodeMatches && priceMatches && specialMatches && groupMatches && plate.vehicle === vehicle;
       });
       const source = catalog.find((plate) => plate.id === similarToId);
       const sameRegionCode = (first: Plate, second: Plate) => first.region.split(" · ")[1]?.trim() === second.region.split(" · ")[1]?.trim();
@@ -2062,7 +2063,7 @@ export default function HomeScreen() {
       });
       return [...grouped.values()].flat();
     },
-    [catalog, archivedPartnerSourceSet, searchCriteria, similarToId, similarityFilter, sort, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys, similarityCounts],
+    [catalog, archivedPartnerSourceSet, searchCriteria, currentUserId, similarToId, similarityFilter, sort, similarFiltersOpen, seriesListingIds, seriesGroupByListingId, hiddenSeriesGroupKeys, similarityCounts],
   );
 
   const similarTo = catalog.find((plate) => plate.id === similarToId);
@@ -2099,7 +2100,7 @@ export default function HomeScreen() {
     setCatalogDisplayLimit(catalogPageSize);
   }, [activeTab, selectedSources, leftLetter, rightLetters, digits, region, regionCode, priceLimit, specialFilters, vehicle, similarToId, sort, freshOnly, catalogPageSize]);
 
-  const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => plate.seller === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => newestFirst(a, b)) : [], [sellerProfile, catalog, archivedPartnerSources]);
+  const sellerProfileListings = useMemo(() => sellerProfile ? catalog.filter((plate) => listingSellerName(plate,currentUserId,profileName) === sellerProfile && (!plate.sourceUrl || !archivedPartnerSources.includes(plate.sourceUrl))).sort((a, b) => newestFirst(a, b)) : [], [sellerProfile, catalog, archivedPartnerSources, currentUserId, profileName]);
   const sellerProfileIsChannel = sellerProfileListings.length > 0 && sellerProfileListings.every((plate) => !!plate.sourceUrl);
   const sellerProfileRating = sellerProfileListings.find((plate) => plate.sellerRating != null)?.sellerRating ?? null;
   const sellerProfileJoinedAt = sellerProfileListings.find((plate) => plate.sellerJoinedAt)?.sellerJoinedAt;
@@ -2792,6 +2793,7 @@ export default function HomeScreen() {
             <ScrollView contentContainerStyle={styles.headerModalContent}>
               <Text style={styles.numberPaymentNoticeTitle}>Оплата за номера через сайт не принимается</Text>
               <Text style={styles.numberPaymentNoticeText}>ЗаНомером — площадка объявлений. Условия сделки и расчёты продавец и покупатель согласуют напрямую вне сервиса. На сайте оплачиваются только подписка и продвижение объявлений после подключения платежей.</Text>
+              <Text style={styles.numberPaymentNoticeText}>При нестабильном интернете приложение может зависать. Проверьте соединение для более быстрой и удобной работы.</Text>
             </ScrollView>
           </View>
         </View>
@@ -2844,7 +2846,7 @@ export default function HomeScreen() {
                 <Text style={styles.managementTitle}>Мои объявления</Text>
                 <View style={styles.statsRow}><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "active").length}</Text><Text style={styles.statLabel}>активных</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{myListings.filter((item) => item.listingStatus === "moderation").length}</Text><Text style={styles.statLabel}>на проверке</Text></View><View style={styles.statCard}><Text style={styles.statValue}>{chatThreads.filter(thread=>myListings.some(listing=>listing.id===thread.listingId)).length}</Text><Text style={styles.statLabel}>диалогов</Text></View></View>
                 {myListings.length === 0 ? <Text style={styles.managementHint}>Ты пока не размещал объявлений.</Text> : myListings.map((listing) => <View key={listing.id} style={[styles.managementCard, styles.managementOwnCard]}>
-                  <Pressable onPress={() => setPromotionListing(value => value === listing.id ? null : listing.id)} style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text><Text style={styles.managementHint}>Нажми на номер для выделения</Text>
+                  <Pressable onPress={() => setPromotionListing(value => value === listing.id ? null : listing.id)} style={styles.managementListingInfo}><Text style={styles.managementPlate}>{listing.value}</Text><Text style={styles.managementMeta}>{listing.region} · {listing.price}</Text><Text style={styles.managementStatus}>{listing.tag}</Text><Text style={styles.managementMeta}>Продавец: {listingSellerName(listing,currentUserId,profileName)}</Text><Text style={styles.managementHint}>Нажми на номер для выделения</Text>
                     {listing.listingStatus === "active" && !!listing.featuredUntil && new Date(listing.featuredUntil).getTime() > Date.now() && <Text style={styles.managementStatus}>🔥 В горячих предложениях · {new Date(listing.featuredUntil).getFullYear() >= 9999 ? "до продажи" : `до ${new Date(listing.featuredUntil).toLocaleString("ru-RU", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`}</Text>}
                     {promotionListing === listing.id && listing.listingStatus === "active" && <View>
                       <Pressable disabled={promotionBusy || promotionBalance.highlights < 1} onPress={() => { void applyPromotion(listing, "highlight"); }} style={styles.managementButton}><Text style={styles.managementButtonText}>Выделить в горячие предложения · 48 ч. ({promotionBalance.highlights})</Text></Pressable>
@@ -2973,7 +2975,7 @@ export default function HomeScreen() {
         <View style={styles.filterControlGroup}>
           <Pressable accessibilityRole="button" accessibilityLabel="Источники объявлений" accessibilityState={{ expanded: sourceListExpanded }} onPress={() => setSourceListExpanded(current => !current)} style={styles.sourceFilterToggle}>
             <Text style={styles.filterControlTitle}>Источники объявлений</Text>
-            <Text style={styles.sourceFilterSelection}>{selectedSources.length === 0 ? "Все источники" : selectedSources.length === 1 ? (sourceOptions.find(source => source.id === selectedSources[0])?.label ?? (selectedSources[0] === "site" ? "Объявления пользователей" : selectedSources[0].replace(/^telegram:/, "@"))) : `Выбрано источников: ${selectedSources.length}`}</Text>
+            <Text style={styles.sourceFilterSelection}>{selectedSources.length === 0 ? "Все источники" : selectedSources.length === 1 ? (sourceOptions.find(source => source.id === selectedSources[0])?.label ?? (selectedSources[0] === "mine" ? "Свои объявления" : selectedSources[0] === "site" ? "Объявления пользователей" : selectedSources[0].replace(/^telegram:/, "@"))) : `Выбрано источников: ${selectedSources.length}`}</Text>
             <Text style={styles.sourceFilterToggleText}>{sourceListExpanded ? "Скрыть список ⌃" : "Выбрать источники ⌄"}</Text>
           </Pressable>
           {sourceListExpanded && <>
@@ -2988,7 +2990,7 @@ export default function HomeScreen() {
                 <Text style={[styles.listFilterButtonText, selected && styles.listFilterButtonTextActive]}>{selected ? "✓ " : ""}{source.label} · {source.count}</Text>
               </Pressable>;
             })}
-            {selectedSources.filter(id => !sourceOptions.some(source => source.id === id)).map(id => <Pressable key={id} accessibilityRole="button" onPress={() => setSelectedSources(current => current.filter(source => source !== id))} style={[styles.listFilterButton, styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, styles.listFilterButtonTextActive]}>{id === "site" ? "Объявления пользователей" : id.replace(/^telegram:/, "@")} · 0 ×</Text></Pressable>)}
+            {selectedSources.filter(id => !sourceOptions.some(source => source.id === id)).map(id => <Pressable key={id} accessibilityRole="button" onPress={() => setSelectedSources(current => current.filter(source => source !== id))} style={[styles.listFilterButton, styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, styles.listFilterButtonTextActive]}>{id === "mine" ? "Свои объявления" : id === "site" ? "Объявления пользователей" : id.replace(/^telegram:/, "@")} · 0 ×</Text></Pressable>)}
           </View>
           </>}
         </View>
@@ -3263,6 +3265,7 @@ export default function HomeScreen() {
       </Pressable>}
       <View testID="catalog-cards" onLayout={event => { const width = event.nativeEvent.layout.width; setOfferListWidth(current => current === width ? current : width); }} style={[styles.list, styles.compactOfferList, compactLayout && styles.compactOfferListMobile, gridCards && styles.offerGrid]}>
         {renderedPlates.map((item, index) => {
+          const sellerName = listingSellerName(item,currentUserId,profileName);
           const expanded = !compactLayout || expandedListingIds.includes(item.id);
           const isLiked = likedListingIds.includes(item.id);
           const seriesGroup = seriesGroupByListingId.get(item.id);
@@ -3288,6 +3291,7 @@ export default function HomeScreen() {
                 </View>
               </View>
               {item.isSiteListing&&!!currentUserId&&item.ownerId===currentUserId&&<Pressable accessibilityRole="button" accessibilityLabel={`Чаты по объявлению ${item.value}`} onPress={()=>void openListingChats(item)} style={[styles.cardAction,{alignSelf:"flex-start",margin:8}]}><Text style={styles.cardActionText}>Личные чаты</Text></Pressable>}
+              {compactLayout&&!expanded&&item.isSiteListing&&<Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${sellerName}`} onPress={()=>setSellerProfile(sellerName)} style={styles.cardFooter}><Text numberOfLines={1} style={[styles.seller,styles.sellerLink]}>Продавец: {sellerName}</Text></Pressable>}
               {expanded && <View style={[styles.offerDetails, wideListingCards && styles.offerDetailsDesktop]}>
                   <View style={[styles.cardInfo, narrowCards && styles.cardInfoCompact, styles.offerInfo]}>
                   <View style={styles.cardTopRow}>
@@ -3300,7 +3304,7 @@ export default function HomeScreen() {
                   <View style={styles.cardBadgesSpread}>
                     {item.saleDetails?.negotiable&&<Text style={styles.sellerCategory}>Торг</Text>}{item.saleDetails?.storage==="storage"&&<Text style={styles.sellerCategory}>На хранении</Text>}
 
-                    {!!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
+                    {item.isSiteListing ? <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление пользователя сайта</Text></View> : !!item.sourceUrl ? <View style={styles.trustBadge}><Text numberOfLines={1} style={styles.trustBadgeText}>✓ Проверенный источник</Text></View> : <View style={styles.catalogSourceBadge}><Text numberOfLines={1} style={styles.catalogSourceText}>Объявление сайта</Text></View>}
                     {seriesListingIds.has(item.id) && <View style={styles.seriesBadge}><Text numberOfLines={1} style={styles.seriesBadgeText}>⌁ Серия · есть похожие варианты</Text></View>}
                   </View>
                   <View style={styles.cardButtonsSpread}>
@@ -3317,8 +3321,8 @@ export default function HomeScreen() {
                     </Pressable>}
                   </View>
                 </View>
-            <Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${item.seller}`} onPress={() => setSellerProfile(item.seller)} style={styles.cardFooter}>
-              <Text style={[styles.seller, styles.sellerLink]}>Продавец: {item.seller}</Text>
+            <Pressable accessibilityRole="button" accessibilityLabel={`Открыть профиль: ${sellerName}`} onPress={() => setSellerProfile(sellerName)} style={styles.cardFooter}>
+              <Text style={[styles.seller, styles.sellerLink]}>Продавец: {sellerName}</Text>
             </Pressable>
               </View>}
             </View>
@@ -3456,7 +3460,7 @@ export default function HomeScreen() {
                 {!!selectedPlate?.saleDetails?.city&&<><Text style={styles.detailsLabel}>Город</Text><Text style={styles.detailsValue}>{selectedPlate.saleDetails.city}</Text></>}
                 {selectedPlate?.saleDetails&&<><Text style={styles.detailsLabel}>Условия предложения</Text><Text style={styles.detailsValue}>{[selectedPlate.saleDetails.negotiable?"Возможен торг":"",selectedPlate.saleDetails.storage!=="unspecified"?storageLabels[selectedPlate.saleDetails.storage]:"",transferLabels[selectedPlate.saleDetails.transfer],selectedPlate.saleDetails.sellerType==="dealer"?"Дилер":"Частный продавец"].filter(Boolean).join(" · ")}</Text></>}
                 <Text style={styles.detailsLabel}>Дата и время публикации</Text><Text style={styles.detailsValue}>{formatListingDate(selectedPlate?.publishedAt ?? selectedPlate?.createdAt)}</Text>
-                <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate?.seller}</Text>
+                <Text style={styles.detailsLabel}>{selectedPlate?.isSiteListing ? "Ник продавца" : "Продавец"}</Text><Text style={styles.detailsValue}>{selectedPlate ? listingSellerName(selectedPlate,currentUserId,profileName) : ""}</Text>
               </View>
               {selectedPlate?.listingStatus === "moderation" && isModerator && <View style={styles.moderationReviewCard}>
                 <Text style={styles.moderationReviewTitle}>Проверка объявления</Text>
@@ -3510,10 +3514,11 @@ export default function HomeScreen() {
               <View style={[styles.detailsActionsRow, styles.detailsShareSection]}>
                 <Pressable onPress={() => { if (selectedPlate) toggleComparison(selectedPlate); }} style={[styles.detailsActionButton, comparison.some(item => item.id === selectedPlate?.id) && styles.comparisonSelected]}><Text style={styles.detailsActionText}>{comparison.some(item => item.id === selectedPlate?.id) ? "✓ В сравнении" : "⇄ Сравнить · Плюс"}</Text></Pressable>
                 <Pressable onPress={() => { if (selectedPlate) void shareListing(selectedPlate); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>↗ Поделиться</Text></Pressable>
-                {Platform.OS === "web" && <Pressable onPress={() => { if (selectedPlate) void Linking.openURL(listingLink(selectedPlate.id, selectedPlate.isSiteListing, true)).catch(() => setShareMessage("Установи приложение ЗаНомером, чтобы открыть объявление в нём.")); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>Открыть в приложении ↗</Text></Pressable>}
+                {Platform.OS === "web" && !selectedPlate?.isSiteListing && <Pressable onPress={() => { if (selectedPlate) void Linking.openURL(listingLink(selectedPlate.id, selectedPlate.isSiteListing, true)).catch(() => setShareMessage("Установи приложение ЗаНомером, чтобы открыть объявление в нём.")); }} style={styles.detailsActionButton}><Text style={styles.detailsActionText}>Открыть в приложении ↗</Text></Pressable>}
               </View>
               {!!shareMessage && <Text selectable accessibilityLiveRegion="polite" style={styles.detailsMuted}>{shareMessage}</Text>}
               {selectedPlate?.isSiteListing ? <View style={styles.detailsBlock}>
+                <Text style={styles.detailsMuted}>Это объявление пользователя сайта.</Text>
                 {!!selectedPlate.sellerComment && <><Text style={styles.detailsLabel}>Комментарий продавца</Text><Text style={styles.detailsComment}>{selectedPlate.sellerComment}</Text></>}
                 <View style={styles.safeContactCard}>
                   <Text style={styles.safeContactTitle}>Безопасная связь</Text>
