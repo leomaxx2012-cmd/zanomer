@@ -1,7 +1,7 @@
 /**
- * Safe import for the channel owners that permitted reposting:
- * @runomer, its regional Runomer channels, @specznak, and @jelezki77. It stores only plate, price, region, post date
- * and a direct Telegram post URL. Contacts and the original post text are
+ * Import for the channel owners that permitted reposting.
+ * It stores only plate, price, region, source name, post date and a direct
+ * Telegram post URL. Contacts and the original post text are
  * deliberately never written to Supabase.
  *
  * Required environment variables:
@@ -12,6 +12,8 @@ import { createClient } from "@supabase/supabase-js";
 import { createWorker } from "tesseract.js";
 import { loadCatalogIndex, plateIdentity } from "./catalog-identity.mjs";
 import { classifyAvailability, createTelegramReader, applyPostEvidence, recheckSavedPosts, isAutomaticallyArchived } from "./partner-availability.mjs";
+import { registrationRegionName } from "../lib/registration-regions.ts";
+import { snomeramiSaleText, snomeramiSources } from "./snomerami.mjs";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -32,6 +34,7 @@ const SOURCES = [
   { handle: "runomer05", name: "Красивые номера Дагестан" },
   { handle: "specznak", name: "Красивые госномера Specznak" },
   { handle: "jelezki77", name: "Железки77" },
+  ...snomeramiSources,
 ];
 // One shared limiter covers both channel feeds and saved-post checks, including
 // transitions between channels. Never burst requests or follow redirects.
@@ -86,17 +89,6 @@ async function notifySearchAlerts(rows) {
   if (messages.length) await fetch("https://exp.host/--/api/v2/push/send", { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify(messages) });
   return messages.length;
 }
-
-// Only codes whose Russian region name is known to the importer are accepted.
-// An unknown code is skipped instead of publishing a misleading region.
-const REGION_NAMES = new Map([
-  ["50", "Московская область"], ["90", "Московская область"], ["150", "Московская область"], ["190", "Московская область"], ["250", "Московская область"], ["550", "Московская область"], ["750", "Москва"],
-  ["77", "Москва"], ["97", "Москва"], ["99", "Москва"], ["177", "Москва"], ["197", "Москва"], ["199", "Москва"], ["777", "Москва"], ["797", "Москва"], ["799", "Москва"], ["977", "Москва"], ["997", "Москва"],
-  ["23", "Краснодарский край"], ["93", "Краснодарский край"], ["123", "Краснодарский край"], ["193", "Краснодарский край"], ["323", "Краснодарский край"],
-  ["26", "Ставропольский край"], ["126", "Ставропольский край"], ["61", "Ростовская область"], ["161", "Ростовская область"],
-  ["66", "Свердловская область"], ["96", "Свердловская область"], ["196", "Свердловская область"], ["54", "Новосибирская область"], ["154", "Новосибирская область"],
-  ["05", "Республика Дагестан"], ["95", "Чеченская Республика"],
-]);
 
 const latinToCyrillic = { A: "А", B: "В", C: "С", E: "Е", H: "Н", K: "К", M: "М", O: "О", P: "Р", T: "Т", X: "Х", Y: "У", V: "В" };
 const normalizeLetter = (letter) => latinToCyrillic[letter.toUpperCase()] ?? letter.toUpperCase();
@@ -156,7 +148,7 @@ function findSingleExplicitPrice(text) {
 
 function createRow({ source, postId, postedAt, rawLeft = "", digits, rawRight = "", regionCode, price, vehicle = "car" }) {
   const normalizedRegionCode = normaliseRegionCode(regionCode);
-  const name = REGION_NAMES.get(normalizedRegionCode);
+  const name = registrationRegionName(normalizedRegionCode);
   if (!name || !Number.isSafeInteger(price) || price < 5_000 || price > 50_000_000) return null;
   const left = [...rawLeft].map(normalizeLetter).join("");
   const right = [...rawRight].map(normalizeLetter).join("");
@@ -179,6 +171,11 @@ function createRow({ source, postId, postedAt, rawLeft = "", digits, rawRight = 
 }
 
 function parsePost(text, source, postId, postedAt) {
+  if (source.format === "snomerami") {
+    text = snomeramiSaleText(text);
+    if (!text) return [];
+  }
+
   // Each accepted row must have a plate, a price immediately following it
   // (on the same or the next caption line), and a known region code.
   // Telegram posts commonly use “P 747 EP 323\n💰 45,000”.
