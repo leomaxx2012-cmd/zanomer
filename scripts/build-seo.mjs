@@ -54,3 +54,17 @@ const sitemapPath = join(dist, 'sitemap.xml');
 const sitemap = await readFile(new URL('../public/sitemap.xml', import.meta.url), 'utf8');
 const entries = pages.map(page => `  <url><loc>${origin}${pagePath(page)}</loc></url>`).join('\n');
 await writeFile(sitemapPath, sitemap.replace('</urlset>', entries + '\n</urlset>'));
+
+const homePath = join(dist, 'index.html');
+let home = await readFile(homePath, 'utf8');
+if (!/<title[\s>]/i.test(home)) {
+  home = home.replace('</head>', '<title>Красивые номера на авто, мото и прицепы — ЗаНомером</title>\n</head>');
+}
+if (!/<meta\s+[^>]*name=["']description["']/i.test(home)) {
+  home = home.replace('</head>', '<meta name="description" content="Каталог объявлений о продаже красивых автомобильных номеров. Подбор по буквам, цифрам, региону и цене.">\n</head>');
+}
+if (pages.some(page => !home.includes(`href="${pagePath(page)}"`))) {
+  const navigation = `<noscript><nav aria-label="Разделы каталога"><ul>${pages.map(page => `<li>${link(page)}</li>`).join('')}</ul></nav></noscript>`;
+  home = home.replace('</body>', navigation + '\n</body>');
+}
+await writeFile(homePath, home);
