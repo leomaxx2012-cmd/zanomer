@@ -12,7 +12,8 @@ import { type Theme } from '../lib/theme';
 import { useTheme, useThemedStyles } from '../components/AppTheme';
 import { registrationRegionName, registrationRegionNames, registrationRegionLabel } from '../lib/registration-regions';
 import { Pressable } from '../components/ActionPressable';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createElement, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import seoPages from "../lib/seo-pages.json";
 import { Link, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import Head from "expo-router/head";
 import { SellerOptions } from "../components/SellerOptions";
@@ -3354,6 +3355,11 @@ export default function HomeScreen() {
             Platform.OS === "web" ? <Link key={item.key} href={regionLink(item.title) as "/"} style={[styles.siteFooterLink,{color:theme.text}]}>Номера: {item.title}</Link> : <Pressable key={item.key} accessibilityRole="link" onPress={() => openCollection({region:item.title,regionCode:""})}><Text style={styles.siteFooterLink}>Номера: {item.title}</Text></Pressable>
           )}
         </View>
+        {Platform.OS === "web" && <View style={styles.siteFooterLinks}>
+          {seoPages.map(({ slug, title }) => createElement("a", {
+            key: slug, href: `/nomera/${slug}/`, style: { color: theme.text, fontSize: 13 },
+          }, title))}
+        </View>}
         <Text style={[styles.siteFooterText,{color:theme.text}]}>Исполнитель цифровых услуг: ИП Леонович Александр Леонидович</Text>
         <Text style={[styles.siteFooterText,{color:theme.text}]}>ИНН 504406730552 · ОГРНИП 319508100089501</Text>
         <Text style={[styles.siteFooterText,{color:theme.text}]}>141570, Московская область, пгт Менделеево, ул. Левобережная, д. 1</Text>

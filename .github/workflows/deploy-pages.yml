@@ -29,7 +29,7 @@ jobs:
       - run: npm ci
       - run: |
           rm -rf dist
-          npx expo export --platform web --clear
+          npm run build:web
           node scripts/version-favicon.mjs
         env:
           EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
