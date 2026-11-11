@@ -5,6 +5,7 @@ import {listingSellerName} from "../lib/listing-seller";
 import {belongsToConversation,groupChatThreads,type ChatMessage,type ChatThread} from "../lib/listing-chat";
 import {banDurationMinutes,banExpiryText,type BanUnit,type AccountBan,type BanNotice,type ModerationHistoryRecord} from "../lib/account-ban";
 import {FilterSection} from "../components/FilterSection";
+import {ListingSourceFilter} from "../components/ListingSourceFilter";
 import {HeaderIcon,headerIconColors} from "../components/HeaderIcon";
 import {createBackdropDrag,isBackdropControlTouch, type BackdropTouch} from "../lib/backdrop-touch";
 import {siteTitle,siteDescription} from "../lib/site-metadata";
@@ -413,7 +414,6 @@ export default function HomeScreen() {
   const [freshOnly, setFreshOnly] = useState(initialSearch.freshOnly);
   const [filterPanelOpen, setFilterPanelOpen] = useState(false);
   const [selectedSources, setSelectedSources] = useState<string[]>(initialSearch.selectedSources);
-  const [sourceListExpanded, setSourceListExpanded] = useState(false);
   const [similarFiltersOpen, setSimilarFiltersOpen] = useState(initialSearch.groupSeries);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
   const routeSearchKey = JSON.stringify([pathname, sharedParams]);
@@ -2974,44 +2974,8 @@ export default function HomeScreen() {
       </View>}
       {filterPanelOpen && <View style={styles.filterControlPanel}>
         <View style={styles.filterControlGroup}>
-          <Pressable accessibilityRole="button" accessibilityLabel="Источники объявлений" accessibilityState={{ expanded: sourceListExpanded }} onPress={() => setSourceListExpanded(current => !current)} style={styles.sourceFilterToggle}>
-            <Text style={styles.filterControlTitle}>Источники объявлений</Text>
-            <Text style={styles.sourceFilterSelection}>{selectedSources.length === 0 ? "Все источники" : selectedSources.length === 1 ? (sourceOptions.find(source => source.id === selectedSources[0])?.label ?? (selectedSources[0] === "mine" ? "Свои объявления" : selectedSources[0] === "site" ? "Объявления пользователей" : selectedSources[0].replace(/^telegram:/, "@"))) : `Выбрано источников: ${selectedSources.length}`}</Text>
-            <Text style={styles.sourceFilterToggleText}>{sourceListExpanded ? "Скрыть список ⌃" : "Выбрать источники ⌄"}</Text>
-          </Pressable>
-          {sourceListExpanded && <>
-          <Text style={styles.sourceFilterHint}>Можно выбрать несколько. Числа показывают доступные объявления для выбранного транспорта.</Text>
-          <View style={styles.listFilters}>
-            <Pressable accessibilityRole="button" accessibilityState={{ selected: selectedSources.length === 0 }} onPress={() => setSelectedSources([])} style={[styles.listFilterButton, selectedSources.length === 0 && styles.listFilterButtonActive]}>
-              <Text style={[styles.listFilterButtonText, selectedSources.length === 0 && styles.listFilterButtonTextActive]}>Все источники</Text>
-            </Pressable>
-            {sourceOptions.map(source => {
-              const selected = selectedSources.includes(source.id);
-              return <Pressable key={source.id} accessibilityRole="button" accessibilityState={{ selected }} accessibilityLabel={`${source.label}, ${source.count} объявлений`} onPress={() => setSelectedSources(current => current.includes(source.id) ? current.filter(id => id !== source.id) : [...current, source.id])} style={[styles.listFilterButton, selected && styles.listFilterButtonActive]}>
-                <Text style={[styles.listFilterButtonText, selected && styles.listFilterButtonTextActive]}>{selected ? "✓ " : ""}{source.label} · {source.count}</Text>
-              </Pressable>;
-            })}
-            {selectedSources.filter(id => !sourceOptions.some(source => source.id === id)).map(id => <Pressable key={id} accessibilityRole="button" onPress={() => setSelectedSources(current => current.filter(source => source !== id))} style={[styles.listFilterButton, styles.listFilterButtonActive]}><Text style={[styles.listFilterButtonText, styles.listFilterButtonTextActive]}>{id === "mine" ? "Свои объявления" : id === "site" ? "Объявления пользователей" : id.replace(/^telegram:/, "@")} · 0 ×</Text></Pressable>)}
-          </View>
-          </>}
+          <ListingSourceFilter options={sourceOptions} selected={selectedSources} onChange={setSelectedSources} />
         </View>
-        <View style={styles.filterControlDivider} />
-        <FilterSection title="Регионы" summary={selectedRegionFilterLabel}>
-          <View style={styles.quickFilters}>
-            <Pressable onPress={() => {
-              if (region !== "Все" || regionCode) {
-                setRegion("Все");
-                setRegionCode("");
-                return;
-              }
-              setRegionPickerGroup(null);
-              setPlatePicker("region");
-            }} style={styles.quickSelect}>
-              <Text style={styles.quickSelectText}>⌖ Регион: {selectedRegionFilterLabel}{region !== "Все" || regionCode ? "  ×" : ""}</Text>
-              {region === "Все" && !regionCode && <Text style={styles.quickSelectChevron}>⌄</Text>}
-            </Pressable>
-          </View>
-        </FilterSection>
         <View style={styles.filterControlDivider} />
         <FilterSection title="Особенности" summary={[...specialFilters.map(filter=>({...specialFilterLabels,similarDigits:"Похожие цифры",similarLetters:"Похожие буквы",similarRegion:"Похожие регионы"})[filter]),similarFiltersOpen?"Похожие номера":""].filter(Boolean).join(", ")||"Любые"}>
           <View style={styles.quickFilters}>
@@ -3976,10 +3940,6 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   resultsHeading: { color: theme.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.4 },
   resultsCaption: { color: theme.muted, fontSize: 11, marginTop: 4 },
 
-  sourceFilterHint: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: 4 },
-  sourceFilterToggle: { minHeight: 48, paddingVertical: 4, gap: 4 },
-  sourceFilterSelection: { color: theme.muted, fontSize: 13, lineHeight: 19 },
-  sourceFilterToggleText: { color: theme.accent, fontSize: 13, lineHeight: 19, fontWeight: "800" },
   numberPaymentNotice: { alignSelf: "center", width: "100%", maxWidth: 1100, backgroundColor: theme.raised, borderColor: theme.border, borderWidth: 2, borderRadius: 18, paddingHorizontal: 20, paddingVertical: 18, marginBottom: 16, marginTop: 8 },
   numberPaymentNoticeTitle: { color: theme.text, fontSize: 26, lineHeight: 32, fontWeight: "900", textAlign: "center" },
   numberPaymentNoticeTitleCompact: { fontSize: 21, lineHeight: 27 },

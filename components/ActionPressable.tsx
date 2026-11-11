@@ -5,7 +5,7 @@ import { Platform, Pressable as NativePressable, StyleSheet, View, type Pressabl
 // Keep the existing hit areas, callbacks, disabled states and test IDs.
 // Transparent modal dismiss layers and plate hit areas must never move.
 export const Pressable = forwardRef<View, PressableProps>(function ActionPressable({style, disabled, ...props}, ref) {
-  const sample = typeof style === 'function' ? style({pressed:false, hovered:false}) : style;
+  const sample = typeof style === 'function' ? style({pressed:false}) : style;
   const flat = StyleSheet.flatten(sample);
   const motion = !disabled && flat?.position !== 'absolute';
   // Keep touch propagation and callbacks, without triggering the page's glow.

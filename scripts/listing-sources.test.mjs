@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { listingSource, matchesListingSources, availableListingSources } from '../lib/listing-sources.ts';
+import { listingSource, matchesListingSources, availableListingSources, groupListingSources } from '../lib/listing-sources.ts';
+import {snomeramiSources} from './snomerami.mjs';
 
 const spec = { vehicle:'car', sourceUrl:'https://t.me/specznak/13765' };
 const runomer = { vehicle:'car', sourceUrl:'https://t.me/runomer/73217' };
@@ -43,4 +44,39 @@ test('own listings source follows the signed-in owner and can combine with partn
  assert.equal(matchesListingSources({...spec,ownerId:'me'},['mine'],'me'),false);
  const choices=availableListingSources([own,another,{...own,vehicle:'truck'},spec],'car',new Set(),'me');
  assert.deepEqual(choices.find(x=>x.id==='mine'),{id:'mine',label:'Свои объявления',count:1});
+});
+
+test('regional import channels stay in their own network, not one Telegram group',()=>{
+ const rows=[spec,runomer,{vehicle:'car',sourceUrl:'https://t.me/runomer23/1'},
+  {vehicle:'car',sourceUrl:'https://t.me/snomerami23/1'}, {vehicle:'car',sourceUrl:'https://t.me/snomerami/2'},
+  {vehicle:'car',sourceUrl:'https://t.me/jelezki77/1'}, {vehicle:'car',sourceUrl:'https://t.me/snomerami_fake/1'},
+  {vehicle:'car',sourceUrl:'https://t.me/runomer777/1'}, {vehicle:'car',isSiteListing:true}];
+ const {groups,direct}=groupListingSources(availableListingSources(rows,'car',new Set()));
+ assert.deepEqual(direct.map(x=>x.id),['site']);
+ assert.deepEqual(groups.find(x=>x.id==='snomerami').channels.map(x=>x.label),['Краснодарский край','Москва и МО']);
+ assert.equal(groups.find(x=>x.id==='runomer').channels.length,2);
+ assert.equal(groups.find(x=>x.id==='snomerami').count,2);
+ assert.equal(groups.find(x=>x.id==='specznak').channels.length,1);
+ assert.equal(groups.find(x=>x.id==='jelezki77').channels.length,1);
+ assert.equal(groups.find(x=>x.id==='snomerami_fake').channels.length,1);
+ assert.equal(groups.find(x=>x.id==='runomer777').channels.length,1);
+});
+
+test('every Snomerami channel in the importer has the same regional label in the filter',()=>{
+ const rows=snomeramiSources.map(source=>({vehicle:'car',sourceUrl:`https://t.me/${source.handle}/1`}));
+ const {groups}=groupListingSources(availableListingSources(rows,'car',new Set()));
+ assert.equal(groups.length,1);
+ assert.equal(groups[0].label,'Snomerami');
+ assert.equal(groups[0].channels.length,snomeramiSources.length);
+ for(const source of snomeramiSources){
+  assert.equal(groups[0].channels.find(x=>x.id===`telegram:${source.handle}`).label,source.name.replace('Snomerami · ',''));
+ }
+});
+
+test('selecting a network uses the existing source union, without including other sources',()=>{
+ const rows=[spec,runomer,{vehicle:'car',sourceUrl:'https://t.me/snomerami23/1'}, {vehicle:'car',sourceUrl:'https://t.me/snomerami/1'}];
+ const groups=groupListingSources(availableListingSources(rows,'car',new Set())).groups;
+ const ids=groups.find(x=>x.id==='snomerami').channels.map(x=>x.id);
+ assert.deepEqual(rows.filter(row=>matchesListingSources(row,ids)),rows.slice(2));
+ assert.deepEqual(rows.filter(row=>matchesListingSources(row,[...ids,'telegram:specznak'])),[spec,...rows.slice(2)]);
 });
