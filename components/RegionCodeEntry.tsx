@@ -4,7 +4,7 @@ import { Pressable } from './ActionPressable';
 import { Text } from './ResponsiveText';
 import { useTheme } from './AppTheme';
 
-export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Добавить код' }: {
+export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Найти' }: {
   onApply: (code: string) => void; initialValue?: string; actionLabel?: string;
 }) {
   const { theme } = useTheme();
@@ -31,7 +31,11 @@ export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Д�
     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
       {[0, 1, 2].map(index => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Цифра региона ${index + 1}`}
         accessibilityValue={{ text: value[index]?.trim() || 'пусто' }} accessibilityState={{ selected: open && index === position }}
-        onPress={() => { setPosition(index); setOpen(true); }} style={[button, { width: 44, height: 44, borderRadius: 6,
+        onPress={() => {
+          // Starting a new code must not retain the third digit of the old one.
+          if (!open && index === 0) setValue('');
+          setPosition(index); setOpen(true);
+        }} style={[button, { width: 44, height: 44, borderRadius: 6,
           borderWidth: open && index === position ? 2 : 1, borderColor: open && index === position ? theme.accent : theme.border,
           backgroundColor: open && index === position ? theme.accentSurface : theme.surface }]}>
         <Text allowFontScaling={false} style={{ color: open && index === position ? theme.accent : theme.text, fontSize: 22, fontWeight: '800' }}>{value[index]?.trim() || '—'}</Text>
@@ -54,6 +58,6 @@ export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Д�
         <Text style={{ color: theme.onPrimary, fontWeight: '800' }}>{actionLabel}</Text>
       </Pressable>
     </>}
-    <Text style={{ color: theme.muted, fontSize: 11 }}>Нажми на поле и введи 2 или 3 цифры.</Text>
+    <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16 }}>Можно ввести 2 или 3 цифры — третье поле необязательное.</Text>
   </View>;
 }

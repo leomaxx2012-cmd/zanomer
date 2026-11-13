@@ -357,14 +357,14 @@ export default function HomeScreen() {
   const [mainViewportHeight, setMainViewportHeight] = useState(windowHeight);
   const backgroundTouch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   const [glowDrag] = useState(createBackdropDrag);
-  function openFilteredCatalog() {
+  function openFilteredCatalog(search: CatalogSearch = currentSearch()) {
     Keyboard.dismiss();
     setPlatePicker(null);
     setFilterPanelOpen(false);
     setCatalogDisplayLimit(catalogPageSize);
     setCatalogScope("filtered");
     setCatalogOnly(true);
-    if (Platform.OS === "web") router.navigate({ pathname: "/catalog", params: catalogSearchParams(currentSearch()) } as never);
+    if (Platform.OS === "web") router.navigate({ pathname: "/catalog", params: catalogSearchParams(search) } as never);
     catalogScrollRef.current?.scrollTo({ y: 0, animated: false });
   }
   const latestPartnerListingRef = useRef("");
@@ -3046,7 +3046,7 @@ export default function HomeScreen() {
         activePosition={platePicker && platePicker !== "region" ? {section:platePicker,index:plateCharacterIndex} : null}
         onOpen={(section,index) => { if (section === "region") setRegionPickerGroup(null); setPlateCharacterIndex(index); setPlatePicker(section); }} />
       {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
-      <Pressable testID="hero-search" accessibilityRole="button" onPress={openFilteredCatalog} style={({pressed}) => [styles.findNumberButton, pressed && {opacity:0.85}]}><Text style={styles.findNumberText}>{catalogOnly ? "Применить фильтры" : "Найти номер"} →</Text></Pressable>
+      <Pressable testID="hero-search" accessibilityRole="button" onPress={() => openFilteredCatalog()} style={({pressed}) => [styles.findNumberButton, pressed && {opacity:0.85}]}><Text style={styles.findNumberText}>{catalogOnly ? "Применить фильтры" : "Найти номер"} →</Text></Pressable>
       <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
         <Text style={styles.searchResetButtonText}>↺ Сбросить фильтры</Text>
       </Pressable>
@@ -3062,9 +3062,11 @@ export default function HomeScreen() {
             <View style={styles.regionPickerContent}>
               <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
               <RegionCodeEntry initialValue={selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : ""} onApply={code => {
-                const codes = [...new Set([...selectedRegionCodes, code])].sort((a,b)=>Number(a)-Number(b));
-                setRegionCode(codes.join(","));
-                setRegion(searchRegionNames(regionGroups,codes).join(", ") || code);
+                const name = registrationRegionName(code) || code;
+                setRegionCode(code);
+                setRegion(name);
+                closePlateKeypad();
+                openFilteredCatalog({...currentSearch(),region:name,regionCode:code});
               }} />
               <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
               {!regionPickerGroup ? <>
@@ -3324,7 +3326,7 @@ export default function HomeScreen() {
         })}
         {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
       </View>
-      {renderedPlates.length < visiblePlates.length && <Pressable testID="motion-button" onPress={isLanding ? openFilteredCatalog : () => setCatalogDisplayLimit((current) => current + catalogPageSize)} style={styles.showMoreButton}>
+      {renderedPlates.length < visiblePlates.length && <Pressable testID="motion-button" onPress={isLanding ? () => openFilteredCatalog() : () => setCatalogDisplayLimit((current) => current + catalogPageSize)} style={styles.showMoreButton}>
         <Text style={styles.showMoreText}>{isLanding ? `Весь каталог · ${visiblePlates.length} →` : `Показать ещё · осталось ${visiblePlates.length - renderedPlates.length}`}</Text>
       </Pressable>}
       </View>
