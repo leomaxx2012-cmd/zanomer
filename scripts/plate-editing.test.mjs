@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nextPlateSection, appendPlateCharacter } from '../lib/plate-editing.ts';
+import { nextPlateSection, appendPlateCharacter, platePositions, movePlatePosition, replacePlateCharacter, plateDeletionPosition } from '../lib/plate-editing.ts';
 test('car advances only when each section is complete',()=>{
  const f={left:1,digits:3,right:2};
  assert.equal(nextPlateSection('left','А',f),'digits');
@@ -39,4 +39,38 @@ test('editing a full field replaces it; deleting one trailer letter keeps the ot
  assert.equal(appendPlateCharacter('АА','В',2),'В');
  assert.equal(appendPlateCharacter('123','4',3),'4');
  assert.equal(appendPlateCharacter('АА'.slice(0,-1),'В',2),'АВ');
+});
+
+test('cursor crosses character groups without wrapping or entering absent groups', () => {
+  for (const vehicle of ['car','motorcycle','truck']) {
+    const positions = platePositions(vehicle);
+    assert.equal(positions.length, 6);
+    assert.deepEqual(movePlatePosition(vehicle, positions[0], -1), positions[0]);
+    assert.deepEqual(movePlatePosition(vehicle, positions.at(-1), 1), positions.at(-1));
+    let cursor = positions[0];
+    for (const expected of positions.slice(1)) {
+      cursor = movePlatePosition(vehicle, cursor, 1);
+      assert.deepEqual(cursor, expected);
+    }
+    assert.ok(positions.every(position => position.section !== 'region'));
+    assert.equal(positions.some(position => position.section === 'left'), vehicle !== 'motorcycle');
+    assert.equal(positions.some(position => position.section === 'right'), vehicle !== 'truck');
+  }
+});
+
+test('editing and erasing the middle digit preserve its neighbours and position', () => {
+  assert.equal(replacePlateCharacter('123', '8', 1, 3), '183');
+  assert.equal(replacePlateCharacter('183', '*', 1, 3), '1*3');
+  assert.equal(replacePlateCharacter('1*3', '0', 1, 3), '103');
+  assert.equal(replacePlateCharacter('', '7', 2, 3), '**7');
+  assert.equal(replacePlateCharacter('АВ', 'Х', 0, 2), 'ХВ');
+  assert.equal(replacePlateCharacter('АВ', '*', 0, 2), '*В');
+  assert.equal(replacePlateCharacter('*', '*', 0, 1), '');
+  assert.equal(replacePlateCharacter('123', '4', 3, 3), '123');
+});
+
+test('backspace after auto-advance erases the character just entered, including group boundaries', () => {
+  assert.deepEqual(plateDeletionPosition('car',{left:'А',digits:'1**',right:''},{section:'digits',index:1}),{section:'digits',index:0});
+  assert.deepEqual(plateDeletionPosition('car',{left:'А',digits:'123',right:''},{section:'right',index:0}),{section:'digits',index:2});
+  assert.deepEqual(plateDeletionPosition('car',{left:'А',digits:'123',right:'ВС'},{section:'digits',index:1}),{section:'digits',index:1});
 });

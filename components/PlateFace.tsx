@@ -1,16 +1,17 @@
 import { memo, useState } from "react";
 import { Image, StyleSheet, Text, View } from "react-native";
 import { plateArtwork, plateGlyphs } from "../lib/plate-artwork";
+import type { PlatePosition } from "../lib/plate-editing";
 
 type Vehicle = "car" | "motorcycle" | "truck";
-type PlateFaceProps = { leftLetter?: string; digits?: string; rightLetters?: string; region?: string; vehicle?: Vehicle };
+type PlateFaceProps = { leftLetter?: string; digits?: string; rightLetters?: string; region?: string; vehicle?: Vehicle; activePosition?: PlatePosition | null; highlightColor?: string };
 const latin: Record<string, string> = { A: "А", B: "В", E: "Е", K: "К", M: "М", H: "Н", O: "О", P: "Р", C: "С", T: "Т", Y: "У", X: "Х" };
 const star = require("../assets/plates/star.png");
 const dash = require("../assets/plates/dash.png");
 
 // Frames, ink outlines and anchors share the reference's native coordinate space.
 // Scaling the whole artwork preserves the exact baselines, spacing and both frames.
-function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", region = "", vehicle = "car" }: PlateFaceProps) {
+function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", region = "", vehicle = "car", activePosition, highlightColor = "#6D4BFF" }: PlateFaceProps) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   const moto = vehicle === "motorcycle";
   const three = /^\d{3}$/.test(region);
@@ -47,6 +48,16 @@ function PlateFaceContent({ leftLetter = "", digits = "", rightLetters = "", reg
         if (!glyph) return <Image key={index} accessible={false} source={character === "—" ? dash : star} resizeMode="contain" style={{ position: "absolute", left: (slot.x + 12) * scale, top: (slot.y + 18) * scale, width: 32 * scale, height: 32 * scale }} />;
         return <Image key={index} accessible={false} source={glyph.image} resizeMode="stretch" style={{ position: "absolute", left: (slot.x + glyph.dx * horizontal) * scale, top: (slot.y + glyph.dy) * scale, width: glyph.width * horizontal * scale, height: glyph.height * scale }} />;
       })}
+      {activePosition && slots.filter(slot => {
+        if (slot.group === 'large' || slot.group === 'motoDigits') return activePosition.section === 'digits' && activePosition.index === slot.index;
+        if (slot.group !== 'letters') return false;
+        if (vehicle === 'truck') return activePosition.section === 'left' && activePosition.index === slot.index;
+        if (moto) return activePosition.section === 'right' && activePosition.index === slot.index;
+        return slot.index === (activePosition.section === 'left' ? 0 : activePosition.section === 'right' ? activePosition.index + 1 : -1);
+      }).map((slot, index) => <View key={`selection:${index}`} pointerEvents="none" style={{ position: 'absolute',
+        left: (slot.x - 5) * scale, top: Math.max(10, slot.y - 7) * scale,
+        width: (slot.group === 'motoDigits' ? 59 : 78) * scale, height: (slot.group === 'large' ? 126 : 101) * scale,
+        backgroundColor: '#8B5CF638', borderColor: highlightColor, borderWidth: Math.max(1.5, 3 * scale), borderRadius: 8 * scale }} />)}
       {!plainRegion && <View style={{ position: "absolute", left: (moto ? 215 : three ? 584 : 630) * scale, top: (moto ? 175 : 21) * scale, width: (moto ? 135 : three ? 180 : 135) * scale, height: 89 * scale, alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
         {region === "*" || region === "—" || !region ? <Image accessible={false} source={region === "—" ? dash : star} resizeMode="contain" style={{ width: 42 * scale, height: 32 * scale }} /> : <Text allowFontScaling={false} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3} style={{ color: "#111", width: "100%", textAlign: "center", fontSize: 28 * scale }}>{region}</Text>}
       </View>}

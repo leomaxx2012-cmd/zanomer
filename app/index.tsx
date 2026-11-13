@@ -46,7 +46,9 @@ import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
-import { appendPlateCharacter, nextPlateSection } from "../lib/plate-editing";
+import { movePlatePosition, plateDeletionPosition, replacePlateCharacter, type PlatePosition } from "../lib/plate-editing";
+import { PlatePositionRow } from "../components/PlatePositionRow";
+import { RegionCodeEntry } from "../components/RegionCodeEntry";
 import { publicationSession } from "../lib/publication-session";
 import { saveSearchAlert } from "../lib/save-search-alert";
 import { collectCatalogPages } from "../lib/catalog-pages";
@@ -416,6 +418,7 @@ export default function HomeScreen() {
   const [selectedSources, setSelectedSources] = useState<string[]>(initialSearch.selectedSources);
   const [similarFiltersOpen, setSimilarFiltersOpen] = useState(initialSearch.groupSeries);
   const [platePicker, setPlatePicker] = useState<PlatePicker>(null);
+  const [plateCharacterIndex, setPlateCharacterIndex] = useState(0);
   const routeSearchKey = JSON.stringify([pathname, sharedParams]);
   const handledSearchLink = useRef(routeSearchKey);
   useEffect(() => {
@@ -514,6 +517,7 @@ export default function HomeScreen() {
   const [comparisonOpen, setComparisonOpen] = useState(false);
   const [favoriteWatchMessage, setFavoriteWatchMessage] = useState("");
   const [listingPicker, setListingPicker] = useState<PlatePicker>(null);
+  const [listingCharacterIndex, setListingCharacterIndex] = useState(0);
   const [listingRegionGroup, setListingRegionGroup] = useState<string | null>(null);
   const [myListings, setMyListings] = useState<Plate[]>([]);
   const [moderationListings, setModerationListings] = useState<Plate[]>([]);
@@ -2192,6 +2196,17 @@ export default function HomeScreen() {
   const pickerLeft = editingListing ? listingLeftLetter : leftLetter;
   const pickerDigits = editingListing ? listingDigits : digits;
   const pickerRight = editingListing ? listingRightLetters : rightLetters;
+  const pickerCharacterIndex = editingListing ? listingCharacterIndex : plateCharacterIndex;
+  function selectPickerPosition(position: PlatePosition) {
+    if (editingListing) { setListingPicker(position.section); setListingCharacterIndex(position.index); }
+    else { setPlatePicker(position.section); setPlateCharacterIndex(position.index); }
+  }
+  function closePlateKeypad() {
+    backgroundTouch.current = null;
+    Keyboard.dismiss();
+    setPlatePicker(null);
+    setListingPicker(null);
+  }
 
   const selectedRegionFilterLabel = region === "Все" ? "Любой регион" : `${compactRegion.codes}${compactRegion.names ? ` · ${compactRegion.names}` : ""}`;
   function toggleRegionValues(values: string[]) {
@@ -2346,38 +2361,42 @@ export default function HomeScreen() {
     const format = plateFormat(vehicle);
     const current = platePicker === "left" ? leftLetter : platePicker === "digits" ? digits : rightLetters;
     const limit = format[platePicker];
-    const nextValue = appendPlateCharacter(current, value, limit);
+    const nextValue = replacePlateCharacter(current, value, plateCharacterIndex, limit);
     if (platePicker === "left") setLeftLetter(nextValue);
     else if (platePicker === "digits") setDigits(nextValue);
     else setRightLetters(nextValue);
-    const next = nextPlateSection(platePicker, nextValue, format);
-    if (next === "region") setRegionPickerGroup(null);
-    setPlatePicker(next);
+    selectPickerPosition(movePlatePosition(vehicle, { section: platePicker, index: plateCharacterIndex }, 1));
   }
 
   function erasePlatePart() {
-    if (platePicker === "left") setLeftLetter("");
-    if (platePicker === "right") setRightLetters((current) => current.slice(0, -1));
-    if (platePicker === "digits") setDigits((current) => current.slice(0, -1));
+    if (!platePicker || platePicker === "region") return;
+    const target = plateDeletionPosition(vehicle, {left:leftLetter,digits,right:rightLetters}, {section:platePicker,index:plateCharacterIndex});
+    const limit = plateFormat(vehicle)[target.section];
+    if (target.section === "left") setLeftLetter(current => replacePlateCharacter(current, "*", target.index, limit));
+    if (target.section === "right") setRightLetters(current => replacePlateCharacter(current, "*", target.index, limit));
+    if (target.section === "digits") setDigits(current => replacePlateCharacter(current, "*", target.index, limit));
+    selectPickerPosition(target);
   }
 
   function chooseListingPart(value: string) {
     if (!listingPicker || listingPicker === "region" || value === "*") return;
     const format = plateFormat(listingVehicle);
     const current = listingPicker === "left" ? listingLeftLetter : listingPicker === "digits" ? listingDigits : listingRightLetters;
-    const nextValue = appendPlateCharacter(current, value, format[listingPicker]);
+    const nextValue = replacePlateCharacter(current, value, listingCharacterIndex, format[listingPicker]);
     if (listingPicker === "left") setListingLeftLetter(nextValue);
     else if (listingPicker === "digits") setListingDigits(nextValue);
     else setListingRightLetters(nextValue);
-    const next = nextPlateSection(listingPicker, nextValue, format);
-    if (next === "region") setListingRegionGroup(null);
-    setListingPicker(next);
+    selectPickerPosition(movePlatePosition(listingVehicle, { section: listingPicker, index: listingCharacterIndex }, 1));
   }
 
   function eraseListingPart() {
-    if (listingPicker === "left") setListingLeftLetter(current => current.slice(0, -1));
-    if (listingPicker === "right") setListingRightLetters(current => current.slice(0, -1));
-    if (listingPicker === "digits") setListingDigits(current => current.slice(0, -1));
+    if (!listingPicker || listingPicker === "region") return;
+    const target = plateDeletionPosition(listingVehicle, {left:listingLeftLetter,digits:listingDigits,right:listingRightLetters}, {section:listingPicker,index:listingCharacterIndex});
+    const limit = plateFormat(listingVehicle)[target.section];
+    if (target.section === "left") setListingLeftLetter(current => replacePlateCharacter(current, "*", target.index, limit));
+    if (target.section === "right") setListingRightLetters(current => replacePlateCharacter(current, "*", target.index, limit));
+    if (target.section === "digits") setListingDigits(current => replacePlateCharacter(current, "*", target.index, limit));
+    selectPickerPosition(target);
   }
 
   function clearListingDraft(){
@@ -2423,7 +2442,7 @@ export default function HomeScreen() {
     const format = plateFormat(listingVehicle);
     const left = listingLeftLetter.toUpperCase();
     const right = listingRightLetters.toUpperCase();
-    const formatIsFilled = left.length === format.left && listingDigits.length === format.digits && right.length === format.right;
+    const formatIsFilled = left.length === format.left && listingDigits.length === format.digits && /^\d+$/.test(listingDigits) && right.length === format.right;
     if (!profileName || !formatIsFilled || !priceValue || !listingConfirmed) {
       setListingMessage(`Введи номер формата «${format.description}», цену и подтверди объявление.`);
       return;
@@ -3024,7 +3043,8 @@ export default function HomeScreen() {
         ))}
       </View>
       <PlateEditor vehicle={vehicle} leftLetter={leftLetter} digits={digits} rightLetters={rightLetters} region={selectedRegionLabel === "—" ? "*" : selectedRegionLabel}
-        onOpen={section => { if (section === "region") setRegionPickerGroup(null); setPlatePicker(section); }} />
+        activePosition={platePicker && platePicker !== "region" ? {section:platePicker,index:plateCharacterIndex} : null}
+        onOpen={(section,index) => { if (section === "region") setRegionPickerGroup(null); setPlateCharacterIndex(index); setPlatePicker(section); }} />
       {!!compactRegion.names && <Text style={styles.searchRegionName}>{compactRegion.names}</Text>}
       <Pressable testID="hero-search" accessibilityRole="button" onPress={openFilteredCatalog} style={({pressed}) => [styles.findNumberButton, pressed && {opacity:0.85}]}><Text style={styles.findNumberText}>{catalogOnly ? "Применить фильтры" : "Найти номер"} →</Text></Pressable>
       <Pressable onPress={resetSearchAndFilters} style={styles.searchResetButton} accessibilityLabel="Сбросить поиск и фильтры">
@@ -3037,10 +3057,15 @@ export default function HomeScreen() {
           <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
             <View style={styles.platePickerTopRow}>
               <Text style={styles.platePickerTitle}>Выбери регион</Text>
-              <Pressable onPress={() => setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Закрыть выбор региона" onPress={closePlateKeypad} style={{minHeight:44,minWidth:64,justifyContent:"center",alignItems:"center"}}><Text style={styles.platePickerClose}>Готово ×</Text></Pressable>
             </View>
             <View style={styles.regionPickerContent}>
               <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
+              <RegionCodeEntry initialValue={selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : ""} onApply={code => {
+                const codes = [...new Set([...selectedRegionCodes, code])].sort((a,b)=>Number(a)-Number(b));
+                setRegionCode(codes.join(","));
+                setRegion(searchRegionNames(regionGroups,codes).join(", ") || code);
+              }} />
               <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
               {!regionPickerGroup ? <>
                 <Pressable onPress={() => { setRegion("Все"); setRegionCode(""); setPlatePicker(null); }} style={[styles.pickerOption, styles.regionPickerOption, region === "Все" && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, region === "Все" && styles.pickerOptionTextActive]}>Любой регион</Text><Text style={[styles.regionPickerCount, region === "Все" && styles.regionPickerCountActive]}>{vehicleRegionCount}</Text></Pressable>
@@ -3102,7 +3127,8 @@ export default function HomeScreen() {
               <View style={styles.listingVehicleTabs}>{([ ["car", "🚗", "Авто"], ["motorcycle", "🏍️", "Мото"], ["truck", "🚛", "Прицеп"] ] as const).map(([type, icon, label]) => <Pressable key={type} onPress={() => chooseListingVehicle(type)} style={[styles.listingVehicleTab, listingVehicle === type && styles.listingVehicleTabActive]}><Text style={[styles.listingVehicleTabText, listingVehicle === type && styles.listingVehicleTabTextActive]}>{icon} {label}</Text></Pressable>)}</View>
               <Text style={styles.listingFormatHint}>{listingVehicle === "motorcycle" ? "Мото: 4 цифры сверху и 2 буквы снизу." : listingVehicle === "truck" ? "Прицеп: 2 буквы и 4 цифры." : "Авто: 1 буква, 3 цифры, 2 буквы."}</Text>
               <PlateEditor vehicle={listingVehicle} leftLetter={listingLeftLetter} digits={listingDigits} rightLetters={listingRightLetters} region={listingRegion || "*"} labelPrefix="Объявление"
-                onOpen={section => { if (section === "region") setListingRegionGroup(null); setListingPicker(section); }} />
+                activePosition={listingPicker && listingPicker !== "region" ? {section:listingPicker,index:listingCharacterIndex} : null}
+                onOpen={(section,index) => { if (section === "region") setListingRegionGroup(null); setListingCharacterIndex(index); setListingPicker(section); }} />
               {!!listingRegion && <Text style={styles.searchRegionName}>{registrationRegionLabel(listingRegion)}</Text>}
               <View style={styles.sellerCategories}>{plateCategories(listingDigits,listingLeftLetter+listingRightLetters).map(label=><Text key={label} style={styles.sellerCategory}>{label}</Text>)}</View>
               <SellerOptions value={listingDetails} onChange={setListingDetails}/>
@@ -3841,20 +3867,13 @@ export default function HomeScreen() {
           <View style={[styles.platePickerPanel, styles.regionPickerPanel, styles.regionPickerModalPanel]}>
             <View style={styles.platePickerTopRow}>
               <Text style={styles.platePickerTitle}>Выбери регион</Text>
-              <Pressable onPress={() => setListingPicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel="Закрыть выбор региона объявления" onPress={closePlateKeypad} style={{minHeight:44,minWidth:64,justifyContent:"center",alignItems:"center"}}><Text style={styles.platePickerClose}>Готово ×</Text></Pressable>
             </View>
             <View style={styles.regionPickerContent}>
               <Text style={styles.regionPickerHint}>Выбери один код для своего номера.{listingRegion ? ` Выбрано: ${registrationRegionLabel(listingRegion)}.` : ""}</Text>
+              <RegionCodeEntry initialValue={listingRegion} actionLabel="Выбрать код" onApply={code => setListingRegion(code)} />
               <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
-                {listingRegionGroup === "manual" ? <>
-                  <Pressable onPress={() => setListingRegionGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
-                  <Text style={styles.pickerCurrentValue}>{listingRegion || "*"}</Text>
-                  <View style={styles.pickerGrid}>
-                    {allowedDigits.map(value => <Pressable key={value} accessibilityRole="button" accessibilityLabel={`Код региона: ${value}`} onPress={() => setListingRegion(current => appendPlateCharacter(current, value, 3))} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{value}</Text></Pressable>)}
-                    <Pressable accessibilityRole="button" accessibilityLabel="Удалить цифру региона" onPress={() => setListingRegion(current => current.slice(0, -1))} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
-                  </View>
-                </> : !listingRegionGroup ? <>
-                  <Pressable onPress={() => setListingRegionGroup("manual")} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>Ввести код цифрами</Text></Pressable>
+                {!listingRegionGroup ? <>
                   {sellerRegionGroups.map(item => <Pressable key={item.title} onPress={() => setListingRegionGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionTextActive]}>{item.title}</Text></Pressable>)}
                 </> : <>
                   <Pressable onPress={() => setListingRegionGroup(null)} style={[styles.pickerOption, styles.regionPickerOption]}><Text style={styles.pickerOptionText}>← Названия регионов</Text></Pressable>
@@ -3869,13 +3888,19 @@ export default function HomeScreen() {
       {currentPlatePicker && currentPlatePicker !== "region" && <View onTouchEnd={event => event.stopPropagation()} onPointerUp={event => event.stopPropagation()} style={[styles.platePickerPanel, styles.platePickerDock, { bottom: navigationHeight + 8, width: Math.min(windowWidth - 24, 760), left: (windowWidth - Math.min(windowWidth - 24, 760)) / 2 }]}>
         <View style={styles.platePickerTopRow}>
           <Text style={styles.platePickerTitle}>{currentPlatePicker === "digits" ? "Выбери цифры" : "Выбери буквы"}</Text>
-          <Pressable onPress={() => editingListing ? setListingPicker(null) : setPlatePicker(null)} hitSlop={8}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+          <View style={{flexDirection:"row",gap:8,alignItems:"center"}}>
+            <Pressable accessibilityRole="button" accessibilityLabel="Готово: закрыть клавиатуру номера" onPress={closePlateKeypad} style={{minHeight:44,minWidth:60,alignItems:"center",justifyContent:"center"}}><Text style={styles.platePickerClose}>Готово</Text></Pressable>
+            <Pressable accessibilityRole="button" accessibilityLabel="Закрыть клавиатуру номера" onPress={closePlateKeypad} style={{width:44,height:44,alignItems:"center",justifyContent:"center",borderRadius:10,borderWidth:1,borderColor:theme.border}}><Text style={[styles.platePickerClose,{fontSize:24}]}>×</Text></Pressable>
+          </View>
         </View>
-        <Text style={styles.pickerCurrentValue}>{formatPlateValue(pickerLeft || (pickerVehicle === "truck" ? "**" : "*"), pickerDigits || (pickerVehicle === "car" ? "***" : "****"), pickerRight || "**", pickerVehicle)}</Text>
+        <PlatePositionRow vehicle={pickerVehicle} values={{left:pickerLeft,digits:pickerDigits,right:pickerRight}} position={{section:currentPlatePicker,index:pickerCharacterIndex}} onSelect={selectPickerPosition} />
         <View style={styles.pickerGrid}>
-          {(currentPlatePicker === "digits" ? allowedDigits : allowedLetters).map((item) => <Pressable key={item} onPress={() => editingListing ? chooseListingPart(item) : choosePlatePart(item)} style={styles.pickerOption}><Text style={styles.pickerOptionText}>{item}</Text></Pressable>)}
+          {(currentPlatePicker === "digits" ? allowedDigits : allowedLetters).map((item) => {
+            const selected = (currentPlatePicker === "digits" ? pickerDigits : currentPlatePicker === "left" ? pickerLeft : pickerRight)[pickerCharacterIndex] === item;
+            return <Pressable key={item} accessibilityRole="button" accessibilityLabel={`Ввести символ ${item}`} accessibilityState={{selected}} onPress={() => editingListing ? chooseListingPart(item) : choosePlatePart(item)} style={[styles.pickerOption,selected&&styles.pickerOptionActive]}><Text style={[styles.pickerOptionText,selected&&styles.pickerOptionTextActive]}>{item}</Text></Pressable>;
+          })}
           {!editingListing && <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar]}><Text style={styles.pickerOptionText}>*</Text></Pressable>}
-          <Pressable onPress={editingListing ? eraseListingPart : erasePlatePart} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel="Удалить выбранный символ номера" onPress={editingListing ? eraseListingPart : erasePlatePart} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
         </View>
       </View>}
 
