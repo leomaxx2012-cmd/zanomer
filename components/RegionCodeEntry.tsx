@@ -1,63 +1,59 @@
-import { useState } from 'react';
+import { useReducer } from 'react';
 import { View } from 'react-native';
 import { Pressable } from './ActionPressable';
 import { Text } from './ResponsiveText';
 import { useTheme } from './AppTheme';
+import { initialRegionCodeEntry, regionCodeEntryReducer, validRegionCodeEntry } from '../lib/region-code-entry';
 
 export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Найти' }: {
   onApply: (code: string) => void; initialValue?: string; actionLabel?: string;
 }) {
   const { theme } = useTheme();
-  const [value, setValue] = useState(/^\d{2,3}$/.test(initialValue) ? initialValue : '');
-  const [position, setPosition] = useState(0);
-  const [open, setOpen] = useState(false);
-  const valid = /^\d{2,3}$/.test(value) && Number(value) > 0;
-  const write = (character: string) => {
-    const characters = value.padEnd(3, ' ').split('');
-    characters[position] = character;
-    setValue(characters.join('').trimEnd());
-    setPosition(index => Math.min(2, index + 1));
-  };
-  const erase = () => {
-    const index = value[position]?.trim() ? position : Math.max(0, position - 1);
-    const characters = value.padEnd(3, ' ').split('');
-    characters[index] = ' ';
-    setValue(characters.join('').trimEnd());
-    setPosition(index);
-  };
+  const [entry, dispatch] = useReducer(regionCodeEntryReducer, initialValue, initialRegionCodeEntry);
+  const { value, position, open, length } = entry;
+  const valid = validRegionCodeEntry(entry);
   const button = { minHeight: 44, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 9, borderWidth: 1, borderColor: theme.border };
   return <View style={{ gap: 8, padding: 10, borderWidth: 1, borderColor: theme.border, borderRadius: 12 }}>
-    <Text style={{ color: theme.text, fontSize: 13, fontWeight: '800' }}>Код региона цифрами</Text>
-    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-      {[0, 1, 2].map(index => <Pressable key={index} accessibilityRole="button" accessibilityLabel={`Цифра региона ${index + 1}`}
-        accessibilityValue={{ text: value[index]?.trim() || 'пусто' }} accessibilityState={{ selected: open && index === position }}
-        onPress={() => {
-          // Starting a new code must not retain the third digit of the old one.
-          if (!open && index === 0) setValue('');
-          setPosition(index); setOpen(true);
-        }} style={[button, { width: 44, height: 44, borderRadius: 6,
-          borderWidth: open && index === position ? 2 : 1, borderColor: open && index === position ? theme.accent : theme.border,
-          backgroundColor: open && index === position ? theme.accentSurface : theme.surface }]}>
-        <Text allowFontScaling={false} style={{ color: open && index === position ? theme.accent : theme.text, fontSize: 22, fontWeight: '800' }}>{value[index]?.trim() || '—'}</Text>
-      </Pressable>)}
-      <Pressable accessibilityRole="button" accessibilityLabel="Очистить код региона" onPress={() => { setValue(''); setPosition(0); }} style={[button, { width: 44, marginLeft: 'auto' }]}>
+    <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
+      <Text style={{ flex:1, color: theme.text, fontSize: 13, fontWeight: '800' }}>Код региона цифрами</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel="Очистить код региона" onPress={() => dispatch({type:'clear'})} style={[button, { width: 36, minHeight:36 }]} hitSlop={4}>
         <Text style={{ color: theme.muted, fontSize: 24 }}>×</Text>
       </Pressable>
+    </View>
+    <View style={{ flexDirection: 'row', gap: 12 }}>
+      {([3,2] as const).map(size => <View key={size} style={{flex:size,minWidth:0,gap:5}}>
+        <Text style={{color:length===size?theme.accent:theme.muted,fontSize:11,fontWeight:'700'}}>{size} цифры</Text>
+        <View style={{flexDirection:'row',gap:4}}>
+          {Array.from({length:size},(_,index)=>{
+            const selected = open && length===size && index===position;
+            const character = length===size ? value[index]?.trim() : '';
+            return <Pressable key={index} accessibilityRole="button"
+              accessibilityLabel={`Цифра ${size===3?'трёхзначного':'двухзначного'} региона ${index+1}`}
+              accessibilityValue={{text:character||'пусто'}} accessibilityState={{selected}}
+              onPress={()=>dispatch({type:'select',length:size,index})}
+              style={[button,{flex:1,maxWidth:44,minHeight:0,aspectRatio:1,borderRadius:6,
+                borderWidth:selected?2:1,borderColor:selected?theme.accent:theme.border,
+                backgroundColor:selected?theme.accentSurface:theme.surface}]}>
+              <Text allowFontScaling={false} style={{color:selected?theme.accent:theme.text,fontSize:22,fontWeight:'800'}}>{character||'—'}</Text>
+            </Pressable>;
+          })}
+        </View>
+      </View>)}
     </View>
     {open && <>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
         {['1','2','3','4','5','6','7','8','9','0'].map(digit => <Pressable key={digit} accessibilityRole="button" accessibilityLabel={`Ввести цифру региона ${digit}`}
-          onPress={() => write(digit)} style={[button, { width: '22%', flexGrow: 1, backgroundColor: theme.surface }]}>
+          onPress={() => dispatch({type:'digit',digit})} style={[button, { width: '22%', flexGrow: 1, backgroundColor: theme.surface }]}>
           <Text style={{ color: theme.accent, fontSize: 18, fontWeight: '800' }}>{digit}</Text>
         </Pressable>)}
-        <Pressable accessibilityRole="button" accessibilityLabel="Удалить выбранную цифру региона" onPress={erase} style={[button, { width: '22%', flexGrow: 1 }]}><Text style={{ color: theme.accent, fontSize: 20 }}>⌫</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Скрыть клавиатуру региона" onPress={() => setOpen(false)} style={[button, { width: '22%', flexGrow: 1 }]}><Text style={{ color: theme.muted, fontSize: 22 }}>×</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Удалить выбранную цифру региона" onPress={() => dispatch({type:'erase'})} style={[button, { width: '22%', flexGrow: 1 }]}><Text style={{ color: theme.accent, fontSize: 20 }}>⌫</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Скрыть клавиатуру региона" onPress={() => dispatch({type:'close'})} style={[button, { width: '22%', flexGrow: 1 }]}><Text style={{ color: theme.muted, fontSize: 22 }}>×</Text></Pressable>
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={actionLabel} disabled={!valid} accessibilityState={{ disabled: !valid }}
-        onPress={() => { if (valid) { onApply(value); setOpen(false); } }} style={[button, { backgroundColor: '#5143C2', opacity: valid ? 1 : 0.4 }]}>
+        onPress={() => { if (valid) { onApply(value); dispatch({type:'close'}); } }} style={[button, { backgroundColor: '#5143C2', opacity: valid ? 1 : 0.4 }]}>
         <Text style={{ color: theme.onPrimary, fontWeight: '800' }}>{actionLabel}</Text>
       </Pressable>
     </>}
-    <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16 }}>Можно ввести 2 или 3 цифры — третье поле необязательное.</Text>
+    <Text style={{ color: theme.muted, fontSize: 11, lineHeight: 16 }}>Слева — для трёх цифр региона, справа — для двух.</Text>
   </View>;
 }
