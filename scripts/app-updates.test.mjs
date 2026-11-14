@@ -99,3 +99,10 @@ test('foreground reload requires explicit apply and a downloaded update', async 
   await manager.check(); assert.equal(reloads,0);
   await manager.applyNow(); assert.equal(reloads,1);
 });
+
+test('failed manual reload keeps the apply action available for a later retry', async () => {
+  const states=[];let fail=true,reloads=0;
+  const manager=createAppUpdateManager({check:async()=>({isAvailable:true}),fetch:async()=>({isNew:true}),reload:async()=>{reloads++;if(fail)throw Error('reload failed');}},'active',Date.now,s=>states.push(s.phase));
+  await manager.check();await manager.applyNow();assert.equal(states.at(-1),'ready');
+  fail=false;await manager.applyNow();assert.equal(reloads,2);
+});

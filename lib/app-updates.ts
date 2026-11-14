@@ -65,7 +65,7 @@ export function createAppUpdateManager(transport: UpdateTransport, initialState:
       if (disposed || !pending || applying) return;
       applying = true;
       try { await transport.reload(); pending = false; }
-      catch { status('error', 'Не удалось перезапустить приложение. Загруженное обновление сохранено — закрой и открой приложение.'); }
+      catch { status('ready', 'Не удалось перезапустить приложение. Обновление сохранено — нажми «Применить обновление» ещё раз или закрой и открой приложение.'); }
       finally { applying = false; }
     },
     async changeState(nextState: string) {
