@@ -655,6 +655,7 @@ export default function HomeScreen() {
     } finally { setPromotionBusy(false); }
   }
   const [paymentInfoOpen, setPaymentInfoOpen] = useState(() => isPaymentInfoPage() || isRequisitesPage());
+  const [footerInfoOpen, setFooterInfoOpen] = useState(false);
   const [legalDocument, setLegalDocument] = useState<LegalDocument>(() => legalDocumentFromUrl());
   const [inAppNotice, setInAppNotice] = useState<AppNotification | null>(null);
 
@@ -3353,7 +3354,7 @@ export default function HomeScreen() {
         {renderedPlates.length === 0 && <Text style={styles.empty}>{activeTab === "favorites" ? "В избранном, сохранённом и лайках пока нет номеров." : "Номеров с такими параметрами пока нет. Попробуй изменить поиск."}</Text>}
       </View>
       {renderedPlates.length < visiblePlates.length && <Pressable testID="motion-button" onPress={isLanding ? () => openFilteredCatalog() : () => setCatalogDisplayLimit((current) => current + catalogPageSize)} style={styles.showMoreButton}>
-        <Text style={styles.showMoreText}>{isLanding ? `Весь каталог · ${visiblePlates.length} →` : `Показать ещё · осталось ${visiblePlates.length - renderedPlates.length}`}</Text>
+        <Text style={styles.showMoreText}>{isLanding ? "Ещё" : `Ещё · осталось ${visiblePlates.length - renderedPlates.length}`}</Text>
       </Pressable>}
       </View>
       </>}
@@ -3362,6 +3363,10 @@ export default function HomeScreen() {
 
       </View>
       <View testID="site-footer" style={styles.siteFooter} accessibilityRole="summary">
+        <Pressable testID="footer-info-toggle" accessibilityRole="button" accessibilityLabel="Информация о сайте" aria-expanded={footerInfoOpen} onPress={() => setFooterInfoOpen(open => !open)} style={styles.siteFooterToggle}>
+          <Text style={styles.siteFooterToggleText}>Информация {footerInfoOpen ? "⌃" : "⌄"}</Text>
+        </Pressable>
+        {footerInfoOpen && <>
         <Text style={[styles.siteFooterTitle,{color:theme.text}]}>ЗаНомером — поиск и размещение объявлений</Text>
         <View style={styles.siteFooterLinks}>
           <Text style={[styles.siteFooterText,{color:theme.text}]}>Наши проекты:</Text>
@@ -3389,6 +3394,7 @@ export default function HomeScreen() {
           {([['offer', 'Оферта'], ['privacy', 'Политика обработки данных'], ['delivery', 'Оказание услуг'], ['refund', 'Возврат средств'], ['requisites', 'Реквизиты']] as const).map(([page, label]) => <Pressable key={page} accessibilityRole="link" onPress={() => openLegalDocument(page)}><Text style={[styles.siteFooterLink,{color:theme.text}]}>{label}</Text></Pressable>)}
         </View>
         <Text style={[styles.siteFooterText,{color:theme.text}]}>Оплата самих номеров и расчёты между пользователями через сервис не проводятся. Приём оплаты цифровых услуг пока не подключён.</Text>
+        </>}
       </View>
       </ScrollView>
 
@@ -3982,7 +3988,9 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   noticeToggle: { minHeight: 48, justifyContent: "center", gap: 6 },
   noticeToggleText: { color: theme.accent, fontSize: 13, lineHeight: 19, fontWeight: "700", textAlign: "center" },
   numberPaymentNoticeText: { color: theme.muted, fontSize: 14, lineHeight: 21, textAlign: "center", marginTop: 8 },
-  siteFooter: { alignSelf: "center", width: "100%", maxWidth: 1360, borderTopWidth: 1, borderTopColor: theme.border, marginTop: 28, paddingTop: 24, paddingBottom: 16, gap: 10 },
+  siteFooter: { alignSelf: "center", width: "100%", maxWidth: 1360, marginTop: 16, paddingBottom: 16, gap: 10 },
+  siteFooterToggle: { alignSelf: "center", minHeight: 44, paddingHorizontal: 16, justifyContent: "center" },
+  siteFooterToggleText: { color: theme.muted, fontSize: 12 },
   siteFooterTitle: { color: theme.text, fontSize: 15, fontWeight: "800" },
   siteFooterText: { color: theme.muted, fontSize: 12, lineHeight: 18 },
   siteFooterLinks: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
@@ -4377,7 +4385,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   restoreSeriesButton: { alignSelf: "center", backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 11, borderWidth: 1, marginTop: 10, paddingHorizontal: 12, paddingVertical: 8 },
   restoreSeriesButtonText: { color: theme.accent, fontSize: 12, fontWeight: "900" },
   catalogError: { alignSelf: "center", color: theme.warning, fontSize: 13, fontWeight: "600", marginHorizontal: 16, marginTop: 8, maxWidth: 1100, textAlign: "center" },
-  showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: theme.surface, borderColor: theme.accentBorder, borderRadius: 14, borderWidth: 1, marginBottom: 108, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
+  showMoreButton: { alignItems: "center", alignSelf: "center", backgroundColor: theme.surface, borderColor: theme.accentBorder, borderRadius: 14, borderWidth: 1, marginBottom: 24, marginTop: 6, maxWidth: 1100, paddingHorizontal: 20, paddingVertical: 14, width: "100%" },
   showMoreText: { color: theme.accent, fontSize: 15, fontWeight: "800" },
   cardShell: { backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 22, borderWidth: 1, overflow: "hidden", shadowColor: "#5143C2", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.09, shadowRadius: 15 },
   card: { paddingHorizontal: 14, paddingTop: 14 },
