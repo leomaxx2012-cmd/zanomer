@@ -66,7 +66,7 @@ import { privacyPolicy } from "../lib/privacy-policy";
 import { toggleCompared, comparisonPrices } from "../lib/listing-comparison";
 import { selectedSearchRegionCodes, searchRegionNames, toggleSearchRegion, compactSearchRegions } from "../lib/search-regions";
 import { availableListingSources, matchesListingSources } from "../lib/listing-sources";
-import { createAppUpdateManager } from "../lib/app-updates";
+import { createAppUpdateManager, type AppUpdateStatus } from "../lib/app-updates";
 import { registerForPushNotifications, sendServerPush, sendModerationPush, showChatNotification } from "../lib/push-notifications";
 
 type Plate = {
@@ -714,6 +714,8 @@ export default function HomeScreen() {
     });
   }
 
+  const [appUpdateStatus, setAppUpdateStatus] = useState<AppUpdateStatus>({phase:'idle',message:''});
+  const appUpdateManager = useRef<ReturnType<typeof createAppUpdateManager> | null>(null);
   // Обновления скачиваются автоматически, но не прерывают действия пользователя.
   // Применяем при сворачивании; при холодном запуске это делает expo-updates.
   useEffect(() => {
@@ -722,13 +724,18 @@ export default function HomeScreen() {
       check: Updates.checkForUpdateAsync,
       fetch: Updates.fetchUpdateAsync,
       reload: Updates.reloadAsync,
-    }, AppState.currentState);
+    }, AppState.currentState, Date.now, setAppUpdateStatus);
+    appUpdateManager.current = manager;
     void manager.check();
+    // Retry even when connectivity returns while the app stays in foreground.
+    const retryTimer = setInterval(() => { if (AppState.currentState === 'active') void manager.check(); }, 30_000);
     const appStateSubscription = AppState.addEventListener("change", (state) => {
       void manager.changeState(state);
     });
     return () => {
       manager.dispose();
+      appUpdateManager.current = null;
+      clearInterval(retryTimer);
       appStateSubscription.remove();
     };
   }, []);
@@ -2840,6 +2847,15 @@ export default function HomeScreen() {
             <>
               {!!accountBan && <View style={styles.moderationNotice}><Text style={styles.moderationNoticeText}>Отправка сообщений и комментариев заблокирована. {banExpiryText(accountBan.expires_at)}. Причина: {accountBan.reason}</Text></View>}
               {Platform.OS !== "web" && <Text selectable style={styles.managementHint}>Версия {Constants.expoConfig?.version ?? Updates.runtimeVersion} · обновление {Updates.updateId?.slice(0, 8) ?? "встроенное"}</Text>}
+              {Platform.OS !== "web" && <View style={{gap:8,marginVertical:8}}>
+                {!!appUpdateStatus.message && <Text style={styles.managementHint}>{appUpdateStatus.message}</Text>}
+                {!!appUpdateStatus.detail && <Text selectable style={styles.managementHint}>Причина: {appUpdateStatus.detail}</Text>}
+                <Pressable accessibilityRole="button" disabled={appUpdateStatus.phase==='checking'||appUpdateStatus.phase==='downloading'}
+                  onPress={() => { if(appUpdateStatus.phase==='ready') void appUpdateManager.current?.applyNow(); else void appUpdateManager.current?.check(true); }}
+                  style={[styles.authSubmit,{opacity:appUpdateStatus.phase==='checking'||appUpdateStatus.phase==='downloading'?0.5:1}]}>
+                  <Text style={styles.authSubmitText}>{appUpdateStatus.phase==='ready'?'Применить обновление':'Проверить обновления'}</Text>
+                </Pressable>
+              </View>}
               <Text style={styles.authHint}>Ты уже вошёл. Пароль нужен только если хочешь изменить его для будущих входов.</Text>
               <Text style={styles.managementTitle}>{hasPlusSubscription ? "✓ Подписка Плюс активна" : "Подписка Плюс не активна"}</Text>
               <Text style={styles.managementHint}>Доступно: {promotionBalance.highlights} размещений на 48 часов (включая бонусы Плюса) · {promotionBalance.hot} постоянных размещений. Выбери свой номер ниже. За каждый оплаченный период Плюса начисляется одно размещение на 48 часов.</Text>

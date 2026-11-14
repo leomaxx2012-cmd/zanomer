@@ -75,3 +75,27 @@ test('failed background reload remains available for retry; server rollback is s
   fail=false; await f.manager.changeState('active'); await f.manager.changeState('background');
   assert.equal(f.calls.reload,2);
 });
+
+test('manual check retries immediately after an error without parallel downloads', async () => {
+  const states=[];
+  let online=false, checks=0;
+  const manager=createAppUpdateManager({check:async()=>{checks++;if(!online)throw Error('network');return {isAvailable:true};},fetch:async()=>({isNew:true}),reload:async()=>{}},'active',()=>1000,s=>states.push(s.phase));
+  await manager.check(); online=true;
+  await manager.check(); assert.equal(checks,1);
+  await manager.check(true); assert.equal(checks,2);
+  assert.deepEqual(states,['checking','error','checking','downloading','ready']);
+});
+
+test('an unfinished download is an error, not a successful check with a 15 minute delay', async () => {
+  const states=[];
+  const manager=createAppUpdateManager({check:async()=>({isAvailable:true}),fetch:async()=>({isNew:false}),reload:async()=>{}},'active',()=>1000,s=>states.push(s.phase));
+  await manager.check(); assert.equal(states.at(-1),'error');
+});
+
+test('foreground reload requires explicit apply and a downloaded update', async () => {
+  let reloads=0;
+  const manager=createAppUpdateManager({check:async()=>({isAvailable:true}),fetch:async()=>({isNew:true}),reload:async()=>{reloads++;}},'active');
+  await manager.applyNow(); assert.equal(reloads,0);
+  await manager.check(); assert.equal(reloads,0);
+  await manager.applyNow(); assert.equal(reloads,1);
+});

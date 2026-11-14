@@ -13,11 +13,12 @@
     },
     "plugins": [
       "expo-router",
-      "expo-notifications"
+      "expo-notifications",
+      "./plugins/with-update-mirrors.cjs"
     ],
     "android": {
       "package": "ru.zanomer.app",
-      "versionCode": 27,
+      "versionCode": 28,
       "intentFilters": [
         {
           "action": "VIEW",
@@ -35,7 +36,7 @@
         "POST_NOTIFICATIONS"
       ]
     },
-    "version": "1.0.26",
+    "version": "1.0.27",
     "runtimeVersion": {
       "policy": "appVersion"
     },

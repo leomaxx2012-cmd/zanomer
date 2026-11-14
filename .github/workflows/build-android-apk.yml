@@ -48,6 +48,10 @@ jobs:
       - name: Подготовить безопасные отступы иконки
         run: node scripts/prepare-android-icon.mjs
 
+      - name: Проверить резервную загрузку обновлений Android
+        working-directory: android
+        run: ./gradlew :expo-updates:testReleaseUnitTest --tests expo.modules.updates.loader.UpdateMirrorInterceptorTest --no-daemon -Dorg.gradle.jvmargs="-Xmx4g -XX:MaxMetaspaceSize=1g"
+
       - name: Собрать APK
         working-directory: android
         # A release build packages the JavaScript bundle into the APK.  A debug
