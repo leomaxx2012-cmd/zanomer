@@ -15,11 +15,12 @@ type Props = {
   onToggleKeyboard:()=>void;
   onMove:(direction:-1|1)=>void;
   labelPrefix?: string;
+  sideInset?: number;
 };
 
 // Search and publication share artwork, hit areas and placeholder positions.
 // These are buttons, so Android never opens a competing system keyboard.
-export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpen,activePosition,keyboardOpen,onToggleKeyboard,onMove,labelPrefix=''}: Props) {
+export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpen,activePosition,keyboardOpen,onToggleKeyboard,onMove,labelPrefix='',sideInset=22}: Props) {
   const {theme} = useTheme();
   const open = (section: Section, index = 0) => { Keyboard.dismiss(); onOpen(section, index); };
   const prefix = (label: string) => labelPrefix ? `${labelPrefix}: ${label}` : label;
@@ -34,12 +35,13 @@ export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpe
     const disabled=direction===-1?selected<=0:selected>=positions.length-1;
     return <Pressable accessibilityRole="button" accessibilityLabel={prefix(direction===-1?'Предыдущий символ номера':'Следующий символ номера')}
       accessibilityState={{disabled}} disabled={disabled} hitSlop={6} onPress={()=>onMove(direction)}
-      style={{position:'absolute',...(direction===-1?{left:-28}:{right:-28}),width:24,height:44,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:theme.border,borderRadius:9,opacity:disabled?0.3:1}}>
+      style={{width:sideInset-2,height:44,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:theme.border,borderRadius:9,opacity:disabled?0.3:1}}>
       <Text allowFontScaling={false} style={{fontSize:25,color:theme.accent}}>{direction===-1?'‹':'›'}</Text>
     </Pressable>;
   };
-  return <View onTouchEnd={event=>event.stopPropagation()} onPointerUp={event=>event.stopPropagation()} style={{alignSelf:'center',width:'100%',maxWidth:vehicle==='motorcycle'?240:520}}>
-   <View style={{position:'relative',alignItems:'center',justifyContent:'center'}}>
+  // Arrows use the card padding while staying inside their parent touch area on Android.
+  return <View onTouchEnd={event=>event.stopPropagation()} onPointerUp={event=>event.stopPropagation()} style={{alignSelf:'stretch',marginHorizontal:-sideInset}}>
+   <View style={{alignSelf:'center',width:'100%',maxWidth:(vehicle==='motorcycle'?240:520)+sideInset*2,flexDirection:'row',alignItems:'center',justifyContent:'center',gap:2}}>
     {arrow(-1)}
     <View style={[styles.plate,vehicle==='motorcycle'&&styles.moto]}>
     <PlateFace vehicle={vehicle} leftLetter={leftLetter.padEnd(vehicle==='truck'?2:1,'*')} digits={digits.padEnd(vehicle==='car'?3:4,'*')} rightLetters={rightLetters.padEnd(2,'*')} region={region||'*'} activePosition={activePosition} highlightColor={theme.accent} />
@@ -62,7 +64,7 @@ export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpe
   </View>;
 }
 const styles=StyleSheet.create({
-  plate:{alignSelf:'center',width:'100%',maxWidth:520,aspectRatio:520/112,position:'relative'},
-  moto:{width:240,maxWidth:'100%',aspectRatio:4/3},
+  plate:{flex:1,minWidth:0,maxWidth:520,aspectRatio:520/112,position:'relative'},
+  moto:{maxWidth:240,aspectRatio:4/3},
   hit:{position:'absolute',cursor:'pointer'},
 });
