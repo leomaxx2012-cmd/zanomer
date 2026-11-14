@@ -5,8 +5,8 @@ import { Text } from './ResponsiveText';
 import { useTheme } from './AppTheme';
 import { initialRegionCodeEntry, regionCodeEntryReducer, validRegionCodeEntry } from '../lib/region-code-entry';
 
-export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Найти' }: {
-  onApply: (code: string) => void; initialValue?: string; actionLabel?: string;
+export function RegionCodeEntry({ onApply, onClose, onShowRegions, initialValue = '', actionLabel = 'Найти' }: {
+  onApply: (code: string) => void; onClose: () => void; onShowRegions: () => void; initialValue?: string; actionLabel?: string;
 }) {
   const { theme } = useTheme();
   const [entry, dispatch] = useReducer(regionCodeEntryReducer, initialValue, initialRegionCodeEntry);
@@ -16,7 +16,7 @@ export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Н�
   return <View style={{ gap: 8, padding: 10, borderWidth: 1, borderColor: theme.border, borderRadius: 12 }}>
     <View style={{flexDirection:'row',alignItems:'center',gap:8}}>
       <Text style={{ flex:1, color: theme.text, fontSize: 13, fontWeight: '800' }}>Код региона цифрами</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel="Очистить код региона" onPress={() => dispatch({type:'clear'})} style={[button, { width: 36, minHeight:36 }]} hitSlop={4}>
+      <Pressable accessibilityRole="button" accessibilityLabel="Закрыть цифровой ввод региона" onPress={event => { event.stopPropagation(); onClose(); }} style={[button, { width: 44, height:44 }]} hitSlop={4}>
         <Text style={{ color: theme.muted, fontSize: 24 }}>×</Text>
       </Pressable>
     </View>
@@ -47,8 +47,11 @@ export function RegionCodeEntry({ onApply, initialValue = '', actionLabel = 'Н�
           <Text style={{ color: theme.accent, fontSize: 18, fontWeight: '800' }}>{digit}</Text>
         </Pressable>)}
         <Pressable accessibilityRole="button" accessibilityLabel="Удалить выбранную цифру региона" onPress={() => dispatch({type:'erase'})} style={[button, { width: '22%', flexGrow: 1 }]}><Text style={{ color: theme.accent, fontSize: 20 }}>⌫</Text></Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Скрыть клавиатуру региона" onPress={() => dispatch({type:'close'})} style={[button, { width: '22%', flexGrow: 1 }]}><Text style={{ color: theme.muted, fontSize: 22 }}>×</Text></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel="Очистить код региона" onPress={() => dispatch({type:'clear'})} style={[button, { width: '22%', flexGrow: 1 }]}><Text style={{ color: theme.muted, fontSize: 12 }}>Очистить</Text></Pressable>
       </View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Вернуться к списку регионов" onPress={event => { event.stopPropagation(); dispatch({type:'close'}); onShowRegions(); }} style={button}>
+        <Text style={{color:theme.accent,fontSize:13,fontWeight:'700'}}>← К списку регионов</Text>
+      </Pressable>
       <Pressable accessibilityRole="button" accessibilityLabel={actionLabel} disabled={!valid} accessibilityState={{ disabled: !valid }}
         onPress={() => { if (valid) { onApply(value); dispatch({type:'close'}); } }} style={[button, { backgroundColor: '#5143C2', opacity: valid ? 1 : 0.4 }]}>
         <Text style={{ color: theme.onPrimary, fontWeight: '800' }}>{actionLabel}</Text>

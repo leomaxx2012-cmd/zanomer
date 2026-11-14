@@ -12,6 +12,12 @@ export function movePlatePosition(vehicle: PlateVehicle, position: PlatePosition
   const index = positions.findIndex(item => item.section === position.section && item.index === position.index);
   return positions[Math.max(0, Math.min(positions.length - 1, index + direction))];
 }
+// Typing the final character finishes plate entry; arrow navigation still clamps.
+export function nextPlateInputPosition(vehicle: PlateVehicle, position: PlatePosition): PlatePosition | 'region' {
+  const positions = platePositions(vehicle);
+  const index = positions.findIndex(item => item.section === position.section && item.index === position.index);
+  return index === positions.length - 1 ? 'region' : movePlatePosition(vehicle, position, 1);
+}
 export function plateDeletionPosition(vehicle: PlateVehicle, values: Record<PlatePosition['section'], string>, position: PlatePosition): PlatePosition {
   const character = values[position.section][position.index];
   return character && character !== '*' ? position : movePlatePosition(vehicle, position, -1);

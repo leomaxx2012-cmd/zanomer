@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nextPlateSection, appendPlateCharacter, platePositions, movePlatePosition, replacePlateCharacter, plateDeletionPosition } from '../lib/plate-editing.ts';
+import { nextPlateSection, appendPlateCharacter, platePositions, movePlatePosition, nextPlateInputPosition, replacePlateCharacter, plateDeletionPosition } from '../lib/plate-editing.ts';
 test('car advances only when each section is complete',()=>{
  const f={left:1,digits:3,right:2};
  assert.equal(nextPlateSection('left','А',f),'digits');
@@ -8,6 +8,16 @@ test('car advances only when each section is complete',()=>{
  assert.equal(nextPlateSection('digits','123',f),'right');
  assert.equal(nextPlateSection('right','В',f),'right');
  assert.equal(nextPlateSection('right','ВВ',f),'region');
+});
+
+test('typing opens region selection at the end of every vehicle, including repeated entry',()=>{
+ for(const vehicle of ['car','motorcycle','truck']){
+  const positions=platePositions(vehicle);
+  for(let attempt=0;attempt<2;attempt++){
+   positions.forEach((position,index)=>assert.deepEqual(nextPlateInputPosition(vehicle,position),positions[index+1]??'region'));
+  }
+  assert.deepEqual(movePlatePosition(vehicle,positions.at(-1),1),positions.at(-1));
+ }
 });
 test('trailer has two letters and four digits, then region',()=>{
  const f={left:2,digits:4,right:0};

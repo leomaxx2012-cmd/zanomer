@@ -46,7 +46,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import * as Updates from "expo-updates";
 import Constants from "expo-constants";
-import { movePlatePosition, plateDeletionPosition, replacePlateCharacter, type PlatePosition } from "../lib/plate-editing";
+import { nextPlateInputPosition, plateDeletionPosition, replacePlateCharacter, type PlatePosition } from "../lib/plate-editing";
 import { PlatePositionRow } from "../components/PlatePositionRow";
 import { RegionCodeEntry } from "../components/RegionCodeEntry";
 import { publicationSession } from "../lib/publication-session";
@@ -2204,6 +2204,7 @@ export default function HomeScreen() {
   const pickerDigits = editingListing ? listingDigits : digits;
   const pickerRight = editingListing ? listingRightLetters : rightLetters;
   const pickerCharacterIndex = editingListing ? listingCharacterIndex : plateCharacterIndex;
+  const plateKeyStyle = {width:Math.max(1,Math.floor((Math.min(windowWidth-24,760)-58)/5)),minWidth:0,height:44,paddingHorizontal:0,paddingVertical:0};
   function selectPickerPosition(position: PlatePosition) {
     if (editingListing) { setListingPicker(position.section); setListingCharacterIndex(position.index); }
     else { setPlatePicker(position.section); setPlateCharacterIndex(position.index); }
@@ -2372,7 +2373,9 @@ export default function HomeScreen() {
     if (platePicker === "left") setLeftLetter(nextValue);
     else if (platePicker === "digits") setDigits(nextValue);
     else setRightLetters(nextValue);
-    selectPickerPosition(movePlatePosition(vehicle, { section: platePicker, index: plateCharacterIndex }, 1));
+    const next = nextPlateInputPosition(vehicle, { section: platePicker, index: plateCharacterIndex });
+    if (next === 'region') { setRegionPickerGroup(null); setPlatePicker('region'); }
+    else selectPickerPosition(next);
   }
 
   function erasePlatePart() {
@@ -2393,7 +2396,9 @@ export default function HomeScreen() {
     if (listingPicker === "left") setListingLeftLetter(nextValue);
     else if (listingPicker === "digits") setListingDigits(nextValue);
     else setListingRightLetters(nextValue);
-    selectPickerPosition(movePlatePosition(listingVehicle, { section: listingPicker, index: listingCharacterIndex }, 1));
+    const next = nextPlateInputPosition(listingVehicle, { section: listingPicker, index: listingCharacterIndex });
+    if (next === 'region') { setListingRegionGroup(null); setListingPicker('region'); }
+    else selectPickerPosition(next);
   }
 
   function eraseListingPart() {
@@ -3077,7 +3082,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.regionPickerContent}>
               <Text style={styles.regionPickerHint}>{regionPickerGroup ? `Отметь нужные коды региона «${regionPickerGroup}» и нажми «Готово».` : "Выбирай коды или все номера одного или нескольких регионов."}</Text>
-              <RegionCodeEntry initialValue={selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : ""} onApply={code => {
+              <RegionCodeEntry onClose={closePlateKeypad} onShowRegions={() => setRegionPickerGroup(null)} initialValue={selectedRegionCodes.length === 1 ? selectedRegionCodes[0] : ""} onApply={code => {
                 const name = registrationRegionName(code) || code;
                 setRegionCode(code);
                 setRegion(name);
@@ -3889,7 +3894,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.regionPickerContent}>
               <Text style={styles.regionPickerHint}>Выбери один код для своего номера.{listingRegion ? ` Выбрано: ${registrationRegionLabel(listingRegion)}.` : ""}</Text>
-              <RegionCodeEntry initialValue={listingRegion} actionLabel="Выбрать код" onApply={code => setListingRegion(code)} />
+              <RegionCodeEntry onClose={closePlateKeypad} onShowRegions={() => setListingRegionGroup(null)} initialValue={listingRegion} actionLabel="Выбрать код" onApply={code => setListingRegion(code)} />
               <ScrollView nestedScrollEnabled directionalLockEnabled keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator style={styles.regionPickerScroll} contentContainerStyle={styles.regionPickerList}>
                 {!listingRegionGroup ? <>
                   {sellerRegionGroups.map(item => <Pressable key={item.title} onPress={() => setListingRegionGroup(item.title)} style={[styles.pickerOption, styles.regionPickerOption, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionActive]}><Text style={[styles.pickerOptionText, item.codes.some(code => code.value === listingRegion) && styles.pickerOptionTextActive]}>{item.title}</Text></Pressable>)}
@@ -3915,10 +3920,10 @@ export default function HomeScreen() {
         <View style={styles.pickerGrid}>
           {(currentPlatePicker === "digits" ? allowedDigits : allowedLetters).map((item) => {
             const selected = (currentPlatePicker === "digits" ? pickerDigits : currentPlatePicker === "left" ? pickerLeft : pickerRight)[pickerCharacterIndex] === item;
-            return <Pressable key={item} accessibilityRole="button" accessibilityLabel={`Ввести символ ${item}`} accessibilityState={{selected}} onPress={() => editingListing ? chooseListingPart(item) : choosePlatePart(item)} style={[styles.pickerOption,selected&&styles.pickerOptionActive]}><Text style={[styles.pickerOptionText,selected&&styles.pickerOptionTextActive]}>{item}</Text></Pressable>;
+            return <Pressable key={item} accessibilityRole="button" accessibilityLabel={`Ввести символ ${item}`} accessibilityState={{selected}} onPress={() => editingListing ? chooseListingPart(item) : choosePlatePart(item)} style={[styles.pickerOption,plateKeyStyle,selected&&styles.pickerOptionActive]}><Text style={[styles.pickerOptionText,selected&&styles.pickerOptionTextActive]}>{item}</Text></Pressable>;
           })}
-          {!editingListing && <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar]}><Text style={styles.pickerOptionText}>*</Text></Pressable>}
-          <Pressable accessibilityRole="button" accessibilityLabel="Удалить выбранный символ номера" onPress={editingListing ? eraseListingPart : erasePlatePart} style={[styles.pickerOption, styles.pickerErase]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
+          {!editingListing && <Pressable onPress={() => choosePlatePart("*")} style={[styles.pickerOption, styles.pickerStar,plateKeyStyle]}><Text style={styles.pickerOptionText}>*</Text></Pressable>}
+          <Pressable accessibilityRole="button" accessibilityLabel="Удалить выбранный символ номера" onPress={editingListing ? eraseListingPart : erasePlatePart} style={[styles.pickerOption, styles.pickerErase,plateKeyStyle]}><Text style={styles.pickerOptionText}>⌫</Text></Pressable>
         </View>
       </View>}
 
@@ -4290,7 +4295,7 @@ const createStyles = (theme:Theme) => StyleSheet.create({
   regionPickerHint: { color: theme.muted, fontSize: 12, lineHeight: 17 },
   regionPickerScroll: { flexGrow: 0, flexShrink: 1, minHeight: 0, maxHeight: 470 },
   regionPickerList: { gap: 7, paddingRight: 3 },
-  pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pickerGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, height: 148, alignContent: "flex-start" },
   pickerOption: { alignItems: "center", backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 10, borderWidth: 1, justifyContent: "center", minHeight: 44, minWidth: 42, paddingHorizontal: 11, paddingVertical: 9 },
   regionPickerOption: { alignItems: "center", alignSelf: "stretch", flexDirection: "row", gap: 9, justifyContent: "space-between", minHeight: 50, paddingHorizontal: 15, paddingVertical: 11 },
   regionPickerOptionRight: { alignItems: "center", flexDirection: "row", gap: 10 },
