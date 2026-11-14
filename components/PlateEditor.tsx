@@ -2,7 +2,8 @@ import { Pressable } from './ActionPressable';
 import { Keyboard, StyleSheet, View } from 'react-native';
 import { PlateFace } from './PlateFace';
 import { useTheme } from './AppTheme';
-import type { PlatePosition } from '../lib/plate-editing';
+import {Text} from './ResponsiveText';
+import {platePositions, type PlatePosition} from '../lib/plate-editing';
 
 type Section = 'left' | 'digits' | 'right' | 'region';
 type Props = {
@@ -10,12 +11,15 @@ type Props = {
   leftLetter: string; digits: string; rightLetters: string; region: string;
   onOpen: (section: Section, index: number) => void;
   activePosition?: PlatePosition | null;
+  keyboardOpen:boolean;
+  onToggleKeyboard:()=>void;
+  onMove:(direction:-1|1)=>void;
   labelPrefix?: string;
 };
 
 // Search and publication share artwork, hit areas and placeholder positions.
 // These are buttons, so Android never opens a competing system keyboard.
-export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpen,activePosition,labelPrefix=''}: Props) {
+export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpen,activePosition,keyboardOpen,onToggleKeyboard,onMove,labelPrefix=''}: Props) {
   const {theme} = useTheme();
   const open = (section: Section, index = 0) => { Keyboard.dismiss(); onOpen(section, index); };
   const prefix = (label: string) => labelPrefix ? `${labelPrefix}: ${label}` : label;
@@ -24,7 +28,20 @@ export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpe
       accessibilityLabel={prefix(index === 0 ? label : `${label}: позиция ${index + 1}`)} accessibilityValue={{text:value[index] || '*'}}
       accessibilityState={{selected:activePosition?.section===section && activePosition.index===index}}
       onPress={()=>open(section,index)} style={[styles.hit,{left:`${left + index * width / count}%`,top:`${top}%`,width:`${width / count}%`,height:`${height}%`}]} />);
-  return <View onTouchEnd={event=>event.stopPropagation()} onPointerUp={event=>event.stopPropagation()} style={[styles.plate,vehicle==='motorcycle'&&styles.moto]}>
+  const positions=platePositions(vehicle);
+  const selected=activePosition?positions.findIndex(p=>p.section===activePosition.section&&p.index===activePosition.index):0;
+  const arrow=(direction:-1|1)=>{
+    const disabled=direction===-1?selected<=0:selected>=positions.length-1;
+    return <Pressable accessibilityRole="button" accessibilityLabel={prefix(direction===-1?'Предыдущий символ номера':'Следующий символ номера')}
+      accessibilityState={{disabled}} disabled={disabled} hitSlop={6} onPress={()=>onMove(direction)}
+      style={{width:28,height:44,alignItems:'center',justifyContent:'center',borderWidth:1,borderColor:theme.border,borderRadius:9,opacity:disabled?0.3:1}}>
+      <Text allowFontScaling={false} style={{fontSize:25,color:theme.accent}}>{direction===-1?'‹':'›'}</Text>
+    </Pressable>;
+  };
+  return <View onTouchEnd={event=>event.stopPropagation()} onPointerUp={event=>event.stopPropagation()} style={{alignSelf:'center',width:'100%',maxWidth:vehicle==='motorcycle'?312:588}}>
+   <View style={{flexDirection:'row',alignItems:'center',justifyContent:'center',gap:4}}>
+    {arrow(-1)}
+    <View style={[styles.plate,vehicle==='motorcycle'&&styles.moto]}>
     <PlateFace vehicle={vehicle} leftLetter={leftLetter.padEnd(vehicle==='truck'?2:1,'*')} digits={digits.padEnd(vehicle==='car'?3:4,'*')} rightLetters={rightLetters.padEnd(2,'*')} region={region||'*'} activePosition={activePosition} highlightColor={theme.accent} />
     {vehicle==='motorcycle'?<>
       {group('digits','Четыре цифры мото-номера',digits,0,0,100,51,4)}
@@ -35,10 +52,17 @@ export function PlateEditor({vehicle,leftLetter,digits,rightLetters,region,onOpe
       {vehicle==='car'&&group('right','Последние буквы номера',rightLetters,50,0,26,100,2)}
     </>}
     <Pressable accessibilityRole="button" accessibilityLabel={prefix(vehicle==='motorcycle'?'Выбрать регион мото-номера':'Выбрать регион номера')} accessibilityValue={{text:region}} onPress={()=>open('region')} style={[styles.hit,vehicle==='motorcycle'?{left:'53%',top:'51%',width:'47%',height:'49%'}:{left:'76%',top:0,width:'24%',height:'100%'}]} />
+    </View>
+    {arrow(1)}
+   </View>
+   <Pressable accessibilityRole="button" accessibilityLabel={prefix(keyboardOpen?'Скрыть клавиатуру номера':'Открыть клавиатуру номера')}
+     aria-expanded={keyboardOpen} onPress={onToggleKeyboard} style={{alignSelf:'center',minWidth:80,minHeight:36,alignItems:'center',justifyContent:'center',marginTop:4}}>
+     <Text allowFontScaling={false} style={{color:theme.accent,fontSize:20}}>{keyboardOpen?'⌃':'⌄'}</Text>
+   </Pressable>
   </View>;
 }
 const styles=StyleSheet.create({
-  plate:{alignSelf:'center',width:'100%',maxWidth:520,aspectRatio:520/112,position:'relative'},
-  moto:{width:240,maxWidth:'100%',aspectRatio:4/3},
+  plate:{flex:1,minWidth:0,maxWidth:520,aspectRatio:520/112,position:'relative'},
+  moto:{maxWidth:240,aspectRatio:4/3},
   hit:{position:'absolute',cursor:'pointer'},
 });
